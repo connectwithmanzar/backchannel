@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 const LINKS = [
   { href: "/roles", label: "Roles" },
@@ -15,6 +16,15 @@ const LINKS = [
 
 export default function Nav() {
   const path = usePathname();
+  const router = useRouter();
+
+  async function signOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-surface">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-2.5">
@@ -40,6 +50,12 @@ export default function Nav() {
             );
           })}
         </nav>
+        <button
+          onClick={signOut}
+          className="ml-auto rounded-full px-3 py-1.5 text-sm font-medium text-muted hover:text-fg"
+        >
+          Sign out
+        </button>
       </div>
     </header>
   );

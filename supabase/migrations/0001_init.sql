@@ -10,7 +10,7 @@ create table profiles (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null unique references auth.users on delete cascade,
   name text,
-  current_role text,
+  "current_role" text,
   years_in_sales numeric,
   quota_attainment_pct int,
   meetings_per_month int,
@@ -184,6 +184,31 @@ create table funnel_events (
   ref_id uuid,
   occurred_at timestamptz default now()
 );
+
+-- ---------- updated_at trigger ----------
+create or replace function set_updated_at()
+returns trigger language plpgsql as $$
+begin new.updated_at = now(); return new; end $$;
+
+create trigger profiles_updated_at before update on profiles
+  for each row execute function set_updated_at();
+
+-- ---------- Storage: CV bucket ----------
+insert into storage.buckets (id, name, public)
+values ('cvs', 'cvs', false)
+on conflict (id) do nothing;
+
+create policy "owner read cvs" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'cvs' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "owner write cvs" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'cvs' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "owner delete cvs" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'cvs' and (storage.foldername(name))[1] = auth.uid()::text);
 
 -- ---------- Row-level security ----------
 do $$
