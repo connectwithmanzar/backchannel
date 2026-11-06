@@ -2,20 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design tokens from the Backchannel prototype */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #edf0f2; --surface: #ffffff; --sunk: #e3e7eb; --line: #cdd4db;
+  --fg: #121a24; --muted: #56616e; --accent: #2340c8; --accent-ink: #ffffff; --accent-soft: #dde3fb;
+  --signal: #9a5b00; --signal-soft: #fbefd9; --good: #16794a; --good-soft: #dcf2e6; --warn: #a33a1d; --warn-soft: #f8e1d9;
 }
-
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #0e1319; --surface: #161d26; --sunk: #1d2631; --line: #2c3743;
+    --fg: #e7ecf2; --muted: #9aa6b4; --accent: #8fa3ff; --accent-ink: #0e1319; --accent-soft: #232e58;
+    --signal: #f2b65a; --signal-soft: #3a2a10; --good: #5fd39a; --good-soft: #143326; --warn: #ff9a7d; --warn-soft: #3d1f16;
+    color-scheme: dark;
   }
 }
-
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-}
+body { background: var(--bg); color: var(--fg); }
+h1, h2, h3 { font-family: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif; text-wrap: balance; letter-spacing: -0.01em; }
+.num { font-variant-numeric: tabular-nums; }

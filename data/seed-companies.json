@@ -1,0 +1,29 @@
+{
+  "_note": "Companies whose public job boards the collector checks every day. Edit freely: name, ats (greenhouse | lever | ashby | smartrecruiters) and slug (the company's board name in the ATS link). Run `npm run collect` and check data/collect-report.json: any company with an error has the wrong slug or has changed ATS.",
+  "companies": [
+    { "name": "Stripe", "ats": "greenhouse", "slug": "stripe" },
+    { "name": "Figma", "ats": "greenhouse", "slug": "figma" },
+    { "name": "Datadog", "ats": "greenhouse", "slug": "datadog" },
+    { "name": "GitLab", "ats": "greenhouse", "slug": "gitlab" },
+    { "name": "Cloudflare", "ats": "greenhouse", "slug": "cloudflare" },
+    { "name": "MongoDB", "ats": "greenhouse", "slug": "mongodb" },
+    { "name": "Elastic", "ats": "greenhouse", "slug": "elastic" },
+    { "name": "Intercom", "ats": "greenhouse", "slug": "intercom" },
+    { "name": "Samsara", "ats": "greenhouse", "slug": "samsara" },
+    { "name": "Twilio", "ats": "greenhouse", "slug": "twilio" },
+    { "name": "Airtable", "ats": "greenhouse", "slug": "airtable" },
+    { "name": "Postman", "ats": "greenhouse", "slug": "postman" },
+    { "name": "Contentsquare", "ats": "greenhouse", "slug": "contentsquare" },
+    { "name": "Amplitude", "ats": "greenhouse", "slug": "amplitude" },
+    { "name": "Braze", "ats": "greenhouse", "slug": "braze" },
+    { "name": "Palantir", "ats": "lever", "slug": "palantir" },
+    { "name": "Spotify", "ats": "lever", "slug": "spotify" },
+    { "name": "OpenAI", "ats": "ashby", "slug": "openai" },
+    { "name": "Notion", "ats": "ashby", "slug": "notion" },
+    { "name": "Ramp", "ats": "ashby", "slug": "ramp" },
+    { "name": "Linear", "ats": "ashby", "slug": "linear" },
+    { "name": "Vanta", "ats": "ashby", "slug": "vanta" },
+    { "name": "Deel", "ats": "ashby", "slug": "deel" },
+    { "name": "Freshworks", "ats": "smartrecruiters", "slug": "freshworks" }
+  ]
+}

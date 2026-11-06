@@ -1,0 +1,4 @@
+[
+ {"id":"lv1","text":"Account Executive, Mid-Market","categories":{"location":"London, UK"},"hostedUrl":"https://example.com/lv1","createdAt":1730419200000,"descriptionPlain":"Close new business. We are unable to sponsor visas.","lists":[{"text":"Tools","content":"<li>Gong</li><li>Salesforce</li>"}],"salaryRange":{"currency":"GBP","min":60000,"max":75000},"workplaceType":"hybrid"},
+ {"id":"lv2","text":"Recruiter","categories":{"location":"Remote"},"hostedUrl":"https://example.com/lv2","descriptionPlain":"Hire people."}
+]

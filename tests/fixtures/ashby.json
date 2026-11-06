@@ -1,0 +1,5 @@
+{"jobs":[
+ {"id":"as1","title":"GTM Engineer","location":"Remote","isRemote":true,"jobUrl":"https://example.com/as1","publishedAt":"2026-11-03T09:00:00Z","descriptionPlain":"Build Clay workflows and outbound systems. Visa sponsorship is available.","compensation":{"compensationTierSummary":"$120K – $150K"}},
+ {"id":"as2","title":"Founding BDR","location":"New York, NY","secondaryLocations":[{"location":"Remote - US"}],"jobUrl":"https://example.com/as2","descriptionPlain":"First BDR hire."},
+ {"id":"as3","title":"Head of Sales Development","location":"Berlin, Germany","jobUrl":"https://example.com/as3","descriptionPlain":"Lead the SDR team.","isListed":false}
+]}

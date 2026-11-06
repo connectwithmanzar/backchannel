@@ -1,36 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Backchannel
 
-## Getting Started
+Your personal sales job-search engine (test phase: one user).
+Full plan: `docs/backchannel-build-brief.md`. Design reference: `docs/backchannel-prototype.html`.
 
-First, run the development server:
+## What works today (build 1 of 10)
+- App shell with every section, in the prototype's design (light and dark).
+- Database setup script for Supabase: `supabase/migrations/0001_init.sql`.
+- **Job collector**: reads public job boards (Greenhouse, Lever, Ashby, SmartRecruiters) for the companies in `data/seed-companies.json` and keeps sales roles (SDR/BDR, GTM Engineer, AE, sales leadership). It works out market, remote/hybrid, published pay and visa wording.
+- **Roles page**: every collected role, scored for fit against `data/profile.json`, with filters and sort.
+- 8 automated tests for the collector.
+
+## Run it on your computer
+You need Node.js 20 or newer (download the LTS version from nodejs.org).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install          # once
+npm run collect      # pull today's sales roles (about a minute)
+npm run dev          # start the app, then open http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Other commands: `npm test` (collector tests), `npm run build` (production build).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Change what it looks for
+- **Companies:** edit `data/seed-companies.json`. After `npm run collect`, `data/collect-report.json` lists any board that couldn't be read (usually a wrong slug).
+- **Your targets:** edit `data/profile.json` (role types, markets, tools, minimum pay in USD).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Next builds
+See section 9 of the build brief: Supabase login and storage → profile from CV → AI scoring → Telegram alerts → great companies → applications → Gmail outreach → AI chat.

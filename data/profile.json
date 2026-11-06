@@ -1,0 +1,9 @@
+{
+  "_note": "Your search profile. Edit it until the profile page (build 3) replaces this file.",
+  "name": "Manzar",
+  "targetFamilies": ["SDR/BDR", "GTM Engineer", "Account Executive"],
+  "markets": ["india", "remote-in", "emea", "global"],
+  "tools": ["HubSpot", "Salesforce", "Apollo", "Clay", "Sales Navigator", "Outreach"],
+  "minOteUsd": 0,
+  "prefersRemote": true
+}

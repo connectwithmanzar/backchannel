@@ -1,0 +1,5 @@
+{"jobs":[
+ {"id":101,"title":"Sales Development Representative, EMEA","location":{"name":"Dublin, Ireland"},"absolute_url":"https://example.com/gh/101","updated_at":"2026-11-01T10:00:00Z","content":"&lt;p&gt;Book meetings with mid-market prospects using Salesforce and Outreach. Hybrid, 3 days in office. The base salary range is €45,000 - €55,000 plus variable.&lt;/p&gt;"},
+ {"id":102,"title":"Senior Software Engineer","location":{"name":"Remote"},"absolute_url":"https://example.com/gh/102","content":"Build things."},
+ {"id":103,"title":"Business Development Representative","location":{"name":"Bengaluru, India"},"absolute_url":"https://example.com/gh/103","content":"&lt;p&gt;Outbound to US SMB accounts. HubSpot, Apollo.&lt;/p&gt;"}
+]}

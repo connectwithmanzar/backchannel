@@ -1,0 +1,1023 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><style>[hidden]{display:none!important}body{margin:0}</style>
+<title>Backchannel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky top bar with nav; feed = filter rail + list + detail drawer. Sales "deal desk" vernacular: OTE, quota, segment, motion. */
+:root{
+  --bg:#EDF0F2; --surface:#FFFFFF; --sunk:#E3E7EB; --line:#CDD4DB;
+  --fg:#121A24; --muted:#56616E; --accent:#2340C8; --accent-ink:#FFFFFF; --accent-soft:#DDE3FB;
+  --signal:#9A5B00; --signal-soft:#FBEFD9; --good:#16794A; --good-soft:#DCF2E6; --warn:#A33A1D; --warn-soft:#F8E1D9;
+  --display:"Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --body:"Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1319; --surface:#161D26; --sunk:#1D2631; --line:#2C3743;
+  --fg:#E7ECF2; --muted:#9AA6B4; --accent:#8FA3FF; --accent-ink:#0E1319; --accent-soft:#232E58;
+  --signal:#F2B65A; --signal-soft:#3A2A10; --good:#5FD39A; --good-soft:#143326; --warn:#FF9A7D; --warn-soft:#3D1F16;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1319; --surface:#161D26; --sunk:#1D2631; --line:#2C3743;
+  --fg:#E7ECF2; --muted:#9AA6B4; --accent:#8FA3FF; --accent-ink:#0E1319; --accent-soft:#232E58;
+  --signal:#F2B65A; --signal-soft:#3A2A10; --good:#5FD39A; --good-soft:#143326; --warn:#FF9A7D; --warn-soft:#3D1F16;
+  color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-size:.82em}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:20px;padding-block:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-weight:800;font-size:20px;text-decoration:none;color:var(--fg)}
+.brand svg{flex:none}
+.nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+.nav a{padding:7px 12px;border-radius:999px;color:var(--muted);text-decoration:none;font-weight:500;font-size:14px}
+.nav a[aria-current="page"]{background:var(--accent-soft);color:var(--fg)}
+.nav a:hover{color:var(--fg)}
+.demo-pill{font-size:12px;color:var(--signal);background:var(--signal-soft);padding:4px 10px;border-radius:999px;font-weight:600;letter-spacing:.02em}
+
+.view{padding-block:24px 64px}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.lede{color:var(--muted);max-width:62ch;margin:6px 0 0}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.head h1{font-size:clamp(26px,3.4vw,36px);font-weight:800}
+
+/* feed layout */
+.feed > *{min-width:0}
+.feed{display:grid;grid-template-columns:250px minmax(0,1fr);gap:24px;align-items:start}
+.rail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 76px);display:flex;flex-direction:column;gap:18px}
+.fgroup{display:flex;flex-direction:column;gap:8px}
+.fgroup > label,.fgroup > .lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:13px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+select,input[type=text],input[type=url],input[type=number],textarea{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.toggle{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+.toggle input{accent-color:var(--accent);width:16px;height:16px}
+.rail-toggle{display:none}
+
+.listbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap;color:var(--muted);font-size:14px}
+.listbar select{width:auto}
+.list{display:flex;flex-direction:column;gap:10px}
+.card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 18px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;cursor:pointer;text-align:left;width:100%}
+.card:hover{border-color:var(--accent)}
+.card.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.card h3{font-size:17px;font-weight:700}
+.card .co{color:var(--muted);font-size:14px}
+.card .meta{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ote{text-align:right}
+.ote b{font-family:var(--display);font-size:20px;font-weight:700;display:block;line-height:1.1}
+.ote span{font-size:12px;color:var(--muted)}
+.tag{font-size:12px;border-radius:6px;padding:2px 8px;background:var(--sunk);color:var(--fg);white-space:nowrap}
+.src{font-weight:600;background:var(--signal-soft);color:var(--signal)}
+.src.unposted::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:1px}
+.vband{background:var(--good-soft);color:var(--good);font-weight:600}
+.eband{background:var(--sunk);color:var(--muted)}
+.fit{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13px}
+.fit i{display:block;width:44px;height:6px;border-radius:3px;background:var(--sunk);overflow:hidden;position:relative}
+.fit i::after{content:"";position:absolute;inset:0 auto 0 0;width:var(--w);background:var(--accent)}
+.empty{padding:40px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:var(--r)}
+
+/* detail drawer */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);border-left:1px solid var(--line);z-index:40;overflow-y:auto;padding:calc(env(safe-area-inset-top,0px) + 20px) max(22px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 32px) 22px;box-shadow:-20px 0 40px rgba(0,0,0,.12);display:flex;flex-direction:column;gap:20px}
+.scrim{position:fixed;inset:0;background:rgba(10,14,20,.35);z-index:35}
+.x{align-self:flex-end;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 12px;cursor:pointer}
+.d-head h2{font-size:26px;font-weight:800;margin-top:4px}
+.d-head p{margin:4px 0 0;color:var(--muted)}
+.box{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.box h4{margin:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.otebar{display:flex;height:12px;border-radius:6px;overflow:hidden}
+.otebar .b{background:var(--accent)}
+.otebar .v{background:var(--accent-soft)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0}
+.brk{display:grid;grid-template-columns:110px 1fr 40px;gap:8px 10px;align-items:center;font-size:14px}
+.brk .bar{height:8px;background:var(--sunk);border-radius:4px;overflow:hidden}
+.brk .bar span{display:block;height:100%;background:var(--accent)}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 16px;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.note{font-size:13px;color:var(--muted)}
+.signalbox{background:var(--signal-soft);border-color:transparent}
+.signalbox h4{color:var(--signal)}
+
+/* modal */
+.modal{position:fixed;inset:0;display:grid;place-items:center;z-index:50;background:rgba(10,14,20,.45);padding:16px}
+.modal .panel{background:var(--surface);border-radius:14px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:14px;border:1px solid var(--line)}
+.modal h3{font-size:22px}
+.radio{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer}
+.radio input{margin-top:4px;accent-color:var(--accent)}
+.radio small{display:block;color:var(--muted)}
+textarea{min-height:200px;line-height:1.5;resize:vertical}
+
+/* profile */
+.two{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px;align-items:start}
+.panelc{min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;display:flex;flex-direction:column;gap:16px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tabs button{border:0;background:none;padding:9px 12px;cursor:pointer;color:var(--muted);font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:flex;flex-direction:column;gap:5px;font-size:14px}
+.field span{color:var(--muted);font-size:13px}
+.chat{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow:auto;padding:4px}
+.msg{max-width:85%;padding:9px 12px;border-radius:12px;font-size:14px}
+.msg.ai{background:var(--sunk);align-self:flex-start}
+.msg.me{background:var(--accent);color:var(--accent-ink);align-self:flex-end}
+.chatin{display:flex;gap:8px}
+.badge{display:inline-flex;gap:6px;align-items:center;font-size:13px;font-weight:600;padding:4px 10px;border-radius:999px}
+.badge.ok{background:var(--good-soft);color:var(--good)}
+.badge.no{background:var(--warn-soft);color:var(--warn)}
+.idcard{display:flex;gap:14px;align-items:center}
+.avatar{width:52px;height:52px;border-radius:50%;background:var(--accent-soft);display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:20px;flex:none}
+.statrow{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:var(--sunk);border-radius:8px;padding:10px}
+.stat b{display:block;font-family:var(--display);font-size:20px}
+.stat span{font-size:12px;color:var(--muted)}
+
+/* pay */
+.range{position:relative;height:56px;margin:10px 0 4px}
+.range .track{position:absolute;left:0;right:0;top:22px;height:12px;background:var(--sunk);border-radius:6px}
+.range .band{position:absolute;top:22px;height:12px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:6px}
+.range .med{position:absolute;top:14px;width:2px;height:28px;background:var(--accent)}
+.range .you{position:absolute;top:0;transform:translateX(-50%);font-size:12px;font-weight:700;color:var(--signal);white-space:nowrap}
+.range .you::after{content:"";display:block;width:2px;height:30px;background:var(--signal);margin:2px auto 0}
+.scale{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.tscroll{overflow-x:auto}
+.stage{font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--sunk)}
+.stage.s1{background:var(--accent-soft)}
+.stage.s2,.stage.s3{background:var(--good-soft);color:var(--good)}
+.steps{display:flex;gap:4px}
+.steps i{width:22px;height:5px;border-radius:3px;background:var(--sunk)}
+.steps i.on{background:var(--accent)}
+
+/* side income */
+.gigs{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.gig{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:10px}
+.gig h3{font-size:19px}
+.gig a.btn{text-decoration:none;text-align:center;color:inherit}
+.disclose{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;z-index:60;font-size:14px}
+
+/* targets */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.tcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.tcard header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.tcard h3{font-size:18px}
+.tier{font-family:var(--mono);font-size:12px;font-weight:500;padding:3px 8px;border-radius:6px;background:var(--fg);color:var(--bg)}
+.tier.B{background:var(--accent-soft);color:var(--fg)}
+.tier.C{background:var(--sunk);color:var(--muted)}
+.cov{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.cov div{font-size:11px;text-align:center;padding:5px 2px;border-radius:6px;background:var(--warn-soft);color:var(--warn);font-weight:600}
+.cov div.on{background:var(--good-soft);color:var(--good)}
+.cert{font-size:12px;border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+.prefs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
+/* autopilot */
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.locked{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.locked b{color:var(--good)}
+.qrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;padding:14px 0;border-bottom:1px solid var(--line);align-items:center}
+.qrow:last-child{border-bottom:0}
+.qrow .note{grid-column:1/-1}
+.st{font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.st.needs{background:var(--warn-soft);color:var(--warn)}
+.st.approve{background:var(--signal-soft);color:var(--signal)}
+.st.scheduled{background:var(--accent-soft)}
+.st.submitted{background:var(--good-soft);color:var(--good)}
+.st.skipped{background:var(--sunk);color:var(--muted)}
+.disabled-ch{opacity:.6}
+/* outreach */
+.seq{display:flex;flex-direction:column;gap:0}
+.step{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px dashed var(--line)}
+.step:last-child{border-bottom:0}
+.step .day{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.mode-auto{color:var(--good);font-weight:600;font-size:12px}
+.mode-task{color:var(--signal);font-weight:600;font-size:12px}
+.tok{background:var(--accent-soft);border-radius:4px;padding:0 3px}
+.preview{white-space:pre-wrap;font-size:14px;background:var(--sunk);border-radius:8px;padding:14px;line-height:1.55}
+/* chatbot */
+.bot-fab{position:fixed;right:calc(env(safe-area-inset-right,0px) + 20px);bottom:calc(env(safe-area-inset-bottom,0px) + 20px);z-index:45;border:0;border-radius:999px;background:var(--accent);color:var(--accent-ink);padding:12px 18px;font-weight:700;cursor:pointer;box-shadow:0 8px 24px rgba(20,30,80,.25)}
+.bot{position:fixed;right:calc(env(safe-area-inset-right,0px) + 20px);bottom:calc(env(safe-area-inset-bottom,0px) + 76px);z-index:46;width:min(380px,calc(100vw - 32px));height:min(540px,calc(100vh - 120px));background:var(--surface);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.2)}
+.bot header{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.bot header b{font-family:var(--display);font-size:17px}
+.bot .chat{flex:1;max-height:none;padding:12px 14px}
+.bot .sugg{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 8px}
+.bot form{display:flex;gap:8px;padding:10px 14px 14px;border-top:1px solid var(--line)}
+.msg.ai a{color:var(--accent)}
+
+@media (max-width:860px){
+  .feed{grid-template-columns:minmax(0,1fr)}
+  .rail{position:static;display:none;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+  .rail.open{display:flex}
+  .rail-toggle{display:inline-flex}
+  .two{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:520px){
+  .card{grid-template-columns:1fr}
+  .ote{text-align:left}
+  .grid2{grid-template-columns:1fr}
+  .demo-pill{display:none}
+}
+@media (prefers-reduced-motion:no-preference){
+  .drawer{animation:slide .22s ease-out}
+  @keyframes slide{from{transform:translateX(24px)}to{transform:none}}
+}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#feed" aria-label="Backchannel home">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="1" width="24" height="24" rx="7" fill="var(--accent)"/><path d="M7 9h9M7 13h12M7 17h6" stroke="var(--accent-ink)" stroke-width="2.2" stroke-linecap="round"/></svg>
+      Backchannel
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#feed" data-v="feed">Roles</a>
+      <a href="#companies" data-v="companies">Great companies</a>
+      <a href="#autopilot" data-v="autopilot">Autopilot</a>
+      <a href="#outreach" data-v="outreach">Outreach</a>
+      <a href="#profile" data-v="profile">My profile</a>
+      <a href="#pay" data-v="pay">Pay benchmark</a>
+      <a href="#referrals" data-v="referrals">Referrals</a>
+      <a href="#side-income" data-v="side-income">Side income</a>
+    </nav>
+    <span class="demo-pill">Prototype · sample data</span>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- FEED -->
+  <section class="view" id="v-feed">
+    <div class="head">
+      <div>
+        <div class="eyebrow">For SDR · BDR · GTM · B2B sales</div>
+        <h1>Every sales role that fits you, hidden or public</h1>
+        <p class="lede">Hidden roles from insiders and hiring signals, plus every public listing from the job boards you connect, in one feed. Everything is matched to your CV, quota record and tool stack, and every role shows where it came from.</p>
+      </div>
+      <button class="btn rail-toggle" id="railToggle" aria-expanded="false" aria-controls="rail">Filters</button>
+    </div>
+    <div class="feed">
+      <aside class="rail" id="rail" aria-label="Filters">
+        <div class="fgroup">
+          <span class="lbl">Market</span>
+          <div class="chips" id="fMarket"></div>
+        </div>
+        <div class="fgroup">
+          <span class="lbl">Where it's from</span>
+          <div class="chips" id="fSource"></div>
+        </div>
+        <div class="fgroup">
+          <label for="fFloor">Minimum OTE <span class="num" id="fFloorOut"></span></label>
+          <input type="range" id="fFloor" min="0" max="120000" step="5000" value="0">
+        </div>
+        <div class="fgroup">
+          <label for="fSeg">Segment</label>
+          <select id="fSeg"><option value="">Any</option><option>SMB</option><option>Mid-market</option><option>Enterprise</option></select>
+        </div>
+        <div class="fgroup">
+          <label for="fMotion">Motion</label>
+          <select id="fMotion"><option value="">Any</option><option>Outbound</option><option>Inbound</option><option>Full-cycle</option></select>
+        </div>
+        <label class="toggle"><input type="checkbox" id="fVerified"> Verified pay band only</label>
+        <label class="toggle"><input type="checkbox" id="fForeign"> Open to foreign candidates</label>
+        <button class="btn" id="fReset">Reset filters</button>
+      </aside>
+      <div>
+        <div class="panelc" style="margin-bottom:14px" id="matcher">
+          <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline"><h3 style="font-size:18px">Find roles from my CV or LinkedIn</h3><span class="note" id="mStatus">Using your saved scorecard</span></div>
+          <div class="grid2">
+            <label class="field"><span>Upload CV</span><input type="file" id="mCv" accept=".pdf,.doc,.docx"></label>
+            <div class="field"><span>Or paste your LinkedIn URL</span><div class="chatin"><input type="url" id="mLi" placeholder="https://www.linkedin.com/in/your-name"><button class="btn primary" id="mGo" type="button">Match</button></div></div>
+          </div>
+          <div id="mOut"></div>
+          <details><summary style="cursor:pointer;font-weight:600">Job sources · <span id="bCount"></span></summary>
+            <div class="tscroll" style="margin-top:10px"><table><thead><tr><th>Source</th><th>How it connects</th><th>Roles</th><th>On</th></tr></thead><tbody id="bBody"></tbody></table></div>
+            <p class="note">LinkedIn, Naukri and other boards connect through licensed job-data providers, not by logging in as you or scraping. Applying on a board always happens on that board or the company's site.</p>
+          </details>
+        </div>
+        <div class="listbar">
+          <span id="count" class="num"></span>
+          <label>Sort <select id="sort"><option value="fit">Best fit</option><option value="ote">Highest OTE</option><option value="fresh">Recently verified</option></select></label>
+        </div>
+        <div class="list" id="list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GREAT COMPANIES -->
+  <section class="view" id="v-companies" hidden>
+    <div class="head"><div>
+      <div class="eyebrow">Great companies to work for</div>
+      <h1>Companies worth joining, hiring or not</h1>
+      <p class="lede">AI keeps adding companies known for high pay, great culture, perks, work-life balance or income upside, matched to what you care about, even when they have no open role yet. Open one to see its open sales roles, or keep watching it and get an alert the moment one opens.</p>
+    </div></div>
+    <details class="panelc" style="margin-bottom:18px" id="prefBox">
+      <summary style="cursor:pointer;font-family:var(--display);font-weight:700;font-size:18px">What AI looks for on your behalf</summary>
+      <div class="prefs" style="margin-top:14px">
+        <div class="fgroup"><span class="lbl">What makes a company great for you</span><div class="chips" id="prCulture"></div></div>
+        <div class="fgroup"><span class="lbl">Certifications that count</span><div class="chips" id="prCerts"></div></div>
+        <div class="fgroup"><span class="lbl">Countries you'd work in</span><div class="chips" id="prCountry"></div></div>
+        <div class="fgroup"><span class="lbl">Dealbreakers</span><div class="chips" id="prDeal"></div></div>
+      </div>
+    </details>
+    <div class="listbar">
+      <div class="chips" id="cFilter"></div>
+      <button class="btn" id="cMore">Find more companies with AI</button>
+    </div>
+    <div class="tgrid" id="tgrid"></div>
+  </section>
+
+  <!-- AUTOPILOT -->
+  <section class="view" id="v-autopilot" hidden>
+    <div class="head"><div>
+      <div class="eyebrow">Autopilot · auto-apply</div>
+      <h1>Applies for you, on your rules</h1>
+      <p class="lede">Autopilot fills and submits applications on company careers pages and ATS forms (Greenhouse, Lever, Ashby, Workday). It uses a CV tailored from your real experience only. Every submission produces a receipt.</p>
+    </div></div>
+    <div class="two">
+      <div class="panelc">
+        <h3 style="font-size:19px">Mode</h3>
+        <div class="modes" id="apModes"></div>
+        <div class="grid2">
+          <label class="field"><span>Daily cap: <b class="num" id="capOut"></b> applications</span><input type="range" id="apCap" min="1" max="20" value="5"></label>
+          <label class="field"><span>Only apply when fit is at least <b class="num" id="minOut"></b>%</span><input type="range" id="apMin" min="50" max="95" step="5" value="75"></label>
+        </div>
+        <label class="toggle"><input type="checkbox" id="apTargets" checked> Apply only to great companies and hidden roles</label>
+        <div class="box">
+          <h4>Always on</h4>
+          <div class="locked"><b>✓</b><span>Stops and asks you about visa, work authorisation, salary expectations, notice period and diversity questions. It never guesses these.</span></div>
+          <div class="locked"><b>✓</b><span>Never invents titles, dates, employers or metrics on your CV.</span></div>
+          <div class="locked"><b>✓</b><span>Applies once per company per role family, so you don't spam one employer's ATS.</span></div>
+        </div>
+        <div class="box">
+          <h4>Channels</h4>
+          <label class="toggle"><input type="checkbox" checked disabled> Company careers pages and ATS forms</label>
+          <label class="toggle disabled-ch"><input type="checkbox" disabled> LinkedIn Easy Apply (not supported)</label>
+          <p class="note">LinkedIn's terms ban automated applying and accounts get restricted for it. Backchannel prepares LinkedIn steps as one-click tasks instead (see Outreach).</p>
+        </div>
+      </div>
+      <div class="panelc">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap"><h3 style="font-size:19px">Queue & receipts</h3><span class="note num" id="apStat"></span></div>
+        <div id="apQueue"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OUTREACH -->
+  <section class="view" id="v-outreach" hidden>
+    <div class="head"><div>
+      <div class="eyebrow">Outreach · email + LinkedIn</div>
+      <h1>Personalised sequences to the people who hire</h1>
+      <p class="lede">Each target company gets a short sequence to the hiring manager, sales leader or recruiter. Emails send automatically from your own mailbox. LinkedIn steps come to you as one-click tasks.</p>
+    </div></div>
+    <div class="two">
+      <div class="panelc">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <h3 style="font-size:19px">Sequence: "Hiring manager, warm"</h3>
+          <button class="btn" id="mailConn"></button>
+        </div>
+        <div class="seq" id="seqSteps"></div>
+        <div class="grid2">
+          <label class="field"><span>Max emails per day</span><input type="number" id="oLimit" value="20" min="1" max="50"></label>
+          <label class="field"><span>Send window (recipient's local time)</span><select id="oWin"><option>Tue–Thu, 8–10 am</option><option>Weekdays, 9 am–12 pm</option><option>Weekdays, any time</option></select></label>
+        </div>
+        <div class="box"><h4>Always on</h4>
+          <div class="locked"><b>✓</b><span>Stops the whole sequence as soon as someone replies on any channel.</span></div>
+          <div class="locked"><b>✓</b><span>Skips anyone at your current employer while stealth is on.</span></div>
+          <div class="locked"><b>✓</b><span>Includes a one-line opt-out, and never emails someone who opted out.</span></div>
+        </div>
+        <h3 style="font-size:17px">Contacts in this sequence</h3>
+        <div class="tscroll"><table><thead><tr><th>Contact</th><th>Company</th><th>Next step</th><th>Status</th></tr></thead><tbody id="oBody"></tbody></table></div>
+      </div>
+      <div class="panelc">
+        <h3 style="font-size:19px">Preview: <span id="pvWho"></span></h3>
+        <p class="note">Highlighted parts are personalised by AI from the company's signals and your scorecard. Click any contact to preview their email.</p>
+        <div class="preview" id="pvMail"></div>
+        <div class="actions"><button class="btn" id="pvRegen">Rewrite with AI</button><button class="btn" id="pvCopy">Copy</button></div>
+        <h3 style="font-size:17px;margin-top:6px">LinkedIn tasks for today</h3>
+        <div id="liTasks"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROFILE -->
+  <section class="view" id="v-profile" hidden>
+    <div class="head"><div>
+      <div class="eyebrow">Your sales profile</div>
+      <h1>Build it once, get matched everywhere</h1>
+      <p class="lede">Pick any way to start. Every method fills the same scorecard, and matches update as soon as you save.</p>
+    </div></div>
+    <div class="two">
+      <div class="panelc">
+        <div class="tabs" role="tablist" id="ptabs">
+          <button role="tab" aria-selected="true" data-t="card">Sales scorecard</button>
+          <button role="tab" aria-selected="false" data-t="cv">Upload CV</button>
+          <button role="tab" aria-selected="false" data-t="li">LinkedIn URL</button>
+          <button role="tab" aria-selected="false" data-t="chat">Chat with AI</button>
+        </div>
+        <div data-p="card">
+          <form id="scoreForm" class="grid2">
+            <label class="field"><span>Name</span><input type="text" id="pName"></label>
+            <label class="field"><span>Current role</span><select id="pRole"><option>SDR</option><option>BDR</option><option>Senior SDR</option><option>SDR Team Lead</option><option>AE (SMB)</option><option>GTM Engineer</option></select></label>
+            <label class="field"><span>Years in sales</span><input type="number" id="pYears" min="0" max="30" step="0.5"></label>
+            <label class="field"><span>Quota attainment, last 4 quarters (%)</span><input type="number" id="pAttain" min="0" max="300"></label>
+            <label class="field"><span>Meetings booked per month</span><input type="number" id="pMeet" min="0" max="100"></label>
+            <label class="field"><span>Current employer</span><input type="text" id="pEmp"></label>
+            <label class="field"><span>Segment</span><select id="pSeg"><option>SMB</option><option>Mid-market</option><option>Enterprise</option></select></label>
+            <label class="field"><span>Motion</span><select id="pMotion"><option>Outbound</option><option>Inbound</option><option>Full-cycle</option></select></label>
+            <div class="field" style="grid-column:1/-1"><span>Tool stack</span><div class="chips" id="pTools"></div></div>
+            <div style="grid-column:1/-1" class="actions"><button class="btn primary" type="submit">Save scorecard</button></div>
+          </form>
+        </div>
+        <div data-p="cv" hidden>
+          <p class="note">Upload a PDF or Word CV. AI pulls out your tools, segment and numbers, and you confirm each one before it's saved.</p>
+          <label class="field"><span>CV file</span><input type="file" id="cvFile" accept=".pdf,.doc,.docx"></label>
+          <div id="cvOut"></div>
+        </div>
+        <div data-p="li" hidden>
+          <p class="note">Paste your public profile URL. We read public information only and never ask for your LinkedIn login.</p>
+          <div class="chatin"><input type="url" id="liUrl" placeholder="https://www.linkedin.com/in/your-name"><button class="btn" id="liGo">Import</button></div>
+          <div id="liOut"></div>
+        </div>
+        <div data-p="chat" hidden>
+          <div class="chat" id="chat" aria-live="polite"></div>
+          <form class="chatin" id="chatForm"><input type="text" id="chatIn" placeholder="Type your answer"><button class="btn primary">Send</button></form>
+        </div>
+      </div>
+      <div class="panelc" id="pSummary"></div>
+    </div>
+  </section>
+
+  <!-- PAY -->
+  <section class="view" id="v-pay" hidden>
+    <div class="head"><div>
+      <div class="eyebrow">Pay benchmark</div>
+      <h1>What should you be earning?</h1>
+      <p class="lede">OTE bands by role and market, split into base and variable. Ranges here are illustrative placeholders for the prototype. The real product would source them from verified offers and partner data.</p>
+    </div></div>
+    <div class="two">
+      <div class="panelc">
+        <div class="grid2">
+          <label class="field"><span>Role</span><select id="bRole"></select></label>
+          <label class="field"><span>Market</span><select id="bMarket"></select></label>
+          <label class="field" style="grid-column:1/-1"><span>Your current or target OTE (local currency, per year)</span><input type="number" id="bYou" min="0"></label>
+        </div>
+        <div id="bOut"></div>
+      </div>
+      <div class="panelc" id="bRoles"></div>
+    </div>
+  </section>
+
+  <!-- REFERRALS -->
+  <section class="view" id="v-referrals" hidden>
+    <div class="head"><div>
+      <div class="eyebrow">Referrals</div>
+      <h1>Every request, tracked</h1>
+      <p class="lede">Each referral request has a receipt. You see when it was sent, viewed, referred and when an interview is booked. Nothing goes out without your consent.</p>
+    </div></div>
+    <div class="panelc"><div class="tscroll"><table>
+      <thead><tr><th>Role</th><th>Via</th><th>Requested</th><th>Stage</th><th>Progress</th><th></th></tr></thead>
+      <tbody id="refBody"></tbody>
+    </table></div></div>
+  </section>
+
+  <!-- SIDE INCOME -->
+  <section class="view" id="v-side-income" hidden>
+    <div class="head"><div>
+      <div class="eyebrow">Side income · from Remote Work Syndicate</div>
+      <h1>Earn on the side with your GTM expertise</h1>
+      <p class="lede">AI labs pay sales and domain experts for contract work, such as writing and reviewing sales scenarios for AI training. Each partner sets its own rates, eligibility and screening. Joining sends you to the partner's own site.</p>
+    </div></div>
+    <div class="gigs" id="gigs"></div>
+  </section>
+</main>
+
+<div id="layer"></div>
+<button class="bot-fab" id="botFab" aria-expanded="false" aria-controls="bot">Ask Backchannel</button>
+<div class="bot" id="bot" hidden role="dialog" aria-label="Backchannel assistant">
+  <header><div><b>Backchannel AI</b><div class="note">Demo assistant · answers from sample data</div></div><button class="x" id="botX" style="align-self:center">Close</button></header>
+  <div class="chat" id="botChat" aria-live="polite"></div>
+  <div class="sugg" id="botSugg"></div>
+  <form id="botForm"><input type="text" id="botIn" placeholder="Ask about roles, pay, visas, prep…" aria-label="Message"><button class="btn primary">Send</button></form>
+</div>
+
+<script>
+(function(){
+const FX={USD:1,INR:1/84,GBP:1.27,EUR:1.08,AED:0.272};
+const SYM={USD:"$",INR:"₹",GBP:"£",EUR:"€",AED:"AED "};
+const fmt=(n,c)=>{ if(c==="INR") return "₹"+(n/100000).toFixed(1).replace(/\.0$/,"")+" L"; return SYM[c]+Math.round(n/1000)+"k"; };
+const usd=(n,c)=>n*FX[c];
+const esc=s=>String(s).replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
+
+const TOOLS=["Salesforce","HubSpot","Outreach","Salesloft","Apollo","Sales Navigator","Clay","Gong","ZoomInfo","Lemlist"];
+let BOARDS=[
+ {n:"Company careers pages",how:"Public ATS feeds (Greenhouse, Lever, Ashby, Workday)",on:1,hidden:1},
+ {n:"Hidden network",how:"Insiders, recruiters and hiring signals",on:1,hidden:1},
+ {n:"LinkedIn Jobs",how:"Licensed job-data feed. You apply on LinkedIn or the company site.",on:1},
+ {n:"Naukri",how:"Licensed job-data feed",on:1},
+ {n:"Indeed",how:"Licensed job-data feed",on:1},
+ {n:"Glassdoor",how:"Licensed job-data feed",on:1},
+ {n:"Wellfound",how:"Licensed job-data feed",on:1},
+ {n:"StepStone",how:"Licensed job-data feed (Germany)",on:1},
+ {n:"Welcome to the Jungle",how:"Licensed job-data feed (France)",on:1},
+ {n:"Instahyre",how:"Licensed job-data feed (India)",on:0},
+ {n:"Bayt",how:"Licensed job-data feed (Gulf)",on:0},
+ {n:"Open web",how:"Jobs marked up for Google for Jobs on company sites",on:1}
+];
+const boardOn=n=>{const b=BOARDS.find(x=>x.n===n);return !b||!!b.on;};
+const srcLabel=j=>j.source==="public"?esc(j.board):SOURCES[j.source];
+const MARKETS={india:"India onsite/hybrid","remote-in":"Remote from India",emea:"EMEA",global:"Global (open to foreign)"};
+const SOURCES={unposted:"Never posted",signal:"Early signal",careers:"Careers page only",network:"Network post",recruiter:"Recruiter mandate",public:"Public job boards"};
+
+// Fictional companies and sample roles for the prototype
+const JOBS=[
+ {id:"lumen",co:"Lumen Ledger",coNote:"Fintech SaaS · Series B · 220 people",title:"Senior SDR, UK & Ireland",seg:"Mid-market",motion:"Outbound",market:"emea",loc:"London · hybrid 3 days",rights:"UK work rights required",foreign:false,cur:"GBP",base:38000,vari:22000,quota:"18 SQLs / month",source:"unposted",detail:"Shared by an AE on the team. The role is filled through referrals before it's posted.",days:2,band:"verified",tools:["Salesforce","Outreach","Sales Navigator","Gong"],via:{type:"Employee referrer",who:"AE, Lumen Ledger (anonymous until you consent)",bonus:"Earns the company's £2,500 referral bonus"},path:"SDR → AE promotion typical in 12–15 months"},
+ {id:"northpeak",co:"Northpeak Analytics",coNote:"Product analytics · Series C · 480 people",title:"BDR, North America (remote from India)",seg:"Mid-market",motion:"Outbound",market:"remote-in",loc:"Remote · US Eastern hours",rights:"Contractor via employer of record",foreign:true,cur:"INR",base:1400000,vari:800000,quota:"14 meetings held / month",source:"signal",detail:"New VP Sales started 3 weeks ago and is building an India-based BDR pod. Expect posting in 4–8 weeks.",signal:"New sales leader hired",days:5,band:"estimated",tools:["HubSpot","Apollo","Clay","Sales Navigator"],via:{type:"Hiring manager",who:"Head of BDR, Northpeak",bonus:"Sees pre-vetted candidates before the role is posted"},path:"BDR → AE (US) track exists"},
+ {id:"ordino",co:"Ordino Commerce",coNote:"B2B ecommerce infra · Series A · 60 people",title:"Founding SDR, DACH",seg:"SMB",motion:"Outbound",market:"emea",loc:"Berlin · hybrid",rights:"EU Blue Card sponsorship available",foreign:true,cur:"EUR",base:48000,vari:22000,quota:"12 SQLs / month",source:"signal",detail:"Raised €18M Series A last month and announced DACH expansion. The founder is hiring the first SDR directly.",signal:"Funding round + market expansion",days:4,band:"estimated",tools:["HubSpot","Lemlist","Clay"],via:{type:"Hiring manager",who:"Co-founder & CRO, Ordino",bonus:"Sees pre-vetted candidates before the role is posted"},path:"Founding team, so the path to a team lead role is likely"},
+ {id:"kestrel",co:"Kestrel Security",coNote:"Cybersecurity · public company India arm",title:"Enterprise SDR, APAC",seg:"Enterprise",motion:"Outbound",market:"india",loc:"Bangalore · onsite",rights:"India work rights",foreign:false,cur:"INR",base:1200000,vari:600000,quota:"8 enterprise SQOs / quarter",source:"careers",detail:"Posted only on the company's own careers page. Not on LinkedIn or Naukri.",days:1,band:"verified",tools:["Salesforce","Outreach","ZoomInfo","Gong"],via:{type:"Employee referrer",who:"Senior SDR, Kestrel",bonus:"Earns the company's ₹75,000 referral bonus"},path:"Enterprise SDR → Commercial AE in about 18 months"},
+ {id:"tidewire",co:"Tidewire",coNote:"Sales automation agency · 35 people",title:"GTM Engineer (Clay & outbound systems)",seg:"Mid-market",motion:"Outbound",market:"global",loc:"Remote · anywhere",rights:"Open to all countries (contract)",foreign:true,cur:"USD",base:60000,vari:20000,quota:"Pipeline-sourced bonus",source:"network",detail:"Shared by the Head of Growth in a private GTM community, not posted publicly.",days:3,band:"verified",tools:["Clay","Apollo","HubSpot","Lemlist"],via:{type:"Hiring manager",who:"Head of Growth, Tidewire",bonus:"Sees pre-vetted candidates first"},path:"Technical GTM track"},
+ {id:"parcelo",co:"Parcelo",coNote:"Logistics SaaS · Series B · 300 people",title:"SDR Team Lead",seg:"Mid-market",motion:"Full-cycle",market:"india",loc:"Gurgaon · hybrid",rights:"India work rights",foreign:false,cur:"INR",base:2000000,vari:1000000,quota:"Team: 60 SQLs / month",source:"recruiter",detail:"Confidential mandate held by a partner sales recruiter. The company name is shared after the first call.",days:6,band:"verified",tools:["Salesforce","Salesloft","Apollo","Gong"],via:{type:"Recruiter",who:"Partner sales recruiter (Delhi NCR)",bonus:"Paid by the employer on placement"},path:"Lead → SDR Manager"},
+ {id:"verity",co:"Verity HR",coNote:"HR tech · Series B · 150 people",title:"Account Executive, SMB France",seg:"SMB",motion:"Full-cycle",market:"emea",loc:"Paris · hybrid",rights:"EU work rights; French C1 required",foreign:false,cur:"EUR",base:50000,vari:40000,quota:"€420k new ARR / year",source:"network",detail:"Shared in a French SaaS sales network group by the sales director.",days:9,band:"estimated",tools:["HubSpot","Lemlist","Gong"],via:{type:"Employee referrer",who:"Sales Director, Verity HR",bonus:"Earns the company's €2,000 referral bonus"},path:"AE SMB → AE Mid-market"},
+ {id:"brightloop",co:"Brightloop AI",coNote:"AI support software · Seed+ · 40 people",title:"Outbound SDR, US market",seg:"SMB",motion:"Outbound",market:"remote-in",loc:"Remote from India · US Pacific overlap 4h",rights:"Contract, paid in USD",foreign:true,cur:"USD",base:24000,vari:12000,quota:"20 meetings booked / month",source:"unposted",detail:"Never posted. The team hires through employee referrals only.",days:2,band:"verified",tools:["Apollo","HubSpot","Clay","Sales Navigator"],via:{type:"Employee referrer",who:"Founding AE, Brightloop",bonus:"Earns a $1,500 referral bonus"},path:"Early team; AE seat likely within a year"},
+ {id:"halcyon",co:"Halcyon Freight",coNote:"Freight tech · Series C · 700 people",title:"Mid-market BDR, Benelux",seg:"Mid-market",motion:"Inbound",market:"emea",loc:"Amsterdam · hybrid",rights:"Visa sponsorship (highly skilled migrant)",foreign:true,cur:"EUR",base:42000,vari:18000,quota:"25 qualified opps / quarter",source:"careers",detail:"Listed only on the company's ATS. Relocation package included.",days:7,band:"verified",tools:["Salesforce","Outreach","ZoomInfo"],via:{type:"Employee referrer",who:"BDR Manager, Halcyon",bonus:"Earns the company's €1,500 referral bonus"},path:"BDR → AE in 12–18 months"},
+ {id:"quarry",co:"Quarry Data",coNote:"Data infra · Series B · 260 people",title:"Partnerships BDR, Middle East",seg:"Enterprise",motion:"Outbound",market:"global",loc:"Dubai · onsite",rights:"Employment visa provided",foreign:true,cur:"AED",base:216000,vari:96000,quota:"6 partner-sourced opps / quarter",source:"signal",detail:"Opening a Dubai office this quarter. Lease and GM hire announced.",signal:"Market expansion",days:8,band:"estimated",tools:["Salesforce","Sales Navigator","Gong"],via:{type:"Recruiter",who:"Partner GCC recruiter",bonus:"Paid by the employer on placement"},path:"Partnerships manager track"},
+ {id:"cobalt",co:"Cobalt Cloud",coNote:"Cloud cost SaaS · Series B · 250 people",title:"SDR, India mid-market",seg:"Mid-market",motion:"Outbound",market:"india",loc:"Pune · hybrid",rights:"India work rights",foreign:false,cur:"INR",base:900000,vari:450000,quota:"16 SQLs / month",source:"public",board:"Naukri",detail:"Posted publicly on Naukri 3 days ago. Also on the company careers page.",days:1,band:"verified",tools:["HubSpot","Apollo","Sales Navigator"],via:{type:"Direct application",who:"Apply on the company site",bonus:"We'll also look for an insider for a warm intro"},path:"SDR → AE in about 18 months"},
+ {id:"pinewave",co:"Pinewave",coNote:"Martech SaaS · 600 people",title:"Business Development Rep, UK",seg:"Mid-market",motion:"Inbound",market:"emea",loc:"Manchester · hybrid",rights:"UK work rights required",foreign:false,cur:"GBP",base:32000,vari:14000,quota:"30 qualified meetings / quarter",source:"public",board:"LinkedIn Jobs",detail:"Posted on LinkedIn Jobs 2 days ago, with 140+ applicants already. A warm referral matters here.",days:2,band:"estimated",tools:["Salesforce","Outreach","Gong"],via:{type:"Direct application",who:"Apply on the company site",bonus:"We'll also look for an insider for a warm intro"},path:"BDR → AE track"},
+ {id:"vantage",co:"Vantage Grid",coNote:"Energy software · 1,100 people",title:"Inside Sales Representative, DACH",seg:"Enterprise",motion:"Full-cycle",market:"emea",loc:"Hamburg · hybrid",rights:"EU Blue Card sponsorship available",foreign:true,cur:"EUR",base:52000,vari:20000,quota:"€600k pipeline / quarter",source:"public",board:"StepStone",detail:"Posted on StepStone and the company's careers page 5 days ago.",days:4,band:"verified",tools:["Salesforce","ZoomInfo","Gong"],via:{type:"Direct application",who:"Apply on the company site",bonus:"We'll also look for an insider for a warm intro"},path:"Inside Sales → Field AE"},
+ {id:"orbitly",co:"Orbitly",coNote:"AI scheduling · Series A · 45 people",title:"Founding BDR (US market, remote)",seg:"SMB",motion:"Outbound",market:"remote-in",loc:"Remote from India · US hours",rights:"Contract, paid in USD",foreign:true,cur:"USD",base:30000,vari:15000,quota:"18 meetings held / month",source:"public",board:"Wellfound",detail:"Posted on Wellfound last week. Founders reply to applicants directly.",days:6,band:"verified",tools:["Apollo","Clay","HubSpot","Lemlist"],via:{type:"Direct application",who:"Apply on Wellfound or the company site",bonus:"We'll draft a note to the founder too"},path:"Founding team"}
+];
+
+// Example profile
+let P={name:"Riya M. (example)",role:"SDR",years:2.5,attain:112,meet:16,emp:"Example Corp",seg:"Mid-market",motion:"Outbound",tools:["HubSpot","Salesforce","Outreach","Apollo","Sales Navigator"],stealth:false,verified:{quota:true,manager:false},floorUsd:0};
+
+let F={markets:new Set(),sources:new Set(),floor:0,seg:"",motion:"",verified:false,foreign:false,sort:"fit"};
+let REFS=[
+ {job:"kestrel",via:"Employee referrer",date:"3 Nov 2026",stage:2},
+ {job:"tidewire",via:"Hiring manager",date:"29 Oct 2026",stage:3}
+];
+const STAGES=["Requested","Viewed","Referred","Interview booked"];
+let selected=null;
+
+function fit(j){
+  const t=j.tools.filter(x=>P.tools.includes(x)).length/j.tools.length;
+  const seg=(j.seg===P.seg?0.6:0.25)+(j.motion===P.motion?0.4:(j.motion==="Full-cycle"?0.15:0.1));
+  const att=Math.min(1,Math.max(0,(P.attain-60)/60));
+  const parts={Tools:Math.round(t*100),"Segment & motion":Math.round(seg*100),"Quota record":Math.round(att*100)};
+  return {score:Math.round(t*40+seg*30+att*30),parts};
+}
+const ote=j=>j.base+j.vari;
+const an=w=>/^[AEIOS]/.test(w)?"an "+w:"a "+w;
+
+// FEED
+function chips(el,map,set){
+  el.innerHTML=Object.entries(map).map(([k,v])=>`<button class="chip" aria-pressed="${set.has(k)}" data-k="${k}">${v}</button>`).join("");
+  el.onclick=e=>{const b=e.target.closest(".chip");if(!b)return;const k=b.dataset.k;set.has(k)?set.delete(k):set.add(k);b.setAttribute("aria-pressed",set.has(k));renderList();};
+}
+function renderList(){
+  let rows=JOBS.filter(j=>(j.source!=="public"||boardOn(j.board))&&(!F.markets.size||F.markets.has(j.market))&&(!F.sources.size||F.sources.has(j.source))&&usd(ote(j),j.cur)>=F.floor&&(!F.seg||j.seg===F.seg)&&(!F.motion||j.motion===F.motion)&&(!F.verified||j.band==="verified")&&(!F.foreign||j.foreign));
+  rows=rows.map(j=>({j,f:fit(j)}));
+  if(F.sort==="fit")rows.sort((a,b)=>b.f.score-a.f.score);
+  if(F.sort==="ote")rows.sort((a,b)=>usd(ote(b.j),b.j.cur)-usd(ote(a.j),a.j.cur));
+  if(F.sort==="fresh")rows.sort((a,b)=>a.j.days-b.j.days);
+  document.getElementById("count").textContent=`${rows.length} of ${JOBS.length} roles · sample data`;
+  const L=document.getElementById("list");
+  if(!rows.length){L.innerHTML=`<div class="empty">No roles match these filters. Try lowering your minimum OTE or clearing a market.</div>`;return;}
+  L.innerHTML=rows.map(({j,f})=>`
+   <button class="card${selected===j.id?" sel":""}" data-id="${j.id}">
+     <div><h3>${esc(j.title)}</h3><div class="co">${esc(j.co)} · ${esc(j.loc)}</div></div>
+     <div class="ote num"><b>${fmt(ote(j),j.cur)}</b><span>OTE · ${fmt(j.base,j.cur)} base</span></div>
+     <div class="meta">
+       ${isTarget(j.co)?`<span class="tag" style="background:var(--fg);color:var(--bg)">★ Great company</span>`:""}
+       <span class="tag src ${j.source}">${srcLabel(j)}</span>
+       <span class="tag ${j.band==="verified"?"vband":"eband"}">${j.band==="verified"?"Verified band":"Estimated band"}</span>
+       <span class="tag">${j.seg} · ${j.motion}</span>
+       <span class="tag num">Checked ${j.days}d ago</span>
+       <span class="fit num" title="Fit with your profile" style="--w:${f.score}%">Fit ${f.score}% <i></i></span>
+     </div>
+   </button>`).join("");
+}
+function floorLabel(){const v=F.floor;document.getElementById("fFloorOut").textContent=v?`· $${v/1000}k+ (≈ ₹${(v*84/100000).toFixed(0)} L)`:"· any";}
+
+function openJob(id){
+  selected=id;renderList();
+  const j=JOBS.find(x=>x.id===id),f=fit(j),o=ote(j),bp=Math.round(j.base/o*100);
+  const sent=REFS.some(r=>r.job===id);
+  const L=document.getElementById("layer");
+  L.innerHTML=`<div class="scrim" data-close></div>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+    <button class="x" data-close>Close</button>
+    <div class="d-head">
+      <span class="tag src ${j.source}">${srcLabel(j)}</span>
+      <h2 id="dTitle">${esc(j.title)}</h2>
+      <p>${esc(j.co)} · ${esc(j.coNote)}</p>
+      <p>${esc(j.loc)} · ${esc(j.rights)}</p>
+    </div>
+    <div class="box">
+      <h4>Pay (${j.band==="verified"?"verified band":"estimated band"})</h4>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap"><b style="font-family:var(--display);font-size:28px" class="num">${fmt(o,j.cur)} OTE</b><span class="note num">≈ $${Math.round(usd(o,j.cur)/1000)}k USD</span></div>
+      <div class="otebar" role="img" aria-label="Base ${bp} percent, variable ${100-bp} percent"><div class="b" style="width:${bp}%"></div><div class="v" style="width:${100-bp}%"></div></div>
+      <dl class="kv num"><dt>Base</dt><dd>${fmt(j.base,j.cur)} (${bp}%)</dd><dt>Variable</dt><dd>${fmt(j.vari,j.cur)} (${100-bp}%)</dd><dt>Quota</dt><dd>${esc(j.quota)}</dd><dt>Career path</dt><dd>${esc(j.path)}</dd></dl>
+      ${j.band==="verified"?`<span class="note">Band confirmed by the referrer or recruiter in the last ${j.days} days.</span>`:`<span class="note">No confirmed range yet. This is estimated from similar roles in the same market.</span>`}
+    </div>
+    <div class="box signalbox">
+      <h4>${j.source==="public"?"Where we found it":"Why this is hidden"}</h4>
+      <div>${esc(j.detail)}</div>
+      <span class="note num">Source verified ${j.days} day${j.days>1?"s":""} ago</span>
+    </div>
+    <div class="box">
+      <h4>Your fit · ${f.score}%</h4>
+      <div class="brk num">${Object.entries(f.parts).map(([k,v])=>`<span>${k}</span><div class="bar"><span style="width:${v}%"></span></div><span>${v}%</span>`).join("")}</div>
+      <div class="chips">${j.tools.map(t=>`<span class="tag" style="${P.tools.includes(t)?"background:var(--accent-soft)":""}">${P.tools.includes(t)?"✓ ":""}${t}</span>`).join("")}</div>
+    </div>
+    <div class="box">
+      <h4>Your way in</h4>
+      <div><b>${esc(j.via.type)}</b>: ${esc(j.via.who)}</div>
+      <div class="note">${esc(j.via.bonus)}</div>
+      <div class="actions">
+        <button class="btn primary" id="askRef" ${sent?"disabled":""}>${sent?"Referral requested":"Request warm referral"}</button>
+        <button class="btn" id="draftHM">Draft note to hiring manager</button>
+      </div>
+    </div>
+  </aside>`;
+  L.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeLayer);
+  document.getElementById("askRef").onclick=()=>refModal(j);
+  document.getElementById("draftHM").onclick=()=>hmModal(j);
+  L.querySelector(".x").focus();
+}
+function closeLayer(){document.getElementById("layer").innerHTML="";selected=null;renderList();}
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){const m=document.querySelector(".modal");if(m)m.remove();else if(document.querySelector(".drawer"))closeLayer();}});
+
+function modal(html){const d=document.createElement("div");d.className="modal";d.innerHTML=`<div class="panel" role="dialog" aria-modal="true">${html}</div>`;document.body.appendChild(d);d.addEventListener("click",e=>{if(e.target===d||e.target.closest("[data-mclose]"))d.remove();});return d;}
+
+function refModal(j){
+  const d=modal(`<h3>Request a warm referral</h3>
+   <p class="note">${esc(j.title)} at ${esc(j.co)}</p>
+   <div class="box"><h4>What the ${esc(j.via.type.toLowerCase())} will see</h4>
+     <div>${P.stealth?"Anonymous SDR profile (stealth on)":esc(P.name)} · ${esc(P.role)} · ${P.years} yrs · ${P.attain}% of quota · ${P.meet} meetings/month</div>
+     <div class="note">Tools: ${P.tools.join(", ")}</div></div>
+   <label class="field"><span>Add a short note (optional)</span><textarea id="refNote" style="min-height:90px">Hi, I'm ${an(P.role)} in ${P.seg.toLowerCase()} outbound at ${P.attain}% of quota. I'd love a referral for this role. Happy to share call recordings or a pipeline breakdown.</textarea></label>
+   <label class="toggle"><input type="checkbox" id="consent"> Share my scorecard with this ${esc(j.via.type.toLowerCase())} only, for this role only</label>
+   <div class="actions"><button class="btn primary" id="sendRef" disabled>Send request</button><button class="btn" data-mclose>Cancel</button></div>
+   <p class="note">Prototype: nothing is actually sent.</p>`);
+  const c=d.querySelector("#consent"),s=d.querySelector("#sendRef");
+  c.onchange=()=>s.disabled=!c.checked;
+  s.onclick=()=>{REFS.unshift({job:j.id,via:j.via.type,date:"6 Nov 2026",stage:0});d.remove();openJob(j.id);renderRefs();toast("Referral requested. Track it under Referrals.");};
+}
+function hmModal(j){
+  const txt=`Subject: ${P.role} for ${j.co}'s ${j.seg.toLowerCase()} push
+
+Hi [Name],
+
+I saw ${j.co} is ${j.signal?j.signal.toLowerCase():"building out the sales team"}, and I'd like to be part of it.
+
+I'm ${an(P.role)} with ${P.years} years in ${P.seg.toLowerCase()} ${P.motion.toLowerCase()}. Over the last four quarters I hit ${P.attain}% of quota and booked about ${P.meet} meetings a month, working mostly in ${P.tools.slice(0,3).join(", ")}.
+
+Your team runs on ${j.tools.slice(0,2).join(" and ")}, so I could be productive from week one. Could we do a 15-minute call next week?
+
+Thanks,
+${P.stealth?"[Your name]":P.name.replace(" (example)","")}`;
+  const d=modal(`<h3>Note to the hiring manager</h3>
+   <p class="note">AI draft from your scorecard and this role. Edit it, then send it yourself from your own email or LinkedIn. Backchannel never sends on your behalf.</p>
+   <label class="field"><span>Draft</span><textarea id="hmText">${esc(txt)}</textarea></label>
+   <div class="actions"><button class="btn primary" id="copyHM">Copy draft</button><button class="btn" data-mclose>Close</button></div>`);
+  d.querySelector("#copyHM").onclick=()=>{const t=d.querySelector("#hmText");navigator.clipboard.writeText(t.value).then(()=>toast("Copied to clipboard"),()=>{t.select();toast("Press Ctrl/Cmd+C to copy");});};
+}
+function toast(m){const t=document.createElement("div");t.className="toast";t.setAttribute("role","status");t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2600);}
+
+// PROFILE
+function fillForm(){
+  pName.value=P.name;pRole.value=P.role;pYears.value=P.years;pAttain.value=P.attain;pMeet.value=P.meet;pEmp.value=P.emp;pSeg.value=P.seg;pMotion.value=P.motion;
+  const T=document.getElementById("pTools");
+  T.innerHTML=TOOLS.map(t=>`<button type="button" class="chip" aria-pressed="${P.tools.includes(t)}" data-k="${t}">${t}</button>`).join("");
+  T.onclick=e=>{const b=e.target.closest(".chip");if(!b)return;const k=b.dataset.k;P.tools=P.tools.includes(k)?P.tools.filter(x=>x!==k):[...P.tools,k];b.setAttribute("aria-pressed",P.tools.includes(k));renderSummary();renderList();};
+}
+function renderSummary(){
+  const init=P.stealth?"?":P.name.trim()[0]||"?";
+  const S=document.getElementById("pSummary");
+  S.innerHTML=`<div class="idcard"><div class="avatar">${esc(init)}</div><div><h3 style="font-size:20px">${P.stealth?"Anonymous SDR":esc(P.name)}</h3><div class="note">${esc(P.role)} · ${P.years} yrs · ${esc(P.seg)} ${esc(P.motion.toLowerCase())}</div></div></div>
+   <div class="statrow num"><div class="stat"><b>${P.attain}%</b><span>Quota attainment</span></div><div class="stat"><b>${P.meet}</b><span>Meetings / month</span></div><div class="stat"><b>${P.tools.length}</b><span>Tools</span></div></div>
+   <div class="fgroup"><span class="lbl" style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600">Verification</span>
+     <div class="chips"><span class="badge ${P.verified.quota?"ok":"no"}">${P.verified.quota?"✓ Quota proof checked":"Quota proof missing"}</span><span class="badge ${P.verified.manager?"ok":"no"}">${P.verified.manager?"✓ Manager reference":"No manager reference"}</span></div>
+     <div class="actions"><button class="btn" id="vQuota">${P.verified.quota?"Replace quota proof":"Upload quota proof"}</button><button class="btn" id="vMgr" ${P.verified.manager?"disabled":""}>Request manager reference</button></div>
+     <p class="note">Verified profiles get referral requests answered first. Proof is checked once and never shown to employers.</p></div>
+   <label class="toggle"><input type="checkbox" id="stealth" ${P.stealth?"checked":""}> Stealth mode: hide my name, and hide me from ${esc(P.emp||"my current employer")} and its recruiters</label>`;
+  S.querySelector("#stealth").onchange=e=>{P.stealth=e.target.checked;renderSummary();toast(P.stealth?"Stealth on. Referrers see an anonymous profile.":"Stealth off");};
+  S.querySelector("#vQuota").onclick=()=>{P.verified.quota=true;renderSummary();toast("Quota proof received (demo)");};
+  S.querySelector("#vMgr").onclick=()=>{P.verified.manager=true;renderSummary();toast("Reference request sent to your manager (demo)");};
+}
+function setupProfile(){
+  fillForm();renderSummary();
+  document.getElementById("ptabs").onclick=e=>{const b=e.target.closest("button");if(!b)return;document.querySelectorAll("#ptabs button").forEach(x=>x.setAttribute("aria-selected",x===b));document.querySelectorAll("[data-p]").forEach(p=>p.hidden=p.dataset.p!==b.dataset.t);};
+  document.getElementById("scoreForm").onsubmit=e=>{e.preventDefault();Object.assign(P,{name:pName.value||"You",role:pRole.value,years:+pYears.value||0,attain:+pAttain.value||0,meet:+pMeet.value||0,emp:pEmp.value,seg:pSeg.value,motion:pMotion.value});renderSummary();renderList();toast("Scorecard saved. Matches updated.");};
+  const extract=(el)=>{el.innerHTML=`<div class="box"><h4>Found in your profile (demo extraction)</h4><div class="chips"><span class="tag">SDR · 2.5 yrs</span><span class="tag">Mid-market outbound</span><span class="tag">112% of quota (FY25)</span><span class="tag">HubSpot</span><span class="tag">Outreach</span><span class="tag">Apollo</span></div><div class="actions"><button class="btn primary" data-apply>Confirm and add to scorecard</button></div></div>`;el.querySelector("[data-apply]").onclick=()=>{Object.assign(P,{role:"SDR",years:2.5,seg:"Mid-market",motion:"Outbound",attain:112});["HubSpot","Outreach","Apollo"].forEach(t=>P.tools.includes(t)||P.tools.push(t));fillForm();renderSummary();renderList();toast("Added to your scorecard");};};
+  document.getElementById("cvFile").onchange=e=>{if(e.target.files.length)extract(document.getElementById("cvOut"));};
+  document.getElementById("liGo").onclick=()=>{const v=liUrl.value.trim();if(!/linkedin\.com\/in\//.test(v)){document.getElementById("liOut").innerHTML=`<p class="note" style="color:var(--warn)">That doesn't look like a profile URL. It should contain linkedin.com/in/.</p>`;return;}extract(document.getElementById("liOut"));};
+  // scripted chat
+  const Q=[
+    {q:"Hi! What's your current role, and how long have you been in sales?",a:v=>{const m=v.match(/(\d+(\.\d+)?)/);if(m)P.years=+m[1];if(/bdr/i.test(v))P.role="BDR";else if(/lead/i.test(v))P.role="SDR Team Lead";else if(/ae|account exec/i.test(v))P.role="AE (SMB)";else if(/gtm/i.test(v))P.role="GTM Engineer";else P.role="SDR";}},
+    {q:"Roughly what % of quota did you hit over the last four quarters?",a:v=>{const m=v.match(/\d+/);if(m)P.attain=+m[0];}},
+    {q:"Do you mostly sell to SMB, mid-market or enterprise? And is it outbound, inbound or full-cycle?",a:v=>{if(/enter/i.test(v))P.seg="Enterprise";else if(/smb|small/i.test(v))P.seg="SMB";else if(/mid/i.test(v))P.seg="Mid-market";if(/in-?bound/i.test(v))P.motion="Inbound";else if(/full/i.test(v))P.motion="Full-cycle";else if(/out/i.test(v))P.motion="Outbound";}},
+    {q:"Which tools do you use daily? (e.g. Salesforce, Outreach, Clay)",a:v=>{const f=TOOLS.filter(t=>v.toLowerCase().includes(t.toLowerCase().split(" ")[0]));if(f.length)P.tools=f;}}
+  ];
+  let qi=0;const C=document.getElementById("chat");
+  const say=(t,who)=>{C.insertAdjacentHTML("beforeend",`<div class="msg ${who}">${esc(t)}</div>`);C.scrollTop=C.scrollHeight;};
+  say(Q[0].q,"ai");
+  document.getElementById("chatForm").onsubmit=e=>{e.preventDefault();const v=chatIn.value.trim();if(!v)return;chatIn.value="";say(v,"me");
+    if(qi<Q.length){Q[qi].a(v);qi++;fillForm();renderSummary();renderList();}
+    setTimeout(()=>say(qi<Q.length?Q[qi].q:"Done. Your scorecard is updated. Check the summary on the right, then upload quota proof to get verified.","ai"),350);};
+}
+
+// PAY (illustrative bands: [p25, median, p75] OTE in local currency, base share)
+const BANDS={
+ "SDR":{"India onsite":["INR",800000,1100000,1500000,.7],"Remote from India (US)":["INR",1400000,2000000,2800000,.65],"UK":["GBP",40000,48000,56000,.65],"Germany":["EUR",55000,62000,72000,.7],"France":["EUR",42000,50000,58000,.7],"Netherlands":["EUR",45000,52000,60000,.7],"US":["USD",75000,85000,98000,.6]},
+ "BDR":{"India onsite":["INR",900000,1200000,1600000,.7],"Remote from India (US)":["INR",1500000,2200000,3000000,.65],"UK":["GBP",42000,50000,58000,.65],"Germany":["EUR",56000,64000,74000,.7],"France":["EUR",44000,52000,60000,.7],"Netherlands":["EUR",47000,55000,62000,.7],"US":["USD",78000,88000,100000,.6]},
+ "Senior SDR":{"India onsite":["INR",1200000,1600000,2100000,.7],"Remote from India (US)":["INR",2000000,2700000,3500000,.65],"UK":["GBP",50000,58000,66000,.65],"Germany":["EUR",64000,72000,82000,.7],"France":["EUR",50000,58000,66000,.7],"Netherlands":["EUR",54000,61000,70000,.7],"US":["USD",88000,98000,112000,.6]},
+ "SDR Team Lead":{"India onsite":["INR",1800000,2500000,3200000,.68],"Remote from India (US)":["INR",2600000,3400000,4400000,.65],"UK":["GBP",60000,70000,82000,.65],"Germany":["EUR",75000,85000,98000,.7],"France":["EUR",62000,70000,80000,.7],"Netherlands":["EUR",65000,74000,85000,.7],"US":["USD",105000,120000,140000,.6]},
+ "AE (SMB)":{"India onsite":["INR",1600000,2200000,3000000,.6],"Remote from India (US)":["INR",2800000,3800000,5000000,.55],"UK":["GBP",65000,80000,95000,.5],"Germany":["EUR",80000,95000,110000,.55],"France":["EUR",70000,85000,100000,.55],"Netherlands":["EUR",72000,86000,100000,.55],"US":["USD",110000,130000,155000,.5]},
+ "GTM Engineer":{"India onsite":["INR",1500000,2200000,3200000,.85],"Remote from India (US)":["INR",2500000,3600000,5000000,.85],"UK":["GBP",50000,62000,75000,.85],"Germany":["EUR",60000,72000,85000,.85],"France":["EUR",50000,60000,72000,.85],"Netherlands":["EUR",55000,66000,78000,.85],"US":["USD",95000,115000,140000,.85]}
+};
+const MKT2={"India onsite":"india","Remote from India (US)":"remote-in","UK":"emea","Germany":"emea","France":"emea","Netherlands":"emea","US":"global"};
+function setupPay(){
+  bRole.innerHTML=Object.keys(BANDS).map(r=>`<option>${r}</option>`).join("");
+  bMarket.innerHTML=Object.keys(BANDS.SDR).map(m=>`<option>${m}</option>`).join("");
+  bRole.value="SDR";bMarket.value="Remote from India (US)";bYou.value=1600000;
+  [bRole,bMarket,bYou].forEach(x=>x.oninput=renderPay);
+  bMarket.onchange=()=>{const [c,,m]=BANDS[bRole.value][bMarket.value];bYou.value=Math.round(m*0.85/1000)*1000;renderPay();};
+  renderPay();
+}
+function renderPay(){
+  const [c,p25,med,p75,bs]=BANDS[bRole.value][bMarket.value];
+  const you=+bYou.value||0;
+  const lo=p25*0.6,hi=p75*1.3,pos=v=>Math.max(0,Math.min(100,(v-lo)/(hi-lo)*100));
+  const verdict=you<p25?`<span class="badge no">Below the typical band. Roles below may pay ${fmt(med-you,c)} more.</span>`:you>p75?`<span class="badge ok">Top quartile for this market</span>`:`<span class="badge ok">Inside the typical band</span>`;
+  document.getElementById("bOut").innerHTML=`
+   <div class="box"><h4>${esc(bRole.value)} · ${esc(bMarket.value)} · OTE per year</h4>
+    <div class="range" role="img" aria-label="Typical band ${fmt(p25,c)} to ${fmt(p75,c)}, median ${fmt(med,c)}, you ${fmt(you,c)}">
+      <div class="track"></div><div class="band" style="left:${pos(p25)}%;width:${pos(p75)-pos(p25)}%"></div><div class="med" style="left:${pos(med)}%"></div>
+      ${you?`<div class="you num" style="left:${pos(you)}%">You ${fmt(you,c)}</div>`:""}
+    </div>
+    <div class="scale num"><span>${fmt(lo,c)}</span><span>${fmt(hi,c)}</span></div>
+    <dl class="kv num"><dt>25th percentile</dt><dd>${fmt(p25,c)}</dd><dt>Median</dt><dd>${fmt(med,c)} (base ${fmt(med*bs,c)} + variable ${fmt(med*(1-bs),c)})</dd><dt>75th percentile</dt><dd>${fmt(p75,c)}</dd><dt>Typical split</dt><dd>${Math.round(bs*100)} / ${Math.round((1-bs)*100)} base / variable</dd></dl>
+    ${you?verdict:""}
+    <p class="note">Illustrative ranges for the prototype, not market data.</p></div>`;
+  const m=MKT2[bMarket.value];
+  const above=JOBS.filter(j=>j.market===m&&usd(ote(j),j.cur)>=usd(Math.max(you,med),c)).sort((a,b)=>usd(ote(b),b.cur)-usd(ote(a),a.cur));
+  document.getElementById("bRoles").innerHTML=`<h3 style="font-size:19px">Hidden roles paying above ${you>med?"your number":"the median"}</h3>
+   ${above.length?above.map(j=>`<button class="card" data-id="${j.id}" style="grid-template-columns:1fr auto"><div><h3 style="font-size:15px">${esc(j.title)}</h3><div class="co">${esc(j.co)}</div></div><div class="ote num"><b style="font-size:17px">${fmt(ote(j),j.cur)}</b><span>${SOURCES[j.source]}</span></div></button>`).join(""):`<p class="note">No sample roles in this market are above that number yet. Try another market.</p>`}`;
+}
+
+// REFERRALS
+function renderRefs(){
+  document.getElementById("refBody").innerHTML=REFS.map((r,i)=>{const j=JOBS.find(x=>x.id===r.job);return `<tr>
+   <td><b>${esc(j.title)}</b><div class="note">${esc(j.co)}</div></td><td>${esc(r.via)}</td><td class="num">${r.date}</td>
+   <td><span class="stage s${r.stage}">${STAGES[r.stage]}</span></td>
+   <td><div class="steps" aria-label="Stage ${r.stage+1} of 4">${STAGES.map((_,k)=>`<i class="${k<=r.stage?"on":""}"></i>`).join("")}</div></td>
+   <td>${r.stage<3?`<button class="btn" data-adv="${i}" style="padding:6px 10px;font-size:13px">Simulate next stage</button>`:""}</td></tr>`;}).join("");
+}
+document.getElementById("refBody").onclick=e=>{const b=e.target.closest("[data-adv]");if(!b)return;REFS[+b.dataset.adv].stage++;renderRefs();};
+
+// SIDE INCOME (RWS module)
+const GIGS=[
+ {n:"micro1",u:"https://www.micro1.ai",d:"An AI-vetted talent network that places experts on contract projects, including work for AI labs that need domain expertise."},
+ {n:"Turing",u:"https://www.turing.com",d:"Matches vetted professionals with AI training and remote contract engagements. Screening includes skill assessments."},
+ {n:"Mercor",u:"https://www.mercor.com",d:"Expert contract work for AI labs. Professionals with sales and business backgrounds can apply for domain-expert projects."}
+];
+function renderGigs(){
+  document.getElementById("gigs").innerHTML=GIGS.map(g=>`<div class="gig"><h3>${g.n}</h3><p style="margin:0">${g.d}</p>
+   <dl class="kv"><dt>Rate</dt><dd>Set by the partner. Check before you join.</dd><dt>Eligibility</dt><dd>Varies by country and project</dd></dl>
+   <a class="btn primary" href="${g.u}" target="_blank" rel="noopener">Join on ${g.n}'s site ↗</a>
+   <div class="disclose">Referral link. Remote Work Syndicate may earn a fee if you're accepted. Backchannel doesn't hire you or pay you.</div></div>`).join("");
+}
+
+// MATCHER + SOURCES
+function renderBoards(){
+  const cnt=b=>b.hidden?(b.n==="Hidden network"?JOBS.filter(j=>["unposted","signal","network","recruiter"].includes(j.source)).length:JOBS.filter(j=>j.source==="careers").length):JOBS.filter(j=>j.board===b.n).length;
+  document.getElementById("bCount").textContent=`${BOARDS.filter(b=>b.on).length} of ${BOARDS.length} connected`;
+  document.getElementById("bBody").innerHTML=BOARDS.map((b,i)=>`<tr><td><b>${esc(b.n)}</b></td><td style="white-space:normal;min-width:220px">${esc(b.how)}</td><td class="num">${cnt(b)}</td><td><input type="checkbox" data-b="${i}" ${b.on?"checked":""} ${b.hidden?"disabled":""} aria-label="Use ${esc(b.n)}"></td></tr>`).join("");
+}
+document.getElementById("bBody").onchange=e=>{const i=e.target.dataset.b;if(i===undefined)return;BOARDS[+i].on=e.target.checked?1:0;renderBoards();renderList();};
+function runMatch(from){
+  const o=document.getElementById("mOut");
+  o.innerHTML=`<p class="note">Reading your ${from}…</p>`;
+  setTimeout(()=>{
+    Object.assign(P,{role:"SDR",years:2.5,seg:"Mid-market",motion:"Outbound",attain:112});["HubSpot","Outreach","Apollo"].forEach(t=>P.tools.includes(t)||P.tools.push(t));
+    const n=JOBS.filter(j=>j.source!=="public"||boardOn(j.board)).length;
+    o.innerHTML=`<div class="box"><h4>AI read your ${from} (demo)</h4><div class="chips"><span class="tag">SDR · 2.5 yrs</span><span class="tag">Mid-market outbound</span><span class="tag">112% of quota</span><span class="tag">HubSpot</span><span class="tag">Outreach</span><span class="tag">Apollo</span></div><div class="note">Searching for: SDR, BDR, Senior SDR, Inside Sales and Founding BDR titles in your markets. Found ${n} roles across ${BOARDS.filter(b=>b.on).length} sources, sorted by fit.</div></div>`;
+    document.getElementById("mStatus").textContent="Matched from your "+from;
+    F.sort="fit";sort.value="fit";fillForm();renderSummary();renderList();toast(`${n} roles matched to your ${from}`);
+  },700);
+}
+document.getElementById("mCv").onchange=e=>{if(e.target.files.length)runMatch("CV");};
+document.getElementById("mGo").onclick=()=>{const v=mLi.value.trim();if(!/linkedin\.com\/in\//.test(v)){document.getElementById("mOut").innerHTML=`<p class="note" style="color:var(--warn)">That doesn't look like a profile URL. It should contain linkedin.com/in/.</p>`;return;}runMatch("LinkedIn profile");};
+
+// GREAT COMPANIES (AI-curated; sample culture/award/visa facts for fictional companies)
+const PREF={culture:new Set(["High salary","Great culture","Work-life balance","Equity / income upside"]),certs:new Set(["Great Place to Work"]),country:new Set(["India","UK","Germany","Netherlands","US","Remote"]),deal:new Set(["100% office"])};
+const PREF_OPTS={culture:["High salary","Great culture","Top-tier perks","Work-life balance","Equity / income upside","Brand & prestige","Learning & growth","Remote flexibility","Job security","Mission & impact"],certs:["Great Place to Work","Glassdoor Best Places to Work","LinkedIn Top Companies","Kununu Top Company","AmbitionBox Award"],country:["India","UK","Ireland","Germany","Netherlands","France","UAE","US","Remote"],deal:["100% office","Cold-calling only","Uncapped clawbacks","No base salary","Recent layoffs"]};
+let COMPANIES=[
+ {co:"Google",real:1,country:"US",sector:"Big tech · offices in India, UK, Ireland, Germany and more",added:"Today",why:"Widely known for top-of-market pay, generous perks and a strong brand on any CV.",culture:["High salary","Top-tier perks","Brand & prestige","Learning & growth"],certs:[],visa:"Depends on role and country",watch:true},
+ {co:"OpenAI",real:1,country:"US",sector:"AI lab · growing go-to-market team",added:"Today",why:"Known for very high pay and equity upside, and its sales team is growing fast.",culture:["High salary","Equity / income upside","Mission & impact","Brand & prestige"],certs:[],visa:"Depends on role and country",watch:false},
+ {co:"NVIDIA",real:1,country:"US",sector:"AI hardware & software · offices in India, UK, Germany",added:"Yesterday",why:"Known for strong stock-based pay and high employee satisfaction.",culture:["Equity / income upside","High salary","Job security","Brand & prestige"],certs:[],visa:"Depends on role and country",watch:false},
+ {co:"Microsoft",real:1,country:"US",sector:"Big tech · large sales org in India and EMEA",added:"2 days ago",why:"Known for work-life balance, strong benefits and structured sales careers.",culture:["Work-life balance","Job security","Top-tier perks","Learning & growth"],certs:[],visa:"Depends on role and country",watch:false},
+ {co:"Lumen Ledger",country:"UK",sector:"Fintech SaaS · 220 people",added:"3 days ago",why:"Top-quartile SDR pay for London, a 4-day week pilot, and 74% of SDRs hit quota.",culture:["High salary","Work-life balance","Great culture"],certs:["Great Place to Work 2026"],visa:"On the UK licensed-sponsor register",watch:true},
+ {co:"Halcyon Freight",country:"Netherlands",sector:"Freight tech · 700 people",added:"5 days ago",why:"Two current awards, a 30-day remote-work allowance and a relocation package.",culture:["Great culture","Remote flexibility","Job security"],certs:["Glassdoor Best Places to Work 2025","Great Place to Work 2026"],visa:"IND recognised sponsor",watch:false},
+ {co:"Fernhill Labs",country:"Ireland",sector:"Dev tools · 340 people · Dublin",added:"Today",why:"Equity for every hire, uncapped commission and highly rated coaching.",culture:["Equity / income upside","Learning & growth","Great culture"],certs:["Great Place to Work 2026","LinkedIn Top Companies 2026"],visa:"Critical Skills Employment Permit sponsor",watch:false},
+ {co:"Sora Health",country:"India",sector:"Health SaaS · 410 people · Bangalore",added:"Yesterday",why:"Hybrid policy, family health cover and a comp plan unchanged for 2 years.",culture:["Work-life balance","Top-tier perks","Job security"],certs:["AmbitionBox Award 2025","Great Place to Work 2026"],visa:"Not needed for Indian citizens",watch:false},
+ {co:"Atlas Pay",country:"UAE",sector:"Payments · 900 people · Dubai",added:"6 days ago",why:"Tax-free pay, housing allowance and visa included. No open sales role right now.",culture:["High salary","Top-tier perks"],certs:["LinkedIn Top Companies 2026"],visa:"Employment visa provided",watch:false}
+];
+const MORE=[
+ {co:"Marlow Robotics",country:"Germany",sector:"Industrial AI · 520 people · Munich",added:"Just now",why:"Kununu Top Company, 30 days' holiday and a company pension top-up.",culture:["Work-life balance","Great culture","Job security"],certs:["Kununu Top Company 2026"],visa:"EU Blue Card sponsorship offered",watch:false},
+ {co:"Quill Learning",country:"Remote",sector:"Edtech SaaS · 180 people · fully remote",added:"Just now",why:"Fully remote across 30 countries, with a learning budget and profit-sharing.",culture:["Remote flexibility","Equity / income upside","Learning & growth"],certs:["Great Place to Work 2026"],visa:"Remote via employer of record",watch:false}
+];
+let cFilter="all";
+const CF={all:"All",hiring:"Hiring now",quiet:"Not hiring yet",watch:"Watching"};
+const isTarget=co=>COMPANIES.some(t=>t.co===co);
+function prefChips(id,key){const el=document.getElementById(id),s=PREF[key];el.innerHTML=PREF_OPTS[key].map(o=>`<button class="chip" aria-pressed="${s.has(o)}" data-k="${esc(o)}">${esc(o)}</button>`).join("");el.onclick=e=>{const b=e.target.closest(".chip");if(!b)return;const k=b.dataset.k;s.has(k)?s.delete(k):s.add(k);b.setAttribute("aria-pressed",s.has(k));renderTargets();};}
+function renderTargets(){
+  document.getElementById("cFilter").innerHTML=Object.entries(CF).map(([k,v])=>{const n=COMPANIES.filter(c=>k==="all"||(k==="hiring"&&JOBS.some(j=>j.co===c.co))||(k==="quiet"&&!JOBS.some(j=>j.co===c.co))||(k==="watch"&&c.watch)).length;return `<button class="chip" aria-pressed="${cFilter===k}" data-cf="${k}">${v} <span class="num">${n}</span></button>`;}).join("");
+  const list=COMPANIES.map((t,i)=>({t,i,roles:JOBS.filter(j=>j.co===t.co)})).filter(({t,roles})=>cFilter==="all"||(cFilter==="hiring"&&roles.length)||(cFilter==="quiet"&&!roles.length)||(cFilter==="watch"&&t.watch));
+  document.getElementById("tgrid").innerHTML=(list.length?list.map(({t,i,roles})=>{
+    const certOk=t.certs.some(c=>[...PREF.certs].some(p=>c.startsWith(p)));
+    const countryOk=PREF.country.has(t.country);
+    return `<article class="tcard">
+      <header><div><h3>${esc(t.co)}</h3><div class="note">${esc(t.country)} · ${esc(t.sector)}</div></div>${roles.length?`<span class="st submitted">Hiring now</span>`:`<span class="st skipped">Not hiring yet</span>`}</header>
+      <div class="box" style="padding:10px 12px;gap:4px"><h4>Why AI added it · ${esc(t.added)}</h4><div style="font-size:14px">${esc(t.why)}</div></div>
+      <dl class="kv"><dt>Why great</dt><dd>${t.culture.map(c=>`<span class="tag" style="${PREF.culture.has(c)?"background:var(--accent-soft)":""}">${PREF.culture.has(c)?"✓ ":""}${esc(c)}</span>`).join(" ")}</dd>
+      <dt>Awards</dt><dd>${t.certs.length?t.certs.map(c=>`<span class="cert">${esc(c)}</span>`).join(" "):`<span class="note">${t.real?"Checked live in the full product":"None found"}</span>`}</dd>
+      <dt>Visa</dt><dd>${esc(t.visa)}</dd></dl>
+      <div class="chips">${countryOk?`<span class="badge ok">Country ✓</span>`:`<span class="badge no">Outside your countries</span>`}${certOk?`<span class="badge ok">Award you value ✓</span>`:""}</div>
+      ${roles.length?`<div class="fgroup"><span class="lbl">Open sales roles</span>${roles.map(j=>`<button class="btn" data-job="${j.id}" style="display:flex;justify-content:space-between;gap:10px;text-align:left;font-weight:500"><span>${esc(j.title)}</span><b class="num">${fmt(ote(j),j.cur)}</b></button>`).join("")}</div>`
+      :`<div class="box" style="padding:10px 12px;gap:4px"><h4>No open sales role right now</h4><div class="note">${t.watch?"Watching the careers page, hiring signals, insiders and recruiters. You'll get an alert the moment a sales role opens, often before it's posted.":"Keep watching to get an alert the moment a sales role opens here."}</div></div>`}
+      <div class="actions"><button class="btn ${t.watch?"":"primary"}" data-watch="${i}">${t.watch?"✓ Watching · stop":roles.length?"Watch for more roles":"Keep watching"}</button><button class="btn" data-hide="${i}">Not for me</button></div>
+    </article>`;}).join(""):`<div class="empty" style="grid-column:1/-1">No companies here yet.</div>`)+`<p class="note" style="grid-column:1/-1">Fictional companies, their stats and awards are sample data. Real company names (Google, OpenAI, NVIDIA, Microsoft) show general reputation only. Their roles, awards and visa details would come from live data in the full product.</p>`;
+}
+document.getElementById("cFilter").onclick=e=>{const b=e.target.closest("[data-cf]");if(!b)return;cFilter=b.dataset.cf;renderTargets();};
+document.getElementById("tgrid").onclick=e=>{const t=e.target.closest("button");if(!t)return;
+  if(t.dataset.job){openJob(t.dataset.job);}
+  if(t.dataset.watch){const c=COMPANIES[+t.dataset.watch];c.watch=!c.watch;renderTargets();toast(c.watch?`Watching ${c.co}. We'll alert you when a sales role opens.`:`Stopped watching ${c.co}`);}
+  if(t.dataset.hide){const c=COMPANIES.splice(+t.dataset.hide,1)[0];renderTargets();renderList();toast(`Removed ${c.co}. AI will suggest fewer companies like it.`);}};
+document.getElementById("cMore").onclick=()=>{const n=MORE.shift();if(!n){toast("No new matches right now. AI checks again tomorrow.");return;}COMPANIES.unshift(n);cFilter="all";renderTargets();renderList();toast(`AI added ${n.co}`);};
+
+// AUTOPILOT
+const AP={mode:"queue",cap:5,min:75};
+const MODES={ask:["Ask before each","You approve every application before it's sent."],queue:["24-hour queue","Sends after 24 hours unless you skip it. You have time to change your mind."],auto:["Full autopilot","Sends right away within your cap and minimum fit."]};
+let AQ=[
+ {job:"halcyon",status:"needs",q:"Will you now or in the future require visa sponsorship?"},
+ {job:"kestrel",status:"approve"},
+ {job:"brightloop",status:"scheduled",eta:"Sends in 17h"},
+ {job:"lumen",status:"submitted",receipt:"Greenhouse confirmation GH-48213 · 5 Nov 2026, 14:02 IST"},
+ {job:"verity",status:"skipped",why:"Below your 75% minimum fit"}
+];
+const STL={needs:"Needs your answer",approve:"Waiting for approval",scheduled:"Scheduled",submitted:"Submitted",skipped:"Skipped"};
+function renderAP(){
+  document.getElementById("apModes").innerHTML=Object.entries(MODES).map(([k,[t,d]])=>`<label class="radio"><input type="radio" name="apm" value="${k}" ${AP.mode===k?"checked":""}><span><b>${t}</b><small>${d}</small></span></label>`).join("");
+  capOut.textContent=AP.cap;minOut.textContent=AP.min;
+  const sub=AQ.filter(a=>a.status==="submitted").length;
+  apStat.textContent=`${sub} submitted today · cap ${AP.cap}/day`;
+  document.getElementById("apQueue").innerHTML=AQ.map((a,i)=>{const j=JOBS.find(x=>x.id===a.job),f=fit(j);
+    let act="",note="";
+    if(a.status==="needs"){note=`<div class="box" style="grid-column:1/-1"><h4>Sensitive question. Autopilot won't guess.</h4><div>${esc(a.q)}</div><div class="actions"><button class="btn" data-ans="${i}:No">No</button><button class="btn" data-ans="${i}:Yes">Yes</button></div></div>`;}
+    if(a.status==="approve")act=`<div class="actions"><button class="btn primary" data-ok="${i}" style="padding:6px 12px">Approve</button><button class="btn" data-skip="${i}" style="padding:6px 12px">Skip</button></div>`;
+    if(a.status==="scheduled"){act=`<button class="btn" data-skip="${i}" style="padding:6px 12px">Cancel</button>`;note=`<div class="note">${a.eta} · tailored CV ready (2 bullets reordered, nothing added)</div>`;}
+    if(a.status==="submitted")note=`<div class="note mono">Receipt: ${esc(a.receipt)}</div>`;
+    if(a.status==="skipped")note=`<div class="note">${esc(a.why)}</div>`;
+    return `<div class="qrow"><div><b>${esc(j.title)}</b><div class="note">${esc(j.co)} · fit ${f.score}% · <span class="st ${a.status}">${STL[a.status]}</span></div></div>${act}${note}</div>`;}).join("");
+}
+document.getElementById("apModes").onchange=e=>{AP.mode=e.target.value;renderAP();toast(MODES[AP.mode][0]+" on");};
+apCap.oninput=()=>{AP.cap=+apCap.value;renderAP();};
+apMin.oninput=()=>{AP.min=+apMin.value;renderAP();};
+document.getElementById("apQueue").onclick=e=>{const t=e.target;
+  if(t.dataset.ans){const [i]=t.dataset.ans.split(":");AQ[+i].status=AP.mode==="ask"?"approve":"scheduled";AQ[+i].eta="Sends in 24h";renderAP();toast("Answer saved to your profile for future forms");}
+  if(t.dataset.ok){const i=+t.dataset.ok;AQ[i].status="submitted";AQ[i].receipt="Workday confirmation WD-"+(70000+i*137)+" · 6 Nov 2026 (demo)";renderAP();toast("Submitted. Receipt saved.");}
+  if(t.dataset.skip){const i=+t.dataset.skip;AQ[i].status="skipped";AQ[i].why="Skipped by you";renderAP();}};
+
+// OUTREACH
+let MAIL=false;
+const SEQ=[["Day 0","Email","Personalised intro to the hiring manager","auto"],["Day 2","LinkedIn","Connection request with a short note","task"],["Day 4","Email","Follow-up with a proof point (call recording or pipeline numbers)","auto"],["Day 7","LinkedIn","Message if connected; otherwise skip","task"],["Day 10","Email","Short break-up note","auto"]];
+let CONTACTS=[
+ {n:"Hannah Kraus",r:"Co-founder & CRO",co:"Ordino Commerce",step:1,status:"Scheduled · Tue 8:40 am CET",hook:"your €18M Series A and the DACH push",hk2:"build the first outbound motion in DACH"},
+ {n:"Tom Ellery",r:"Head of SDR",co:"Lumen Ledger",step:2,status:"Opened twice",hook:"Lumen's move into mid-market banks",hk2:"help the SDR team hit the new SQL target"},
+ {n:"Sanne de Vries",r:"BDR Manager",co:"Halcyon Freight",step:3,status:"Replied, sequence stopped",hook:"Halcyon's new inbound programme in Benelux",hk2:"turn inbound volume into qualified opps faster"},
+ {n:"Arjun Rao",r:"Director, Sales APAC",co:"Kestrel Security",step:1,status:"Waiting for mailbox",hook:"Kestrel's APAC enterprise expansion",hk2:"open new enterprise logos in India"}
+];
+let pv=0;
+function mailText(c,alt){const first=c.n.split(" ")[0];
+  return alt?`Subject: Quick idea for ${c.co}'s outbound
+
+Hi ${first},
+
+Saw <span class="tok">${c.hook}</span>. Teams at that stage usually need pipeline fast, and that's the work I've been doing.
+
+I'm ${an(P.role)} running <span class="tok">${P.seg.toLowerCase()} ${P.motion.toLowerCase()}</span>. I've been at <span class="tok">${P.attain}% of quota</span> for four quarters, with about ${P.meet} meetings a month in ${P.tools.slice(0,2).join(" and ")}.
+
+Open to a 15-minute call about how I'd <span class="tok">${c.hk2}</span>?
+
+${P.stealth?"[Your name]":P.name.replace(" (example)","")}
+
+If this isn't relevant, reply "no" and I won't follow up.`
+  :`Subject: ${P.role} interested in ${c.co}
+
+Hi ${first},
+
+Congrats on <span class="tok">${c.hook}</span>. I'd like to help you <span class="tok">${c.hk2}</span>.
+
+Quick background: ${P.years} years as ${an(P.role)}, <span class="tok">${P.attain}% of quota</span> over the last four quarters, and ${P.meet} meetings booked a month. Your team runs on tools I use daily (<span class="tok">${P.tools.slice(0,3).join(", ")}</span>).
+
+Would a 15-minute call next week make sense?
+
+Best,
+${P.stealth?"[Your name]":P.name.replace(" (example)","")}
+
+If this isn't relevant, reply "no" and I won't follow up.`;}
+let alt=false;
+function renderOutreach(){
+  mailConn.textContent=MAIL?"✓ Gmail connected (demo)":"Connect Gmail or Outlook";
+  mailConn.className=MAIL?"btn":"btn primary";
+  document.getElementById("seqSteps").innerHTML=SEQ.map(s=>`<div class="step"><span class="day">${s[0]}</span><div><b>${s[1]}</b> · ${s[2]}</div><span class="${s[3]==="auto"?"mode-auto":"mode-task"}">${s[3]==="auto"?"Auto-send":"Your click"}</span></div>`).join("");
+  document.getElementById("oBody").innerHTML=CONTACTS.map((c,i)=>`<tr style="cursor:pointer" data-pv="${i}"><td><b>${esc(c.n)}</b><div class="note">${esc(c.r)}</div></td><td>${esc(c.co)}</td><td>${SEQ[c.step-1][0]} · ${SEQ[c.step-1][1]}</td><td>${esc(!MAIL&&c.status.startsWith("Waiting")?c.status:(c.status.startsWith("Waiting")?"Scheduled · Wed 9:10 am IST":c.status))}</td></tr>`).join("");
+  const c=CONTACTS[pv];pvWho.textContent=`${c.n}, ${c.co}`;pvMail.innerHTML=mailText(c,alt);
+  const tasks=CONTACTS.filter(c=>c.step===2||c.step===4);
+  document.getElementById("liTasks").innerHTML=tasks.length?tasks.map((c)=>`<div class="box"><div><b>Connect with ${esc(c.n)}</b> · ${esc(c.r)}, ${esc(c.co)}</div><div class="preview" style="padding:10px">Hi ${esc(c.n.split(" ")[0])}, I follow ${esc(c.co)}'s growth and work in ${esc(P.seg.toLowerCase())} outbound. I'd love to connect.</div><div class="actions"><button class="btn" data-copyli="${esc(c.n)}">Copy note</button><button class="btn" data-done>Mark done</button></div></div>`).join(""):`<p class="note">No LinkedIn tasks today.</p>`;
+}
+mailConn.onclick=()=>{MAIL=!MAIL;renderOutreach();toast(MAIL?"Mailbox connected (demo). Emails send from your own address.":"Mailbox disconnected");};
+document.getElementById("oBody").onclick=e=>{const r=e.target.closest("[data-pv]");if(!r)return;pv=+r.dataset.pv;alt=false;renderOutreach();};
+pvRegen.onclick=()=>{alt=!alt;renderOutreach();toast("Rewritten with AI");};
+pvCopy.onclick=()=>{const t=pvMail.innerText;navigator.clipboard.writeText(t).then(()=>toast("Copied"),()=>toast("Select the text to copy"));};
+document.getElementById("liTasks").onclick=e=>{const b=e.target;if(b.dataset.copyli!==undefined){const t=b.closest(".box").querySelector(".preview").innerText;navigator.clipboard.writeText(t).then(()=>toast("Note copied. Paste it on LinkedIn."),()=>toast("Select the text to copy"));}if(b.dataset.done!==undefined){b.closest(".box").remove();toast("Task done");}};
+
+// CHATBOT (scripted demo over sample data)
+const BOT_SUGG=["Best fits for me","Roles above $50k","Visa for Germany?","Prep me for Lumen Ledger","Is my pay fair?"];
+function botAnswer(q){
+  const s=q.toLowerCase();
+  const ranked=JOBS.map(j=>({j,f:fit(j).score})).sort((a,b)=>b.f-a.f);
+  const co=JOBS.find(j=>s.includes(j.co.toLowerCase().split(" ")[0]));
+  if(/prep|interview/.test(s)&&co)return `Prep brief for <b>${esc(co.co)}</b> (${esc(co.coNote)}):<br>• They sell ${co.seg.toLowerCase()}, ${co.motion.toLowerCase()}. Expect a cold-call or email role-play.<br>• Quota is ${esc(co.quota)}. Come with your own monthly numbers to compare.<br>• Their stack: ${co.tools.join(", ")}. Mention where you've used these.<br>• Ask about: ramp time, the share of SDRs at quota, and the path to AE (${esc(co.path)}).`;
+  if(/visa|sponsor|relocat|germany|uk|netherlands|abroad|country/.test(s)){const v=JOBS.filter(j=>j.foreign&&j.market!=="remote-in");return `Roles open to foreign candidates with visa or relocation support:<br>${v.map(j=>`• <b>${esc(j.title)}</b>, ${esc(j.co)}: ${esc(j.rights)}`).join("<br>")}<br>Tip: add the country under Great companies → Countries, and Autopilot will answer the sponsorship question only after you confirm it.`;}
+  const m=s.match(/(\d+)\s*k/);
+  if(m||/above|over|more than|salary|pay|ote/.test(s)&&!/fair/.test(s)){const n=m?+m[1]*1000:50000;const r=JOBS.filter(j=>usd(ote(j),j.cur)>=n);return r.length?`${r.length} hidden role${r.length>1?"s":""} at or above $${n/1000}k OTE (USD equivalent):<br>${r.map(j=>`• <b>${esc(j.title)}</b>, ${esc(j.co)}: ${fmt(ote(j),j.cur)}`).join("<br>")}`:`None of the sample roles reach $${n/1000}k OTE yet. Try a lower number.`;}
+  if(/fair|benchmark|underpaid|worth/.test(s))return `Open <a href="#pay">Pay benchmark</a> and enter your current OTE. For ${an(esc(P.role))} working remotely from India for US companies, the sample median is ₹20 L OTE. If you're below ₹14 L, you're under the typical band.`;
+  if(/referral|status|track/.test(s))return REFS.map(r=>{const j=JOBS.find(x=>x.id===r.job);return `• ${esc(j.co)}: <b>${STAGES[r.stage]}</b>`;}).join("<br>")+`<br>Full list under <a href="#referrals">Referrals</a>.`;
+  if(/autopilot|auto.?apply|apply for me/.test(s))return `Autopilot is in <b>${MODES[AP.mode][0]}</b> mode with a cap of ${AP.cap} applications a day and a minimum fit of ${AP.min}%. ${AQ.filter(a=>a.status==="needs").length} application needs your answer. <a href="#autopilot">Open Autopilot</a>.`;
+  if(/email|outreach|linkedin|message/.test(s))return `Your sequence has ${CONTACTS.length} contacts. Emails auto-send from your mailbox${MAIL?"":" once you connect it"}; LinkedIn steps are one-click tasks. <a href="#outreach">Open Outreach</a>.`;
+  if(/best|fit|match|recommend|top/.test(s))return `Your top matches right now:<br>${ranked.slice(0,3).map(x=>`• <b>${esc(x.j.title)}</b>, ${esc(x.j.co)}: fit ${x.f}%, ${fmt(ote(x.j),x.j.cur)} OTE`).join("<br>")}<br>Adding Clay to your tool stack would raise two of these.`;
+  return `I can help with your best-fit roles, pay ("roles above $40k"), visas and relocation, interview prep ("prep me for Ordino"), your referrals, Autopilot and outreach. What would you like?`;
+}
+function setupBot(){
+  const C=document.getElementById("botChat");
+  const add=(h,who)=>{C.insertAdjacentHTML("beforeend",`<div class="msg ${who}">${h}</div>`);C.scrollTop=C.scrollHeight;};
+  add(`Hi! I'm your job-search assistant. Ask me about hidden roles, pay, visas or interview prep.`,"ai");
+  document.getElementById("botSugg").innerHTML=BOT_SUGG.map(s=>`<button class="chip" type="button">${s}</button>`).join("");
+  const ask=q=>{add(esc(q),"me");setTimeout(()=>add(botAnswer(q),"ai"),300);};
+  document.getElementById("botSugg").onclick=e=>{const b=e.target.closest(".chip");if(b)ask(b.textContent);};
+  document.getElementById("botForm").onsubmit=e=>{e.preventDefault();const v=botIn.value.trim();if(!v)return;botIn.value="";ask(v);};
+  const tog=o=>{bot.hidden=!o;botFab.setAttribute("aria-expanded",o);if(o)botIn.focus();};
+  botFab.onclick=()=>tog(bot.hidden);botX.onclick=()=>tog(false);
+}
+
+// ROUTING
+const VIEWS=["feed","companies","autopilot","outreach","profile","pay","referrals","side-income"];
+function route(){
+  const h=location.hash.slice(1);const v=VIEWS.includes(h)?h:"feed";
+  VIEWS.forEach(x=>document.getElementById("v-"+x).hidden=x!==v);
+  document.querySelectorAll(".nav a").forEach(a=>{if(a.dataset.v===v)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");});
+  if(v!=="feed"&&document.querySelector(".drawer"))closeLayer();
+  if(v==="pay")renderPay();
+  window.scrollTo(0,0);
+}
+window.addEventListener("hashchange",route);
+
+// list clicks (feed + pay)
+document.addEventListener("click",e=>{const c=e.target.closest(".card[data-id]");if(c)openJob(c.dataset.id);});
+
+// filters
+chips(document.getElementById("fMarket"),MARKETS,F.markets);
+chips(document.getElementById("fSource"),SOURCES,F.sources);
+fFloor.oninput=()=>{F.floor=+fFloor.value;floorLabel();renderBoards();renderList();};
+fSeg.onchange=()=>{F.seg=fSeg.value;renderList();};
+fMotion.onchange=()=>{F.motion=fMotion.value;renderList();};
+fVerified.onchange=()=>{F.verified=fVerified.checked;renderList();};
+fForeign.onchange=()=>{F.foreign=fForeign.checked;renderList();};
+sort.onchange=()=>{F.sort=sort.value;renderList();};
+fReset.onclick=()=>{F.markets.clear();F.sources.clear();F.floor=0;F.seg="";F.motion="";F.verified=false;F.foreign=false;fFloor.value=0;fSeg.value="";fMotion.value="";fVerified.checked=false;fForeign.checked=false;chips(document.getElementById("fMarket"),MARKETS,F.markets);chips(document.getElementById("fSource"),SOURCES,F.sources);floorLabel();renderBoards();renderList();};
+railToggle.onclick=()=>{const r=document.getElementById("rail");r.classList.toggle("open");railToggle.setAttribute("aria-expanded",r.classList.contains("open"));};
+
+prefChips("prCulture","culture");prefChips("prCerts","certs");prefChips("prCountry","country");prefChips("prDeal","deal");
+floorLabel();renderBoards();renderList();setupProfile();setupPay();renderRefs();renderGigs();renderTargets();renderAP();renderOutreach();setupBot();route();
+})();
+</script>
+</html>
