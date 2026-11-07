@@ -135,7 +135,7 @@ export default async function CompaniesPage({
             <>
               <p className="font-semibold">No companies curated yet.</p>
               <p className="mt-1 text-muted">Click <b>Find more companies with AI</b> above to get started.</p>
-              <p className="mt-1 text-xs text-muted">Requires ANTHROPIC_API_KEY in .env.local</p>
+              <p className="mt-1 text-xs text-muted">Requires OPENROUTER_API_KEY in Vercel env vars</p>
             </>
           ) : (
             <p>No companies match this filter.</p>

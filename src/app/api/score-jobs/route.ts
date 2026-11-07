@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as serviceClient } from "@supabase/supabase-js";
-import Anthropic from "@anthropic-ai/sdk";
 import { scoreJob, type SearchProfile } from "@/lib/score";
 import type { Job, Market, RemoteType } from "@/lib/collector/types";
 import { rateLimit, retryAfter } from "@/lib/rate-limit";
+import { createAIClient, hasAIKey, AI_MODEL } from "@/lib/ai";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -41,16 +41,15 @@ function countryToMarket(country: string): Market {
   return "global";
 }
 
-// Use Claude to write a 2-sentence explanation — returns null if no API key
+// Use Claude via OpenRouter to write a 2-sentence explanation — returns null if no API key
 async function aiExplain(
   job: Job,
   profile: SearchProfile,
   score: number
 ): Promise<string | null> {
-  const key = process.env.ANTHROPIC_API_KEY ?? "";
-  if (!key || key.startsWith("sk-ant-api03-PLACEHOLDER")) return null;
+  if (!hasAIKey()) return null;
 
-  const client = new Anthropic({ apiKey: key });
+  const client = createAIClient();
   const prompt = `You are a career coach. Given a sales job and a candidate profile, write exactly 2 sentences explaining why the fit score is ${score}/100.
 
 Job: ${job.title} at ${job.company} (${job.location})
@@ -66,12 +65,12 @@ Candidate profile:
 Write 2 short, direct sentences. First sentence: main reason for the score. Second: one specific thing to look out for.`;
 
   try {
-    const msg = await client.messages.create({
-      model: "claude-haiku-5-5",
+    const response = await client.chat.completions.create({
+      model: AI_MODEL,
       max_tokens: 120,
       messages: [{ role: "user", content: prompt }],
     });
-    return (msg.content[0] as { text: string }).text.trim();
+    return response.choices[0].message.content?.trim() ?? null;
   } catch {
     return null;
   }
@@ -130,8 +129,7 @@ export async function POST() {
   );
 
   let scored = 0;
-  const hasAI = !!process.env.ANTHROPIC_API_KEY &&
-    !process.env.ANTHROPIC_API_KEY.startsWith("sk-ant-api03-PLACEHOLDER");
+  const hasAI = hasAIKey();
 
   for (const row of unscored) {
     const job: Job = {
@@ -169,7 +167,7 @@ export async function POST() {
         score: result.score,
         parts: result.parts,
         explanation: explanation ?? result.explanation,
-        model: explanation ? "claude-haiku-5-5" : "rule-based",
+        model: explanation ? AI_MODEL : "rule-based",
         scored_at: new Date().toISOString(),
       },
       { onConflict: "user_id,job_id" }

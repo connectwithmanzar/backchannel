@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import * as pdfParseModule from "pdf-parse";
 import { createClient } from "@/lib/supabase/server";
 import { rateLimit, retryAfter } from "@/lib/rate-limit";
+import { createAIClient, hasAIKey, AI_MODEL } from "@/lib/ai";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const pdfParse: (buf: Buffer) => Promise<{ text: string }> = (pdfParseModule as any).default ?? pdfParseModule;
 
@@ -33,10 +33,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || apiKey.startsWith("sk-ant-...")) {
+  if (!hasAIKey()) {
     return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY not configured. Add it to .env.local." },
+      { error: "OPENROUTER_API_KEY not configured." },
       { status: 503 }
     );
   }
@@ -68,15 +67,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const client = new Anthropic({ apiKey });
-    const message = await client.messages.create({
-      model: "claude-haiku-4-5",
+    const client = createAIClient();
+    const response = await client.chat.completions.create({
+      model: AI_MODEL,
       max_tokens: 1024,
-      system: SYSTEM,
-      messages: [{ role: "user", content: `Extract from this CV:\n\n${cvText.slice(0, 12000)}` }],
+      messages: [
+        { role: "system", content: SYSTEM },
+        { role: "user", content: `Extract from this CV:\n\n${cvText.slice(0, 12000)}` },
+      ],
     });
 
-    const raw = (message.content[0] as { type: string; text: string }).text.trim();
+    const raw = (response.choices[0].message.content ?? "").trim();
     const json = raw.startsWith("{") ? raw : raw.replace(/^```json\s*/i, "").replace(/```$/, "");
     const extracted = JSON.parse(json);
 

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as serviceClient } from "@supabase/supabase-js";
-import Anthropic from "@anthropic-ai/sdk";
 import { rateLimit, retryAfter } from "@/lib/rate-limit";
+import { createAIClient, hasAIKey, AI_MODEL } from "@/lib/ai";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -114,21 +114,20 @@ export async function POST() {
     tools: profile?.tools ?? [],
   };
 
-  const apiKey = process.env.ANTHROPIC_API_KEY ?? "";
-  if (!apiKey || apiKey.startsWith("sk-ant-api03-PLACEHOLDER") || apiKey === "sk-ant-...") {
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 400 });
+  if (!hasAIKey()) {
+    return NextResponse.json({ error: "OPENROUTER_API_KEY not configured" }, { status: 400 });
   }
 
-  const anthropic = new Anthropic({ apiKey });
+  const client = createAIClient();
   let companies: CuratedCompany[] = [];
 
   try {
-    const msg = await anthropic.messages.create({
-      model: "claude-haiku-5-5",
+    const response = await client.chat.completions.create({
+      model: AI_MODEL,
       max_tokens: 4096,
       messages: [{ role: "user", content: buildPrompt(prefsData) }],
     });
-    const text = msg.content.find((b) => b.type === "text")?.text ?? "";
+    const text = response.choices[0].message.content ?? "";
     const parsed = JSON.parse(text);
     companies = Array.isArray(parsed.companies) ? parsed.companies : [];
   } catch {
