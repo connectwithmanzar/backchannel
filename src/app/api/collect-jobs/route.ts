@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as userClient } from "@/lib/supabase/server";
 import { COMPANY_SEEDS, type CompanySeed } from "@/data/companies";
 import { fetchGreenhouse, fetchLever, fetchAshby, fetchSmartRecruiters, type RawJob } from "@/lib/collectors/ats";
 import { isSalesRole, normalise } from "@/lib/jobs/process";
 
 export const runtime = "nodejs";
-export const maxDuration = 300; // 5 min timeout for full run
+export const maxDuration = 300;
 
-// Service-role client can write to shared tables (companies, jobs).
 function getServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,7 +15,6 @@ function getServiceClient() {
   );
 }
 
-// Upsert a company seed → returns the company UUID.
 async function upsertCompany(
   supabase: ReturnType<typeof getServiceClient>,
   seed: CompanySeed
@@ -44,6 +43,7 @@ async function upsertCompany(
 }
 
 // Mark jobs that disappeared from the ATS feed as inactive.
+// Uses parameterised PostgREST filter — no raw SQL string interpolation.
 async function markInactiveForCompany(
   supabase: ReturnType<typeof getServiceClient>,
   companyId: string,
@@ -55,44 +55,48 @@ async function markInactiveForCompany(
     .update({ is_active: false })
     .eq("company_id", companyId)
     .eq("is_active", true)
-    .not("dedupe_hash", "in", `(${activeHashes.map((h) => `'${h}'`).join(",")})`);
+    .not("dedupe_hash", "in", `(${activeHashes.join(",")})`);
 }
 
-export async function POST(req: NextRequest) {
-  // Allow a single-company test via ?slug=hubspot
-  const { searchParams } = new URL(req.url);
-  const slugFilter = searchParams.get("slug");
+type IngestionResult = {
+  company: string;
+  fetched: number;
+  sales: number;
+  upserted: number;
+  error?: string;
+};
 
+async function runIngestion(slugFilter?: string | null): Promise<{
+  companies_checked: number;
+  total_upserted: number;
+  results: IngestionResult[];
+}> {
   const seeds = COMPANY_SEEDS.filter(
     (s) => s.enabled && (!slugFilter || s.ats_slug === slugFilter)
   );
 
-  if (!seeds.length) {
-    return NextResponse.json({ error: "No matching companies" }, { status: 400 });
-  }
-
   const supabase = getServiceClient();
-  const results: Array<{
-    company: string;
-    fetched: number;
-    sales: number;
-    upserted: number;
-  }> = [];
+  const results: IngestionResult[] = [];
   let totalUpserted = 0;
 
   for (const seed of seeds) {
     const companyId = await upsertCompany(supabase, seed);
-    if (!companyId) continue;
+    if (!companyId) {
+      results.push({ company: seed.name, fetched: 0, sales: 0, upserted: 0, error: "upsert failed" });
+      continue;
+    }
 
-    // Fetch and collect
     let rawJobs: RawJob[];
     try {
       if (seed.ats_type === "greenhouse") rawJobs = await fetchGreenhouse(seed.ats_slug);
       else if (seed.ats_type === "lever") rawJobs = await fetchLever(seed.ats_slug);
       else if (seed.ats_type === "ashby") rawJobs = await fetchAshby(seed.ats_slug);
       else rawJobs = await fetchSmartRecruiters(seed.ats_slug);
-    } catch {
-      rawJobs = [];
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "fetch error";
+      console.error(`[collect-jobs] fetch ${seed.name}:`, msg);
+      results.push({ company: seed.name, fetched: 0, sales: 0, upserted: 0, error: msg });
+      continue;
     }
 
     const salesJobs = rawJobs.filter((j) => isSalesRole(j.title));
@@ -116,35 +120,47 @@ export async function POST(req: NextRequest) {
       if (!error) upserted++;
     }
 
-    // Mark any previously active jobs that weren't in this fetch as inactive
     if (activeHashes.length) await markInactiveForCompany(supabase, companyId, activeHashes);
 
     results.push({ company: seed.name, fetched: rawJobs.length, sales: salesJobs.length, upserted });
     totalUpserted += upserted;
   }
 
-  return NextResponse.json({
-    ok: true,
-    companies_checked: results.length,
-    total_upserted: totalUpserted,
-    results,
-  });
+  return { companies_checked: results.length, total_upserted: totalUpserted, results };
 }
 
-// GET returns current job counts (useful for the UI)
-export async function GET() {
-  const supabase = getServiceClient();
-  const { count } = await supabase
-    .from("jobs")
-    .select("*", { count: "exact", head: true })
-    .eq("is_active", true);
+// POST /api/collect-jobs — admin-only manual trigger
+export async function POST(req: NextRequest) {
+  const uc = await userClient();
+  const { data: { user } } = await uc.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: recent } = await supabase
-    .from("jobs")
-    .select("id, title, location, board, last_checked_at, companies(name)")
-    .eq("is_active", true)
-    .order("last_checked_at", { ascending: false })
-    .limit(50);
+  const ownerEmail = process.env.NEXT_PUBLIC_OWNER_EMAIL ?? "";
+  if (!ownerEmail || user.email !== ownerEmail) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
-  return NextResponse.json({ total: count ?? 0, recent: recent ?? [] });
+  const { searchParams } = new URL(req.url);
+  const slugFilter = searchParams.get("slug");
+
+  if (!COMPANY_SEEDS.some((s) => s.enabled && (!slugFilter || s.ats_slug === slugFilter))) {
+    return NextResponse.json({ error: "No matching companies" }, { status: 400 });
+  }
+
+  const result = await runIngestion(slugFilter);
+  return NextResponse.json({ ok: true, ...result });
+}
+
+// GET /api/collect-jobs — Vercel cron endpoint (Bearer CRON_SECRET)
+export async function GET(req: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const auth = req.headers.get("authorization") ?? "";
+    if (auth !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
+  const result = await runIngestion();
+  return NextResponse.json({ ok: true, ...result });
 }

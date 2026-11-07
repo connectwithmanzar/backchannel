@@ -92,6 +92,7 @@ export async function POST() {
 
 // GET /api/notify — Vercel cron endpoint (secured by CRON_SECRET)
 // Vercel automatically passes `Authorization: Bearer <CRON_SECRET>` for cron jobs.
+// Runs the digest for every signed-up user and sends matching alerts.
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
@@ -101,15 +102,23 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Find the first active user (single-user mode)
   const svc = serviceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-  const { data: users } = await svc.auth.admin.listUsers({ perPage: 1 });
-  const user = users?.users?.[0];
-  if (!user) return NextResponse.json({ ok: false, error: "No users found" }, { status: 404 });
 
-  const result = await runDigest(user.id);
-  return NextResponse.json(result, { status: result.ok ? 200 : 500 });
+  // Page through all users (up to 1 000 for the Hobby plan)
+  const { data: { users } } = await svc.auth.admin.listUsers({ perPage: 1000 });
+  if (!users?.length) return NextResponse.json({ ok: false, error: "No users found" }, { status: 404 });
+
+  let totalSent = 0;
+  const userResults: Array<{ userId: string; sent: number; ok: boolean; error?: string }> = [];
+
+  for (const u of users) {
+    const result = await runDigest(u.id);
+    userResults.push({ userId: u.id, sent: result.sent, ok: result.ok, error: result.error });
+    if (result.ok) totalSent += result.sent;
+  }
+
+  return NextResponse.json({ ok: true, users_checked: users.length, total_sent: totalSent, results: userResults });
 }

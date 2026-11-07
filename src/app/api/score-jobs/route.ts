@@ -4,6 +4,7 @@ import { createClient as serviceClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { scoreJob, type SearchProfile } from "@/lib/score";
 import type { Job, Market, RemoteType } from "@/lib/collector/types";
+import { rateLimit, retryAfter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -82,6 +83,14 @@ export async function POST() {
   const userClient = await createClient();
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // 5 scoring runs per hour per user — prevents runaway AI spend
+  if (!rateLimit(`score:${user.id}`, 5, 60 * 60 * 1000)) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Try again in " + retryAfter(`score:${user.id}`) + "s." },
+      { status: 429 }
+    );
+  }
 
   // Load profile
   const { data: profileRow } = await userClient.from("profiles")

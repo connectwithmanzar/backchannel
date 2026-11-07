@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as serviceClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
+import { rateLimit, retryAfter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -79,6 +80,20 @@ export async function POST() {
   const userClient = await createClient();
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Server-side admin check — hiding the button in the UI is not enough
+  const ownerEmail = process.env.NEXT_PUBLIC_OWNER_EMAIL ?? "";
+  if (!ownerEmail || user.email !== ownerEmail) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // 3 curation runs per hour per admin — guards against runaway AI spend
+  if (!rateLimit(`curate:${user.id}`, 3, 60 * 60 * 1000)) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Try again in " + retryAfter(`curate:${user.id}`) + "s." },
+      { status: 429 }
+    );
+  }
 
   const svc = serviceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

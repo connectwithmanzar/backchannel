@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import * as pdfParseModule from "pdf-parse";
+import { createClient } from "@/lib/supabase/server";
+import { rateLimit, retryAfter } from "@/lib/rate-limit";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const pdfParse: (buf: Buffer) => Promise<{ text: string }> = (pdfParseModule as any).default ?? pdfParseModule;
 
@@ -18,6 +20,19 @@ const SYSTEM = `You are a CV parser for a sales job-search tool. Extract facts O
 Return only valid JSON, no markdown, no commentary.`;
 
 export async function POST(request: NextRequest) {
+  // Auth required — prevents unauthenticated users from burning AI quota
+  const uc = await createClient();
+  const { data: { user } } = await uc.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // 10 CV extractions per hour per user
+  if (!rateLimit(`extract-cv:${user.id}`, 10, 60 * 60 * 1000)) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Try again in " + retryAfter(`extract-cv:${user.id}`) + "s." },
+      { status: 429 }
+    );
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || apiKey.startsWith("sk-ant-...")) {
     return NextResponse.json(

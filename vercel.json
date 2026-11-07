@@ -3,6 +3,10 @@
     {
       "path": "/api/notify",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/collect-jobs",
+      "schedule": "0 */6 * * *"
     }
   ]
 }
