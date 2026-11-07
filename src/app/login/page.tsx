@@ -2,8 +2,6 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL ?? "";
-
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
@@ -13,12 +11,6 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-
-    if (OWNER_EMAIL && email.toLowerCase() !== OWNER_EMAIL.toLowerCase()) {
-      setError("This tool is private. Only the owner can sign in.");
-      return;
-    }
-
     setLoading(true);
     const supabase = createClient();
     const { error: authError } = await supabase.auth.signInWithOtp({
