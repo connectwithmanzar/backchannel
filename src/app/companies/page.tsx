@@ -4,7 +4,6 @@ import CurateButton from "./CurateButton";
 
 export const dynamic = "force-dynamic";
 
-const OWNER_EMAIL = process.env.NEXT_PUBLIC_OWNER_EMAIL ?? "";
 
 type DbInsight = {
   user_id: string;
@@ -104,7 +103,7 @@ export default async function CompaniesPage({
       </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        {user?.email === OWNER_EMAIL && <CurateButton />}
+        {user && <CurateButton />}
       </div>
 
       {/* Filter tabs */}
