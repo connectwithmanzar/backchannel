@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as userClient } from "@/lib/supabase/server";
-import { COMPANY_SEEDS, type CompanySeed } from "@/data/companies";
+import { COMPANY_SEEDS, isExcludedCompany, type CompanySeed } from "@/data/companies";
+import { isOwner, isCronAuthorized } from "@/lib/owner";
 import { fetchGreenhouse, fetchLever, fetchAshby, fetchSmartRecruiters, type RawJob } from "@/lib/collectors/ats";
 import { isSalesRole, normalise } from "@/lib/jobs/process";
 
@@ -72,7 +73,10 @@ async function runIngestion(slugFilter?: string | null): Promise<{
   results: IngestionResult[];
 }> {
   const seeds = COMPANY_SEEDS.filter(
-    (s) => s.enabled && (!slugFilter || s.ats_slug === slugFilter)
+    (s) =>
+      s.enabled &&
+      !isExcludedCompany(s.name, s.domain, s.ats_slug) &&
+      (!slugFilter || s.ats_slug === slugFilter)
   );
 
   const supabase = getServiceClient();
@@ -135,15 +139,21 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await uc.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const ownerEmail = process.env.NEXT_PUBLIC_OWNER_EMAIL ?? "";
-  if (!ownerEmail || user.email !== ownerEmail) {
+  if (!isOwner(user.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { searchParams } = new URL(req.url);
   const slugFilter = searchParams.get("slug");
 
-  if (!COMPANY_SEEDS.some((s) => s.enabled && (!slugFilter || s.ats_slug === slugFilter))) {
+  if (
+    !COMPANY_SEEDS.some(
+      (s) =>
+        s.enabled &&
+        !isExcludedCompany(s.name, s.domain, s.ats_slug) &&
+        (!slugFilter || s.ats_slug === slugFilter)
+    )
+  ) {
     return NextResponse.json({ error: "No matching companies" }, { status: 400 });
   }
 
@@ -151,14 +161,10 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, ...result });
 }
 
-// GET /api/collect-jobs — Vercel cron endpoint (Bearer CRON_SECRET)
+// GET /api/collect-jobs — Vercel cron endpoint (Bearer CRON_SECRET). Fails closed if unset.
 export async function GET(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const auth = req.headers.get("authorization") ?? "";
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  if (!isCronAuthorized(req.headers.get("authorization"))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const result = await runIngestion();

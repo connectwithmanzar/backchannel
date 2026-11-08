@@ -1,14 +1,21 @@
 import type { Metadata, Viewport } from "next";
 import Nav from "@/components/Nav";
+import { createClient } from "@/lib/supabase/server";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Backchannel",
-  description: "Every sales role that fits you, hidden or public.",
+  description:
+    "It finds matching public roles and drafts a truthful CV plus a referral ask you send, and you apply yourself.",
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <html lang="en">
       <head>
@@ -19,7 +26,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         />
       </head>
       <body className="font-sans text-[15px] leading-relaxed antialiased">
-        <Nav />
+        {user && <Nav email={user.email ?? ""} />}
         <main className="mx-auto max-w-6xl px-4 pb-16">{children}</main>
       </body>
     </html>

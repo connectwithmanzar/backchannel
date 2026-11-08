@@ -1,7 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+// Cron endpoints authenticate themselves with CRON_SECRET (and fail closed without it),
+// so they must not be redirected to /login. Exact paths only — nothing else is opened.
+const CRON_PATHS = new Set(["/api/collect-jobs", "/api/notify"]);
+
 export async function middleware(request: NextRequest) {
+  if (CRON_PATHS.has(request.nextUrl.pathname)) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

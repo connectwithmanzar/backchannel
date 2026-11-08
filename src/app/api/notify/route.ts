@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as serviceClient } from "@supabase/supabase-js";
 import { sendTelegramMessage, isTelegramConfigured } from "@/lib/telegram";
+import { isCronAuthorized } from "@/lib/owner";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -94,12 +95,9 @@ export async function POST() {
 // Vercel automatically passes `Authorization: Bearer <CRON_SECRET>` for cron jobs.
 // Runs the digest for every signed-up user and sends matching alerts.
 export async function GET(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const auth = req.headers.get("authorization") ?? "";
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  // Fails closed when CRON_SECRET is unset (middleware no longer redirects this path).
+  if (!isCronAuthorized(req.headers.get("authorization"))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const svc = serviceClient(

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import CompanyCard, { type CompanyData } from "./CompanyCard";
 import CurateButton from "./CurateButton";
+import { isExcludedCompany } from "@/data/companies";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ export default async function CompaniesPage({
   }
 
   const companies: CompanyData[] = ((insightsRes.data ?? []) as unknown as DbInsight[])
-    .filter((r) => r.companies !== null)
+    .filter((r) => r.companies !== null && !isExcludedCompany(r.companies.name, r.companies.domain))
     .map((r) => {
       const co = r.companies!;
       return {
@@ -94,7 +95,7 @@ export default async function CompaniesPage({
   return (
     <section className="py-6">
       <div className="text-xs font-semibold uppercase tracking-wider text-muted">
-        AI-curated · updated daily
+        AI-curated on request
       </div>
       <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">Great companies</h1>
       <p className="mt-2 max-w-[62ch] text-muted">
@@ -134,7 +135,6 @@ export default async function CompaniesPage({
             <>
               <p className="font-semibold">No companies curated yet.</p>
               <p className="mt-1 text-muted">Click <b>Find more companies with AI</b> above to get started.</p>
-              <p className="mt-1 text-xs text-muted">Requires OPENROUTER_API_KEY in Vercel env vars</p>
             </>
           ) : (
             <p>No companies match this filter.</p>

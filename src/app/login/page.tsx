@@ -44,15 +44,17 @@ export default function LoginPage() {
           <div>
             <p className="mb-2 font-semibold text-good">Check your inbox</p>
             <p className="text-sm text-muted">
-              We sent a sign-in link to <strong>{email}</strong>. Click it to open Backchannel.
-              You can close this tab.
+              We sent an email to <strong>{email}</strong>. The first time, it asks you to
+              confirm your address; after that it&apos;s a sign-in link. Click it to open
+              Backchannel. You can close this tab.
             </p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div>
               <p className="mb-4 text-sm text-muted">
-                Enter your email and we&apos;ll send you a sign-in link — no password needed.
+                Enter your email and we&apos;ll send you a link — no password needed. The first
+                email asks you to confirm your address; later visits get a sign-in link.
               </p>
               <label className="mb-1 block text-sm font-medium" htmlFor="email">
                 Email address

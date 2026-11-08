@@ -81,13 +81,7 @@ export async function POST() {
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Server-side admin check — hiding the button in the UI is not enough
-  const ownerEmail = process.env.NEXT_PUBLIC_OWNER_EMAIL ?? "";
-  if (!ownerEmail || user.email !== ownerEmail) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  // 3 curation runs per hour per admin — guards against runaway AI spend
+  // 3 curation runs per hour per user — guards against runaway AI spend
   if (!rateLimit(`curate:${user.id}`, 3, 60 * 60 * 1000)) {
     return NextResponse.json(
       { error: "Rate limit exceeded. Try again in " + retryAfter(`curate:${user.id}`) + "s." },

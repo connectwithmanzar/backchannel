@@ -18,6 +18,17 @@ export interface CompanySeed {
   enabled: boolean;
 }
 
+// Companies that must never be collected or shown (e.g. current employer).
+// Matched case-insensitively against company name, domain, or ATS slug.
+export const EXCLUDED_COMPANIES = ["taboola"];
+
+export function isExcludedCompany(...values: (string | null | undefined)[]): boolean {
+  return values.some((v) => {
+    const l = (v ?? "").toLowerCase();
+    return l !== "" && EXCLUDED_COMPANIES.some((x) => l.includes(x));
+  });
+}
+
 export const COMPANY_SEEDS: CompanySeed[] = [
   // ── Greenhouse ───────────────────────────────────────────────────────────
   { name: "HubSpot",       domain: "hubspot.com",       country: "US", ats_type: "greenhouse", ats_slug: "hubspot",      careers_url: "https://boards.greenhouse.io/hubspot",      enabled: true },

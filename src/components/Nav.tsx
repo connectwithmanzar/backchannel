@@ -14,9 +14,12 @@ const LINKS = [
   { href: "/side-income", label: "Side income" },
 ];
 
-export default function Nav() {
+export default function Nav({ email }: { email: string }) {
   const path = usePathname();
   const router = useRouter();
+
+  // Never show the private nav on the sign-in or auth screens.
+  if (path.startsWith("/login") || path.startsWith("/auth")) return null;
 
   async function signOut() {
     const supabase = createClient();
@@ -50,9 +53,14 @@ export default function Nav() {
             );
           })}
         </nav>
+        {email && (
+          <span className="ml-auto truncate text-sm text-muted" title="Signed in as">
+            {email}
+          </span>
+        )}
         <button
           onClick={signOut}
-          className="ml-auto rounded-full px-3 py-1.5 text-sm font-medium text-muted hover:text-fg"
+          className="rounded-full px-3 py-1.5 text-sm font-medium text-muted hover:text-fg"
         >
           Sign out
         </button>
