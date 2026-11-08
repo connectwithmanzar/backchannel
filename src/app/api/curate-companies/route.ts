@@ -122,10 +122,15 @@ export async function POST() {
       messages: [{ role: "user", content: buildPrompt(prefsData) }],
     });
     const text = response.choices[0].message.content ?? "";
-    const parsed = JSON.parse(text);
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end <= start) throw new Error("No JSON object in model response");
+    const parsed = JSON.parse(text.slice(start, end + 1));
     companies = Array.isArray(parsed.companies) ? parsed.companies : [];
-  } catch {
-    return NextResponse.json({ error: "AI curation failed" }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("curate-companies failed:", message);
+    return NextResponse.json({ error: `AI curation failed: ${message}`.slice(0, 200) }, { status: 500 });
   }
 
   // Upsert each company into companies table then company_insights
