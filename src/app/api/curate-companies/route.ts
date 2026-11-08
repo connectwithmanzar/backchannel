@@ -136,22 +136,35 @@ export async function POST() {
   // Upsert each company into companies table then company_insights
   const results: { name: string; id: string }[] = [];
   for (const c of companies) {
-    const { data: co, error: coErr } = await svc
+    const { data: existing } = await svc
       .from("companies")
-      .upsert(
-        {
+      .select("id")
+      .ilike("name", c.name)
+      .limit(1)
+      .maybeSingle();
+
+    let co: { id: string } | null = existing;
+    let coErr: unknown = null;
+    if (!co) {
+      const inserted = await svc
+        .from("companies")
+        .insert({
           name: c.name,
           domain: c.domain || null,
           country: c.country || null,
           hq: c.hq || null,
           sector: c.sector || null,
-        },
-        { onConflict: "name", ignoreDuplicates: false }
-      )
-      .select("id")
-      .maybeSingle();
+        })
+        .select("id")
+        .maybeSingle();
+      co = inserted.data;
+      coErr = inserted.error;
+    }
 
-    if (coErr || !co) continue;
+    if (coErr || !co) {
+      console.error("curate-companies: company save failed", c.name, coErr);
+      continue;
+    }
 
     await svc.from("company_insights").upsert(
       {
