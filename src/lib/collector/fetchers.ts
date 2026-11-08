@@ -3,8 +3,12 @@ import type { RawJob, SeedCompany } from "./types";
 const UA = "Backchannel job collector (personal use)";
 
 export function htmlToText(html = ""): string {
-  return html
-    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&")
+  let decoded = html;
+  for (let i = 0; i < 3 && /&(lt|gt|quot|#39|amp);/.test(decoded); i++) {
+    decoded = decoded
+      .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+  }
+  return decoded
     .replace(/<\s*(br|\/p|\/li|\/h\d)\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")

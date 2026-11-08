@@ -1,11 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { scoreJob, type SearchProfile } from "@/lib/score";
 import type { Job, Market, RemoteType, RoleFamily } from "@/lib/collector/types";
+import { htmlToText } from "@/lib/collector/fetchers";
 import RolesFeed, { type JobReaction } from "./RolesFeed";
 import RunNowButton from "./RunNowButton";
 import ScoreNowButton from "./ScoreNowButton";
 import TelegramButton from "./TelegramButton";
 import { isTelegramConfigured } from "@/lib/telegram";
+import { isOwner } from "@/lib/owner";
+import { COMPANY_SEEDS, isExcludedCompany } from "@/data/companies";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +97,12 @@ export default async function RolesPage() {
     .order("last_checked_at", { ascending: false })
     .limit(500);
 
-  const jobs: Job[] = (rows ?? []).map((row) => ({
+  // Never surface excluded companies (e.g. Taboola), even if rows exist.
+  const visibleRows = (rows ?? []).filter(
+    (row) => !isExcludedCompany((row.companies as { name: string } | null)?.name, row.url)
+  );
+
+  const jobs: Job[] = visibleRows.map((row) => ({
     id: row.id,
     company: (row.companies as { name: string } | null)?.name ?? "Unknown",
     title: row.title,
@@ -116,17 +124,21 @@ export default async function RolesPage() {
         : "unknown",
     visaSponsorship: (row.visa_sponsorship ?? "unknown") as "yes" | "no" | "unknown",
     roleFamily: toRoleFamily(row.title),
-    description: row.description ?? "",
+    description: htmlToText(row.description ?? ""),
   }));
 
   const scored = jobs
     .map((j) => scoreJob(j, profile))
     .sort((a, b) => b.score - a.score);
 
-  const lastChecked = rows?.[0]?.last_checked_at ?? null;
+  const lastChecked = visibleRows[0]?.last_checked_at ?? null;
+  const seedCount = COMPANY_SEEDS.filter(
+    (s) => s.enabled && !isExcludedCompany(s.name, s.domain, s.ats_slug)
+  ).length;
 
   // Load this user's existing job scores / reactions
   const { data: { user } } = await supabase.auth.getUser();
+  const owner = isOwner(user?.email);
   const reactions: Record<string, JobReaction> = {};
   if (user) {
     const { data: scoreRows } = await supabase
@@ -151,16 +163,17 @@ export default async function RolesPage() {
         For SDR · BDR · GTM · B2B sales
       </div>
       <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">
-        Every sales role that fits you
+        Matching public roles
       </h1>
       <p className="mt-2 max-w-[62ch] text-muted">
-        Collected daily from company careers pages and scored against your
-        profile. Hidden roles and job boards arrive in later builds.
+        It finds matching public roles and drafts a truthful CV plus a referral
+        ask you send, and you apply yourself. Roles come from public company
+        careers pages ({seedCount} companies) and are ranked against your profile.
       </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-4">
-        <RunNowButton />
-        <ScoreNowButton />
+        {owner && <RunNowButton />}
+        {owner && <ScoreNowButton />}
         <TelegramButton configured={isTelegramConfigured()} />
         {lastChecked && (
           <p className="text-sm text-muted num">
@@ -176,8 +189,14 @@ export default async function RolesPage() {
       {jobs.length === 0 && (
         <div className="mt-4 rounded-card bg-signal-soft px-4 py-3 text-sm text-signal">
           No roles collected yet.{" "}
-          <b>Click &quot;Run now&quot; above</b> to fetch roles from your 49-company seed
-          list — takes about 90 seconds.
+          {owner ? (
+            <>
+              <b>Click &quot;Run now&quot; above</b> to fetch public roles from the{" "}
+              {seedCount}-company list — takes about 90 seconds.
+            </>
+          ) : (
+            <>Roles appear after the next daily collection.</>
+          )}
         </div>
       )}
 
