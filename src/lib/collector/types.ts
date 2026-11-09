@@ -45,6 +45,7 @@ export interface Job {
   roleFamily: RoleFamily;
   description: string;
   companyQuality?: number; // 0-100, see lib/companyQuality.ts
+  payKind?: "ote" | "base"; // which kind of pay payMin and payMax are
 }
 
 export type RoleFamily = "SDR/BDR" | "GTM Engineer" | "Account Executive" | "Sales leadership" | "Other sales";

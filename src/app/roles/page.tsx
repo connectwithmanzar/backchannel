@@ -1,9 +1,10 @@
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { getSharedJobs, JOB_COLUMNS } from "@/lib/jobs/shared-cache";
-import { scoreJob, parseMinOteByMarket, type SearchProfile } from "@/lib/score";
+import { scoreJob, buildSearchProfile } from "@/lib/score";
+import { toRoleFamily } from "@/lib/jobs/scoring";
 import { companyQuality, signalsFromRows } from "@/lib/companyQuality";
-import { toMarket, countryToMarkets } from "@/lib/jobs/market";
-import type { Job, Market, RemoteType, RoleFamily } from "@/lib/collector/types";
+import { toMarket } from "@/lib/jobs/market";
+import type { Job, RemoteType } from "@/lib/collector/types";
 import { htmlToText } from "@/lib/collector/fetchers";
 import { shortDateTime } from "@/lib/format";
 import RolesFeed, { type JobReaction } from "./RolesFeed";
@@ -19,40 +20,12 @@ export const dynamic = "force-dynamic";
 
 
 
-// Classify a job title into a sales role family
-function toRoleFamily(title: string): RoleFamily {
-  const t = title.toLowerCase();
-  if (
-    /\b(sdr|bdr|sales development|business development rep|inside sales|market development|lead development)\b/.test(
-      t
-    )
-  )
-    return "SDR/BDR";
-  if (
-    /\b(account executive|\bae\b|new business sales|sales executive)\b/.test(t)
-  )
-    return "Account Executive";
-  if (
-    /\b(gtm|go.to.market) (engineer|systems|operations)\b|\brevops engineer\b|\bgrowth engineer\b/i.test(
-      t
-    )
-  )
-    return "GTM Engineer";
-  if (
-    /\b(vp|vice president|head of|director).{0,20}(sales|revenue|growth)\b/i.test(
-      t
-    )
-  )
-    return "Sales leadership";
-  return "Other sales";
-}
-
 export default async function RolesPage() {
   const [supabase, user] = await Promise.all([createClient(), getSessionUser()]);
 
   // Independent queries run together instead of one after another.
   const [{ data: profileRow }, sharedJobs, { data: ownJobs }, { data: scoreRows }] = await Promise.all([
-    supabase.from("profiles").select("name, tools, markets, min_ote_usd, min_ote_by_market").maybeSingle(),
+    supabase.from("profiles").select("name, tools, markets, target_titles, min_ote_usd, min_ote_by_market").maybeSingle(),
     // Shared jobs come from a 5-minute cache; the jobs you pasted yourself are read fresh (row-level security shows only yours).
     getSharedJobs(),
     supabase.from("jobs").select(JOB_COLUMNS).eq("is_active", true).not("added_by", "is", null),
@@ -64,15 +37,7 @@ export default async function RolesPage() {
     .sort((a, b) => (b.last_checked_at ?? "").localeCompare(a.last_checked_at ?? ""))
     .slice(0, 500);
 
-  const profile: SearchProfile = {
-    name: profileRow?.name ?? "You",
-    targetFamilies: ["SDR/BDR", "GTM Engineer", "Account Executive"],
-    markets: [...new Set<Market>((profileRow?.markets ?? []).flatMap(countryToMarkets))],
-    tools: profileRow?.tools ?? [],
-    minOteUsd: profileRow?.min_ote_usd ?? 0,
-    minOteByMarket: parseMinOteByMarket(profileRow?.min_ote_by_market),
-    prefersRemote: false,
-  };
+  const profile = buildSearchProfile(profileRow);
 
   // Never surface excluded companies (e.g. Taboola), even if rows exist.
   const visibleRows = (rows ?? []).filter(
@@ -96,6 +61,7 @@ export default async function RolesPage() {
     // Prefer OTE for AE/sales roles; fall back to base pay
     payMin: row.ote_min ?? row.base_min ?? undefined,
     payMax: row.ote_max ?? row.base_max ?? undefined,
+    payKind: (row.ote_max ?? row.ote_min) != null ? "ote" : "base",
     payBandStatus:
       row.pay_band_status === "verified"
         ? "verified"

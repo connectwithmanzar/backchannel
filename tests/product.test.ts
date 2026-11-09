@@ -9,7 +9,7 @@ import { buildMime } from "../src/lib/outreach/gmail";
 import { recipientTimezone, inRecipientWindow } from "../src/lib/outreach/timezone";
 import { trackOf, weeklyFunnel } from "../src/lib/funnel";
 import { parseJobUrl, buildPastedJob } from "../src/lib/jobs/paste";
-import { scoreJob, parseMinOteByMarket, type SearchProfile } from "../src/lib/score";
+import { scoreJob, parseMinOteByMarket, familiesFromTitles, mentions, buildSearchProfile, toUsd, type SearchProfile } from "../src/lib/score";
 import { companyQuality, signalsFromRows } from "../src/lib/companyQuality";
 import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddress, isDelayNotice, isAutoReply } from "../src/lib/outreach/limits";
@@ -438,4 +438,33 @@ test("generated text is flagged when it uses numbers the CV does not have", () =
   assert.deepEqual(unsupportedNumbers("Built $1,200,000 pipeline", [cv]).length, 1);          // different figure
   assert.deepEqual(unsupportedNumbers("Exceeded quota by 140% and booked 40 meetings", [cv]).sort(), ["140%", "40"].sort());
   assert.deepEqual(unsupportedNumbers("I have 3 years and 2 emails", [cv]), []);             // single digits are ignored
+});
+
+test("target role types come from the profile, and default to all three", () => {
+  assert.deepEqual(familiesFromTitles(["Senior SDR", "BDR"]), ["SDR/BDR"]);
+  assert.deepEqual(familiesFromTitles(["Account Executive (SMB)", "GTM Engineer"]).sort(), ["Account Executive", "GTM Engineer"]);
+  assert.deepEqual(familiesFromTitles([]).sort(), ["Account Executive", "GTM Engineer", "SDR/BDR"]);
+  const profile = buildSearchProfile({ name: "A", target_titles: ["SDR"], markets: ["India", "UK"], tools: ["Clay"], min_ote_usd: 50000 });
+  assert.deepEqual(profile.targetFamilies, ["SDR/BDR"]);
+  assert.deepEqual([...profile.markets].sort(), ["emea", "india", "remote-in"]);
+  const aeJob = { ...baseJob, roleFamily: "Account Executive" as const };
+  assert.ok(scoreJob(aeJob, profile).score < scoreJob(baseJob, profile).score);   // an AE role scores below an SDR role for an SDR
+});
+
+test("tool names match whole words only", () => {
+  assert.equal(mentions("We use Clay and HubSpot daily", "Clay"), true);
+  assert.equal(mentions("Clayton office, Clayton team", "Clay"), false);
+  assert.equal(mentions("experience with Sales Navigator (LinkedIn)", "LinkedIn Sales Navigator"), false);
+  assert.equal(mentions("Salesforce.com required", "Salesforce"), true);
+  assert.equal(mentions("anything", ""), false);
+  assert.equal(mentions("C++ and node.js", "node.js"), true);               // regex characters in a tool name are safe
+});
+
+test("base-only pay is not compared with an OTE minimum; Singapore dollars convert", () => {
+  const p = { ...baseProfile, minOteUsd: 90000 };
+  const base = scoreJob({ ...baseJob, payKind: "base", payMax: 60000 }, p).parts.find((x) => x.label === "Pay")?.value;
+  const ote = scoreJob({ ...baseJob, payKind: "ote", payMax: 60000 }, p).parts.find((x) => x.label === "Pay")?.value;
+  assert.equal(base, 50);    // unknown, not "below minimum"
+  assert.equal(ote, 10);     // OTE below the minimum is a real miss
+  assert.equal(toUsd(100000, "SGD"), 74000);
 });

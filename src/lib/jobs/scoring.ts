@@ -1,22 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { scoreJob, parseMinOteByMarket, type SearchProfile } from "@/lib/score";
+import { scoreJob, buildSearchProfile, type SearchProfile } from "@/lib/score";
 import { companyQuality, signalsFromRows } from "@/lib/companyQuality";
-import { toMarket, countryToMarkets } from "@/lib/jobs/market";
-import type { Job, Market, RemoteType } from "@/lib/collector/types";
+import { toMarket } from "@/lib/jobs/market";
+import type { Job, RemoteType, RoleFamily } from "@/lib/collector/types";
 import { createAIClient, hasAIKey, AI_MODEL, untrusted, DATA_NOTICE } from "@/lib/ai";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 
-export function toRoleFamily(title: string) {
+export function toRoleFamily(title: string): RoleFamily {
   const t = title.toLowerCase();
-  if (/\b(sdr|bdr|sales development|business development rep|inside sales)\b/.test(t)) return "SDR/BDR" as const;
-  if (/\b(account executive|\bae\b|new business sales|sales executive)\b/.test(t)) return "Account Executive" as const;
-  if (/\b(gtm|go.to.market) (engineer|systems|operations)\b|\bgrowth engineer\b/i.test(t)) return "GTM Engineer" as const;
-  if (/\b(vp|head of|director).{0,20}(sales|revenue)\b/i.test(t)) return "Sales leadership" as const;
-  return "Other sales" as const;
+  if (/\b(sdr|bdr|sales development|business development rep|inside sales|market development|lead development)\b/.test(t)) return "SDR/BDR";
+  if (/\b(account executive|\bae\b|new business sales|sales executive)\b/.test(t)) return "Account Executive";
+  if (/\b(gtm|go.to.market) (engineer|systems|operations)\b|\brevops engineer\b|\bgrowth engineer\b/i.test(t)) return "GTM Engineer";
+  if (/\b(vp|vice president|head of|director).{0,20}(sales|revenue|growth)\b/i.test(t)) return "Sales leadership";
+  return "Other sales";
 }
-
 
 // Use Claude via OpenRouter to write a 2-sentence explanation — returns null if no API key
 async function aiExplain(
@@ -58,16 +57,8 @@ Write 2 short, direct sentences. First sentence: main reason for the score. Seco
 export async function scoreForUser(svc: SupabaseClient, userId: string, opts: { rescoreAll?: boolean; deadline: number; ai?: boolean }) {
   const rescoreAll = !!opts.rescoreAll;
   const deadline = opts.deadline;
-  const { data: profileRow } = await svc.from("profiles").select("name, tools, markets, min_ote_usd, min_ote_by_market").eq("user_id", userId).maybeSingle();
-  const profile: SearchProfile = {
-    name: profileRow?.name ?? "You",
-    targetFamilies: ["SDR/BDR", "GTM Engineer", "Account Executive"],
-    markets: [...new Set<Market>((profileRow?.markets ?? []).flatMap(countryToMarkets))],
-    tools: profileRow?.tools ?? [],
-    minOteUsd: profileRow?.min_ote_usd ?? 0,
-    minOteByMarket: parseMinOteByMarket(profileRow?.min_ote_by_market),
-    prefersRemote: false,
-  };
+  const { data: profileRow } = await svc.from("profiles").select("name, tools, markets, target_titles, min_ote_usd, min_ote_by_market").eq("user_id", userId).maybeSingle();
+  const profile = buildSearchProfile(profileRow);
 
   const { data: existing } = await svc.from("job_scores").select("job_id, model").eq("user_id", userId);
   const scoredBefore = new Map((existing ?? []).map((r: { job_id: string; model: string | null }) => [r.job_id, r.model]));
@@ -92,6 +83,7 @@ export async function scoreForUser(svc: SupabaseClient, userId: string, opts: { 
       currency: row.currency ?? undefined,
       payMin: row.ote_min ?? row.base_min ?? undefined,
       payMax: row.ote_max ?? row.base_max ?? undefined,
+      payKind: (row.ote_max ?? row.ote_min) != null ? "ote" : "base",
       payBandStatus: row.pay_band_status === "verified" ? "verified" : "unknown",
       visaSponsorship: (row.visa_sponsorship ?? "unknown") as "yes" | "no" | "unknown",
       roleFamily: toRoleFamily(row.title),

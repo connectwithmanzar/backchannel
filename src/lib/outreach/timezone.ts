@@ -27,7 +27,7 @@ const LOCATION_TZ: [RegExp, string][] = [
   [/london|united kingdom|\buk\b|manchester|england/i, "Europe/London"], [/dublin|ireland/i, "Europe/Dublin"], [/berlin|munich|germany/i, "Europe/Berlin"],
   [/paris|france/i, "Europe/Paris"], [/amsterdam|netherlands/i, "Europe/Amsterdam"], [/madrid|barcelona|spain/i, "Europe/Madrid"],
   [/stockholm|sweden/i, "Europe/Stockholm"], [/tel aviv|israel/i, "Asia/Jerusalem"], [/singapore/i, "Asia/Singapore"],
-  [/bengaluru|bangalore|mumbai|delhi|hyderabad|chennai|pune|india/i, "Asia/Kolkata"],
+  [/bengaluru|bangalore|mumbai|delhi|hyderabad|chennai|pune|\bindia\b/i, "Asia/Kolkata"],
   [/san francisco|los angeles|seattle|california/i, "America/Los_Angeles"], [/chicago|austin|dallas|texas/i, "America/Chicago"],
   [/new york|boston|atlanta|miami|washington|united states|\bus\b|usa/i, "America/New_York"],
 ];
