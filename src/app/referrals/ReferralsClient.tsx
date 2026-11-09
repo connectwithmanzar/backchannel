@@ -52,6 +52,19 @@ export default function ReferralsClient({ refs, jobs, aiReady }: { refs: Ref[]; 
 
 function RefItem({ r, busy, act, aiReady, overdue, setMsg }: { r: Ref; busy: string | null; aiReady: boolean; overdue: boolean; act: (k: string, b: object, ok: string) => Promise<void>; setMsg: (m: { ok: boolean; text: string }) => void }) {
   const [m, setM] = useState(r.message ?? "");
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  const router = useRouter();
+
+  async function emailThem() {
+    if (r.referrer_name.includes("*")) { setMsg({ ok: false, text: "This name is only partly shown. Reveal the full name in Find who to ask, or edit it, before emailing." }); return; }
+    setSending(true);
+    try {
+      await postJson("/api/outreach", { action: "add_contact", name: r.referrer_name, company_name: r.company_name, email: email.trim(), title: r.referrer_relation ?? undefined, job_id: r.job_id ?? undefined });
+      setMsg({ ok: true, text: "Email sequence drafted. Review and approve it on the Outreach page." });
+      setEmail(""); router.refresh();
+    } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } finally { setSending(false); }
+  }
   return (
     <li><Card className="flex flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -70,6 +83,11 @@ function RefItem({ r, busy, act, aiReady, overdue, setMsg }: { r: Ref; busy: str
         <button className={btn} onClick={async () => setMsg((await copyText(m)) ? { ok: true, text: "Copied." } : { ok: false, text: "Select the text and copy it." })}>Copy</button>
         {r.stage === "to_ask" && <button className={btnPrimary} disabled={!!busy} onClick={() => act(r.id + "a", { action: "update", id: r.id, stage: "asked", message: m, follow_up_on: new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10) }, "Marked as asked. Follow-up reminder set for 4 days.")}>I sent it</button>}
         <button className={btn} disabled={!!busy} onClick={() => act(r.id + "x", { action: "delete", id: r.id }, "Deleted.")}>Delete</button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
+        <input aria-label="Their work email" type="email" className={input + " max-w-xs"} placeholder="Their email (you find it yourself)" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <button className={btn} disabled={sending || !email.includes("@")} onClick={emailThem}>{sending ? "Drafting…" : "Email this person"}</button>
+        <span className="text-xs text-muted">Creates a draft on Outreach. Nothing sends until you approve it.</span>
       </div>
     </Card></li>
   );
