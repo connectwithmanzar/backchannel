@@ -124,7 +124,7 @@ function ReviewItem({ a, open, onToggle, busy, act }: {
     <li><Card>
       <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full flex-wrap items-center justify-between gap-2 text-left">
         <div className="min-w-0"><div className="font-bold">{a.jobs?.title}</div><div className="text-sm text-muted">{a.jobs?.companies?.name} · {a.jobs?.location}</div></div>
-        {needs ? <Pill tone="warn">Needs your answer</Pill> : <Pill tone="good">Ready to submit</Pill>}
+        {needs ? <Pill tone="warn">Confirm your answers</Pill> : <Pill tone="good">Ready to submit</Pill>}
       </button>
       {open && (
         <div className="mt-4 flex flex-col gap-5 border-t border-line pt-4">

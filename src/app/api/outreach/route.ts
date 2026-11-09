@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       }
       case "settings": {
         const patch: Record<string, unknown> = { user_id: user.id };
-        if (Number.isFinite(b.email_daily_limit)) patch.email_daily_limit = Math.max(1, Math.min(40, Number(b.email_daily_limit)));
+        if (Number.isFinite(b.email_daily_limit)) patch.email_daily_limit = Math.max(1, Math.min(20, Number(b.email_daily_limit)));
         if (typeof b.email_signature === "string") patch.email_signature = b.email_signature.slice(0, 500);
         const { error } = await db.from("preferences").upsert(patch, { onConflict: "user_id" });
         if (error) throw error;

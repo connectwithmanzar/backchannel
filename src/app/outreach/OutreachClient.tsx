@@ -72,7 +72,7 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
         <Card className="flex flex-col gap-2">
           <span className={label}>Sending rules</span>
           <label className="flex items-center gap-2 text-sm">Max emails a day
-            <input id="o-limit" type="number" min={1} max={40} value={limit} onChange={(e) => setLimit(+e.target.value)} className={input + " w-20"} /></label>
+            <input id="o-limit" type="number" min={1} max={20} value={limit} onChange={(e) => setLimit(+e.target.value)} className={input + " w-20"} /></label>
           <textarea id="o-sig" rows={2} className={input} placeholder="Email signature (optional)" value={sig} onChange={(e) => setSig(e.target.value)} />
           <button className={btn} disabled={!!busy} onClick={() => act("set", "/api/outreach", { action: "settings", email_daily_limit: limit, email_signature: sig }, "Saved.")}>Save</button>
           <span className="text-xs text-muted">Always on: stop on reply, opt-out line, stealth blocklist.</span>
@@ -165,7 +165,7 @@ function StepEditor({ s, busy, gmail, act }: { s: Step; busy: string | null; gma
           <button className={btn} disabled={!!busy} onClick={() => act(s.id + "e", "/api/outreach", { action: "edit_step", id: s.id, subject, body, channel: s.channel }, "Saved.")}>Save edits</button>
           {s.channel === "email" && (s.status === "draft" || s.status === "failed" || s.status === "scheduled") && (
             <button className={btnPrimary} disabled={!!busy || !gmail} title={gmail ? "" : "Connect Gmail first"}
-              onClick={() => act(s.id + "s", "/api/outreach", { action: "send_now", id: s.id }, s.step_index === 0 ? "Sent. Follow-ups are scheduled and stop if they reply." : "Sent.")}>
+              onClick={() => act(s.id + "s", "/api/outreach", { action: "send_now", id: s.id }, s.step_index === 0 ? "Sent. Follow-ups are due on their dates for you to approve, and stop if they reply." : "Sent.")}>
               {busy === s.id + "s" ? "Sending…" : s.step_index === 0 ? "Approve and send" : "Send now"}
             </button>
           )}

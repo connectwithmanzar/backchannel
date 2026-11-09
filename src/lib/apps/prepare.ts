@@ -62,13 +62,14 @@ Include 5-8 questions: always include visa sponsorship, salary expectation and n
     if (key || q.sensitive) return { q: q.q, sensitive: true, key: key ?? undefined, answer: key ? saved[key] ?? "" : "" };
     return { q: q.q, answer: q.answer ?? "", sensitive: false };
   });
-  const missing = questions.some((q) => q.sensitive && !q.answer.trim());
+  // Sensitive answers always stop for the user, even when prefilled from saved answers.
+  const missing = questions.some((q) => q.sensitive);
 
   const row = {
     user_id: userId, job_id: jobId,
     status: missing ? "needs_answer" : "awaiting_approval",
     tailored_cv: out.tailored_cv ?? "", cv_changes: out.changes ?? [], cover_note: out.cover_note ?? "",
-    questions, pending_question: missing ? questions.find((q) => q.sensitive && !q.answer)?.q ?? null : null,
+    questions, pending_question: missing ? questions.find((q) => q.sensitive)?.q ?? null : null,
     updated_at: new Date().toISOString(),
   };
   const { data, error } = await db.from("applications").upsert(row, { onConflict: "user_id,job_id" }).select("id").single();
@@ -80,7 +81,7 @@ export function matchSensitive(q: string): string | null {
   const t = q.toLowerCase();
   if (/sponsor|visa/.test(t)) return "visa_sponsorship";
   if (/authori[sz]|right to work|eligible to work|work permit/.test(t)) return "work_authorisation";
-  if (/salary|compensation|ote|pay expectation|expected pay|ctc/.test(t)) return "salary_expectation";
+  if (/salary|compensation|\bote\b|pay expectation|expected pay|ctc/.test(t)) return "salary_expectation";
   if (/notice period|start date|when can you start|availability to start/.test(t)) return "notice_period";
   if (/relocat/.test(t)) return "willing_to_relocate";
   if (/where are you (based|located)|current location|city of residence/.test(t)) return "current_location";

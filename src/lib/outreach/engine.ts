@@ -6,6 +6,18 @@ import { htmlToText } from "@/lib/collector/fetchers";
 
 export const OPT_OUT = "If this isn't relevant, just reply \"no\" and I won't follow up.";
 const DAY = 24 * 3600 * 1000;
+export const MAX_EMAILS_PER_DAY = 20;
+// Emails only go out inside this window (local hours, Mon-Fri), so nothing lands at 3am.
+export const SEND_TZ = process.env.OUTREACH_TZ ?? "Asia/Kolkata";
+export const SEND_START_HOUR = Number(process.env.OUTREACH_START_HOUR ?? 9);
+export const SEND_END_HOUR = Number(process.env.OUTREACH_END_HOUR ?? 18);
+
+export function inSendWindow(now = new Date()): boolean {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: SEND_TZ, hour: "numeric", hourCycle: "h23", weekday: "short" }).formatToParts(now);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value);
+  const day = parts.find((p) => p.type === "weekday")?.value ?? "";
+  return !["Sat", "Sun"].includes(day) && hour >= SEND_START_HOUR && hour < SEND_END_HOUR;
+}
 
 // Day offset, channel, which generated text to use
 export const SEQUENCE: { day: number; channel: "email" | "linkedin_task"; key: "email1" | "email2" | "email3" | "li_connect" | "li_message"; label: string }[] = [
@@ -18,7 +30,7 @@ export const SEQUENCE: { day: number; channel: "email" | "linkedin_task"; key: "
 
 type Gen = { subject: string; email1: string; email2: string; email3: string; li_connect: string; li_message: string };
 
-export async function isBlocked(db: SupabaseClient, userId: string, email: string, company: string) {
+export async function isBlocked(db: SupabaseClient, userId: string, email: string, company: string, name = "") {
   const domain = email.split("@")[1]?.toLowerCase() ?? "";
   if (isExcludedCompany(company, domain)) return true;
   const { data } = await db.from("blocklist").select("type, value").eq("user_id", userId);
@@ -27,7 +39,7 @@ export async function isBlocked(db: SupabaseClient, userId: string, email: strin
     if (!v) return false;
     if (b.type === "domain") return domain === v || domain.endsWith("." + v) || domain.includes(v);
     if (b.type === "company") return company.toLowerCase().includes(v);
-    return email.toLowerCase().includes(v);
+    return email.toLowerCase().includes(v) || (!!name && name.toLowerCase().includes(v));
   });
 }
 
@@ -65,7 +77,7 @@ Return JSON: {"subject": "short, specific subject (max 7 words)", "email1": "int
 
 /** Creates the contact and its 5-step sequence. The first email starts as a draft for you to approve. */
 export async function startSequence(db: SupabaseClient, userId: string, input: { name: string; title?: string; email?: string; linkedin_url?: string; company_name: string; job_id?: string | null; notes?: string }) {
-  if (input.email && (await isBlocked(db, userId, input.email, input.company_name))) {
+  if (input.email && (await isBlocked(db, userId, input.email, input.company_name, input.name))) {
     throw new Error(`${input.company_name} is on your blocklist (stealth). Backchannel won't contact them.`);
   }
   if (isExcludedCompany(input.company_name)) throw new Error(`${input.company_name} is excluded. Backchannel won't contact them.`);
@@ -81,7 +93,7 @@ export async function startSequence(db: SupabaseClient, userId: string, input: {
     .filter((s) => (s.channel === "email" ? !!input.email : true))
     .map((s) => ({
       user_id: userId, contact_id: contact.id, step_index: SEQUENCE.indexOf(s), channel: s.channel,
-      // Every email starts as a draft; later emails are scheduled only after you approve and send the first.
+      // Every email starts as a draft and stays one until you approve it.
       status: s.channel === "email" ? "draft" : "task_open",
       subject: s.channel === "email" ? (s.key === "email1" ? g.subject : `Re: ${g.subject}`) : s.label,
       body: g[s.key], to_email: s.channel === "email" ? input.email : null,
@@ -101,18 +113,19 @@ async function sentToday(svc: SupabaseClient, userId: string) {
 /** Sends one email step now (respects the daily limit, blocklist and stop-on-reply). Uses the service client. */
 export async function sendStep(svc: SupabaseClient, userId: string, outreachId: string) {
   const [{ data: step }, { data: acct }, { data: prefs }] = await Promise.all([
-    svc.from("outreach").select("id, contact_id, status, subject, body, to_email, step_index, contacts(company_name, email)").eq("id", outreachId).eq("user_id", userId).single(),
+    svc.from("outreach").select("id, contact_id, status, subject, body, to_email, step_index, contacts(company_name, email, name)").eq("id", outreachId).eq("user_id", userId).single(),
     svc.from("gmail_accounts").select("email, refresh_token").eq("user_id", userId).maybeSingle(),
     svc.from("preferences").select("email_daily_limit").eq("user_id", userId).maybeSingle(),
   ]);
   if (!step) throw new Error("That email no longer exists.");
   if (!acct) throw new Error("Connect your Gmail first.");
   if (!["draft", "scheduled", "failed"].includes(step.status)) throw new Error("This email was already sent or stopped.");
-  const contact = step.contacts as unknown as { company_name: string; email: string } | null;
+  const contact = step.contacts as unknown as { company_name: string; email: string; name: string } | null;
   const to = step.to_email ?? contact?.email;
   if (!to) throw new Error("This contact has no email address.");
-  if (await isBlocked(svc, userId, to, contact?.company_name ?? "")) throw new Error("Blocked by your stealth list.");
-  const limit = prefs?.email_daily_limit ?? 20;
+  if (!inSendWindow()) throw new Error(`Emails only send Mon-Fri, ${SEND_START_HOUR}:00-${SEND_END_HOUR}:00 (${SEND_TZ}). Try again then.`);
+  if (await isBlocked(svc, userId, to, contact?.company_name ?? "", contact?.name ?? "")) throw new Error("Blocked by your stealth list.");
+  const limit = Math.min(MAX_EMAILS_PER_DAY, prefs?.email_daily_limit ?? MAX_EMAILS_PER_DAY);
   if ((await sentToday(svc, userId)) >= limit) throw new Error(`Daily limit of ${limit} emails reached. It will go out tomorrow.`);
 
   // Reuse the thread of the earlier email so follow-ups land as replies.
@@ -127,12 +140,11 @@ export async function sendStep(svc: SupabaseClient, userId: string, outreachId: 
     const sent = await sendEmail(token, { from: acct.email, to, subject: step.subject ?? "", body: step.body ?? "", threadId });
     await svc.from("outreach").update({ status: "sent", sent_at: new Date().toISOString(), gmail_message_id: sent.id, gmail_thread_id: sent.threadId, error: null }).eq("id", step.id);
     await svc.from("funnel_events").insert({ user_id: userId, type: "outreach_sent", ref_id: step.id });
-    // Once the first email is approved and sent, later email steps are scheduled from today.
+    // Once the first email is sent, later steps get due dates from today. They stay drafts: you approve each one.
     if (step.step_index === 0) {
       const { data: later } = await svc.from("outreach").select("id, step_index").eq("contact_id", step.contact_id).gt("step_index", 0);
       await Promise.all((later ?? []).map((l: { id: string; step_index: number }) =>
         svc.from("outreach").update({ scheduled_for: new Date(Date.now() + SEQUENCE[l.step_index].day * DAY).toISOString() }).eq("id", l.id)));
-      await svc.from("outreach").update({ status: "scheduled" }).eq("contact_id", step.contact_id).eq("channel", "email").eq("status", "draft").gt("step_index", 0);
     }
     return sent;
   } catch (e) {
