@@ -1,6 +1,7 @@
 export { SENSITIVE_LABELS } from "./labels";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { aiJson, hasAIKey, NO_AI_MESSAGE } from "@/lib/ai";
+import { aiJson, hasAIKey, NO_AI_MESSAGE, untrusted, DATA_NOTICE } from "@/lib/ai";
+import { unsupportedNumbers } from "./faithfulness";
 import { htmlToText } from "@/lib/collector/fetchers";
 import { isBlocked } from "@/lib/outreach/engine";
 
@@ -8,7 +9,7 @@ import { isBlocked } from "@/lib/outreach/engine";
 export type AppQuestion = { q: string; answer: string; sensitive: boolean; key?: string };
 type Prepared = { tailored_cv: string; changes: string[]; cover_note: string; questions: AppQuestion[] };
 
-const SYSTEM = `You prepare job applications for a B2B sales professional. Absolute rules:
+const SYSTEM = `You prepare job applications for a B2B sales professional. ${DATA_NOTICE} Absolute rules:
 - Use ONLY facts in the candidate's CV and scorecard. Never invent employers, titles, dates, numbers, tools, skills or achievements.
 - Tailoring means reordering, trimming and rewording existing bullets toward the job. If a requirement isn't met, don't claim it.
 - Write in plain, confident English. No buzzwords, no em-dashes.
@@ -40,7 +41,7 @@ export async function prepareApplication(db: SupabaseClient, userId: string, job
 
   const out = await aiJson<Prepared>(SYSTEM, `JOB: ${job.title} at ${company} (${job.location})
 JOB DESCRIPTION:
-${htmlToText(job.description ?? "").slice(0, 7000)}
+${untrusted("job_description", htmlToText(job.description ?? "").slice(0, 7000))}
 
 CANDIDATE SCORECARD:
 ${scorecard}
@@ -56,6 +57,10 @@ Return JSON:
   "questions": [{"q": "a question this application form is likely to ask", "answer": "answer from the CV, or empty if sensitive", "sensitive": false}]
 }
 Include 5-8 questions: always include visa sponsorship, salary expectation and notice period (sensitive), plus role-specific ones like 'Why this company?' or 'Describe your outbound process'.`, { maxTokens: 4000, smart: true });
+
+  // Flag any figure the model used that is not in the candidate's own CV or scorecard.
+  const strange = unsupportedNumbers(`${out.tailored_cv ?? ""}\n${out.cover_note ?? ""}`, [profile.cv_text, scorecard]);
+  if (strange.length) out.changes = [`Check before using: these numbers are not in your CV or scorecard: ${strange.join(", ")}. Remove them or correct them.`, ...(out.changes ?? [])];
 
   // Fill sensitive questions from saved answers; anything missing needs the user's input.
   const saved = (prefs?.standard_answers ?? {}) as Record<string, string>;
@@ -81,12 +86,12 @@ Include 5-8 questions: always include visa sponsorship, salary expectation and n
 
 export function matchSensitive(q: string): string | null {
   const t = q.toLowerCase();
-  if (/sponsor|visa/.test(t)) return "visa_sponsorship";
-  if (/authori[sz]|right to work|eligible to work|work permit/.test(t)) return "work_authorisation";
-  if (/salary|compensation|\bote\b|pay expectation|expected pay|ctc/.test(t)) return "salary_expectation";
-  if (/notice period|start date|when can you start|availability to start/.test(t)) return "notice_period";
+  if (/sponsor|visa|immigration/.test(t)) return "visa_sponsorship";
+  if (/authori[sz]|right to work|eligible to work|allowed to work|legally (able|permitted)|work permit/.test(t)) return "work_authorisation";
+  if (/salary|compensation|\bote\b|\bctc\b|pay (expectation|requirement)|expected pay|remuneration|\bpackage\b/.test(t)) return "salary_expectation";
+  if (/notice period|start date|when can you start|availability to start|how soon can you (join|start)|joining (time|date)|earliest (start|joining)/.test(t)) return "notice_period";
   if (/relocat/.test(t)) return "willing_to_relocate";
   if (/where are you (based|located)|current location|city of residence/.test(t)) return "current_location";
-  if (/gender|ethnic|race|disab|veteran|pronoun|sexual orientation|religion/.test(t)) return "diversity";
+  if (/\b(gender|ethnic\w*|race|racial|disabilit\w*|disabled|veteran|pronouns?|sexual orientation|religio\w*|caste|marital status|date of birth)\b/.test(t)) return "diversity";
   return null;
 }

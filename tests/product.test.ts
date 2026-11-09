@@ -15,6 +15,7 @@ import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddress, isDelayNotice, isAutoReply } from "../src/lib/outreach/limits";
 import { fakeSupabase } from "./helpers/fake-supabase";
 import { claimStep, markBounced, recentBounceStats, stopContact } from "../src/lib/outreach/engine";
+import { unsupportedNumbers } from "../src/lib/apps/faithfulness";
 import { pickProfileFields, pickPreferenceFields } from "../src/lib/profile-fields";
 import { validateTemplate, renderTemplate, autoSendDecision, OPT_OUT, unknownFields } from "../src/lib/outreach/templates";
 import { compareOffers, type OfferInput } from "../src/lib/offers";
@@ -411,4 +412,30 @@ test("a reply is counted once, however many times it is detected", async () => {
   await stopContact(asClient(db), "c", "replied");
   assert.equal(db.tables.funnel_events.length, 1);
   assert.deepEqual(db.tables.outreach.map((r) => r.status), ["replied", "replied", "stopped"]);
+});
+
+test("sensitive form questions are recognised in many wordings", () => {
+  const cases: [string, string | null][] = [
+    ["Will you now or in the future require visa sponsorship?", "visa_sponsorship"],
+    ["Are you legally able to work in the UK?", "work_authorisation"],
+    ["What are your pay requirements?", "salary_expectation"],
+    ["What is your expected CTC?", "salary_expectation"],
+    ["Describe your ideal remuneration package", "salary_expectation"],
+    ["How soon can you join?", "notice_period"],
+    ["What is your notice period?", "notice_period"],
+    ["How do you identify in terms of gender?", "diversity"],
+    ["Are you a protected veteran?", "diversity"],
+    ["Why do you want to join Acme?", null],
+    ["How do you manage embracing change and disabling bad habits?", null],   // "disab", "race" inside other words
+    ["Describe your outbound process", null],
+  ];
+  for (const [q, key] of cases) assert.equal(matchSensitive(q), key, q);
+});
+
+test("generated text is flagged when it uses numbers the CV does not have", () => {
+  const cv = "Senior SDR at Acme. Hit 112% of quota. Booked 25 meetings per month. Closed $1.2M pipeline in 2024.";
+  assert.deepEqual(unsupportedNumbers("Hit 112% of quota and booked 25 meetings a month.", [cv]), []);
+  assert.deepEqual(unsupportedNumbers("Built $1,200,000 pipeline", [cv]).length, 1);          // different figure
+  assert.deepEqual(unsupportedNumbers("Exceeded quota by 140% and booked 40 meetings", [cv]).sort(), ["140%", "40"].sort());
+  assert.deepEqual(unsupportedNumbers("I have 3 years and 2 emails", [cv]), []);             // single digits are ignored
 });

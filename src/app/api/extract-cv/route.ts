@@ -53,9 +53,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
+    if (file.size > 10 * 1024 * 1024) return NextResponse.json({ error: "That file is over 10 MB. Try a smaller one." }, { status: 400 });
+    const name = file.name.toLowerCase();
+    const isPdf = file.type === "application/pdf" || name.endsWith(".pdf");
+    if (!isPdf && !/\.(txt|md)$/.test(name) && !file.type.startsWith("text/")) {
+      return NextResponse.json({ error: "Upload a PDF or a plain text (.txt) file. Word files aren't read yet: save it as PDF first." }, { status: 400 });
+    }
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+    if (isPdf) {
       cvText = await pdfToText(buffer);
     } else {
       cvText = buffer.toString("utf-8");
@@ -82,6 +88,11 @@ export async function POST(request: NextRequest) {
 
     const raw = (response.choices[0].message.content ?? "").trim();
     const extracted = parseJsonLoose<Record<string, unknown>>(raw);
+    // A model can misread a number. Drop figures that are not plausible instead of saving them as facts.
+    const within = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : null);
+    extracted.years = within(extracted.years, 60);
+    extracted.quota_attainment_pct = within(extracted.quota_attainment_pct, 1000);
+    extracted.meetings_per_month = within(extracted.meetings_per_month, 500);
 
     return NextResponse.json({ extracted, cvText });
   } catch (err) {

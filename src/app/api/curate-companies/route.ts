@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as serviceClient } from "@supabase/supabase-js";
 import { rateLimit, retryAfter } from "@/lib/rate-limit";
+import { promises as dns } from "node:dns";
+import { isExcludedCompany } from "@/data/companies";
+import { cleanDomain } from "@/lib/contacts/apollo";
 import { createAIClient, hasAIKey, AI_MODEL, NO_AI_MESSAGE, parseJsonLoose } from "@/lib/ai";
 import { discoverBoard } from "@/lib/collectors/ats";
 
@@ -51,13 +54,7 @@ User preferences:
 - Dealbreakers: ${dealbreakers}
 - Known tools/tech: ${tools}
 
-Suggest exactly 12 real companies that match these preferences. Prioritise companies with:
-- Active sales teams hiring in those countries
-- Strong employer brand or awards
-- Clear product-led or sales-led motion
-- No recent layoffs (within 6 months)
-
-CRITICAL: Only include verifiable, sourced facts. If you cannot cite a specific award with a real source URL, leave the awards array empty. Never invent URLs.
+Suggest up to 12 real companies that match these preferences. Only include companies you are confident exist and that sell to or hire B2B sales people. Return fewer than 12 if you are unsure. Do not make claims about layoffs, funding amounts, hiring status or awards: you cannot check them. Write "why_great" as one short sentence using only widely known general facts about the company, and say "unknown" for anything you are not sure of. Use an empty awards array and null for visa_note.
 
 Respond with ONLY a valid JSON object (no markdown, no explanation):
 {
@@ -131,9 +128,18 @@ export async function POST() {
     return NextResponse.json({ error: `AI curation failed: ${message}`.slice(0, 200) }, { status: 500 });
   }
 
+  // The model only suggests names. A company is kept only if its website really resolves.
+  const verified: CuratedCompany[] = [];
+  for (const c of companies) {
+    const domain = cleanDomain(String(c.domain ?? ""));
+    if (!c.name || !domain || isExcludedCompany(c.name, domain)) continue;
+    try { await dns.lookup(domain); } catch { continue; }
+    verified.push({ ...c, domain, awards: [], visa_note: null, why_great: String(c.why_great ?? "").slice(0, 400) });
+  }
+
   // Upsert each company into companies table then company_insights
   const results: { name: string; id: string }[] = [];
-  for (const c of companies) {
+  for (const c of verified) {
     const { data: existing } = await svc
       .from("companies")
       .select("id")

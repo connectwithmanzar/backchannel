@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAIClient, hasAIKey, AI_MODEL, NO_AI_MESSAGE } from "@/lib/ai";
+import { createAIClient, hasAIKey, AI_MODEL, NO_AI_MESSAGE, untrusted, DATA_NOTICE } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -21,12 +21,12 @@ export async function POST(req: NextRequest) {
   if (!history.length) return NextResponse.json({ error: "Ask me something." }, { status: 400 });
 
   const [{ data: profile }, { data: scores }, { data: apps }, { data: refs }, { data: contacts }, { data: insights }] = await Promise.all([
-    db.from("profiles").select("name, current_role, years_in_sales, quota_attainment_pct, meetings_per_month, segment, motion, tools, markets, min_ote_usd").eq("user_id", user.id).maybeSingle(),
+    db.from("profiles").select("name, current_role, years_in_sales, quota_attainment_pct, meetings_per_month, segment, motion, tools, markets").eq("user_id", user.id).maybeSingle(),
     db.from("job_scores").select("score, reaction, explanation, jobs!inner(title, location, url, currency, base_min, base_max, ote_min, ote_max, visa_sponsorship, remote_type, is_active, companies(name))").eq("user_id", user.id).eq("jobs.is_active", true).order("score", { ascending: false }).limit(40),
     db.from("applications").select("status, stage, submitted_at, jobs(title, companies(name))").eq("user_id", user.id).limit(50),
     db.from("referrals").select("company_name, referrer_name, stage, follow_up_on").eq("user_id", user.id).limit(50),
     db.from("contacts").select("name, company_name").eq("user_id", user.id).limit(50),
-    db.from("company_insights").select("why_great, criteria_tags, companies(name, country)").eq("hidden", false).limit(40),
+    db.from("company_insights").select("why_great, criteria_tags, companies(name, country)").eq("user_id", user.id).eq("hidden", false).limit(40),
   ]);
 
   const roles = (scores ?? []).map((s) => {
@@ -49,7 +49,7 @@ GREAT COMPANIES: ${JSON.stringify((insights ?? []).map((i) => ({ company: (i.com
       model: AI_MODEL,
       max_tokens: 900,
       messages: [
-        { role: "system", content: `You are Backchannel's assistant, helping a B2B sales professional land a better-paid job. Answer from the user's data below. Be concise and practical; use short lists. Link roles with their URL. Never invent roles, pay, companies, people or facts about the user. If the data doesn't answer it, say so and suggest which Backchannel page helps (Roles, Great companies, Autopilot, Outreach, Referrals, Pay benchmark). For interview prep, use the role's company and the user's real numbers. No em-dashes.\n\n${context}` },
+        { role: "system", content: `You are Backchannel's assistant, helping a B2B sales professional land a better-paid job. Answer from the user's data below. Be concise and practical; use short lists. Link roles with their URL. Never invent roles, pay, companies, people or facts about the user. Never state, guess or suggest an answer to a visa, work-authorisation, salary-expectation, notice-period or diversity question: tell the user to answer those themselves on their Profile. ${DATA_NOTICE} If the data doesn't answer it, say so and suggest which Backchannel page helps (Roles, Great companies, Autopilot, Outreach, Referrals, Pay benchmark). For interview prep, use the role's company and the user's real numbers. No em-dashes.\n\n${untrusted("user_data", context)}` },
         ...history,
       ],
     });

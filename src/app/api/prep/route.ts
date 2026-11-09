@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { aiText, hasAIKey, NO_AI_MESSAGE } from "@/lib/ai";
+import { aiText, hasAIKey, NO_AI_MESSAGE, untrusted, DATA_NOTICE } from "@/lib/ai";
 import { htmlToText } from "@/lib/collector/fetchers";
 import { rateLimit, retryAfter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const SYSTEM = `You prepare a B2B sales candidate for an interview. Absolute rules:
+const SYSTEM = `You prepare a B2B sales candidate for an interview. ${DATA_NOTICE} Absolute rules:
 - Use ONLY facts in the candidate's CV and scorecard. Never invent employers, numbers, tools, results or experience.
 - Where the job asks for something the candidate's facts don't show, list it under "Gaps to be ready for" with an honest way to address it. Never suggest claiming it.
 - Plain text, no markdown symbols other than "- " bullets, no em-dashes.
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const content = await aiText(SYSTEM,
-      `JOB: ${job.title} at ${company} (${job.location})\n${htmlToText(job.description ?? "").slice(0, 6000)}\n\nSCORECARD:\n${scorecard || "(none on file)"}\n\nCV (the only source of facts):\n${p.cv_text.slice(0, 10000)}`,
+      `JOB: ${job.title} at ${company} (${job.location})\n${untrusted("job_description", htmlToText(job.description ?? "").slice(0, 6000))}\n\nSCORECARD:\n${scorecard || "(none on file)"}\n\nCV (the only source of facts):\n${p.cv_text.slice(0, 10000)}`,
       { maxTokens: 1200 });
     if (!content) return NextResponse.json({ error: "The AI gave no answer. Try again." }, { status: 502 });
     await db.from("interview_preps").upsert({ user_id: user.id, job_id: jobId, content, created_at: new Date().toISOString() }, { onConflict: "user_id,job_id" });

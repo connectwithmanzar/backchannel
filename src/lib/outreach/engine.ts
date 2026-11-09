@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { aiJson, hasAIKey, NO_AI_MESSAGE } from "@/lib/ai";
+import { aiJson, hasAIKey, NO_AI_MESSAGE, untrusted, DATA_NOTICE } from "@/lib/ai";
 import { accessToken, sendEmail, threadState } from "./gmail";
 import { MAX_EMAILS_PER_DAY, bouncePaused, effectiveDailyLimit } from "./limits";
 import { OPT_OUT, autoSendDecision, renderTemplate } from "./templates";
@@ -52,12 +52,12 @@ export async function generateSequence(db: SupabaseClient, userId: string, c: { 
 
   const g = await aiJson<Gen>(
     `You write short, human outreach from a B2B sales professional to someone who hires at a company they want to join.
-Rules: only use facts given about the sender; never invent numbers, names, mutual connections or company news. If no company news is given, don't claim any.
+Rules: ${DATA_NOTICE} Only use facts given about the sender; never invent numbers, names, mutual connections or company news. If no company news is given, don't claim any.
 Plain text, no em-dashes, no buzzwords, no "I hope this finds you well". Each email 70-120 words with one clear ask (a 15-minute call or the right person to talk to). Sign off with the sender's first name only.`,
     `SENDER FACTS:\n${facts || "(only the name is known)"}\nSender name: ${p?.name ?? ""}\n${p?.cv_text ? `CV excerpt:\n${p.cv_text.slice(0, 3000)}` : ""}
 RECIPIENT: ${c.name}${c.title ? `, ${c.title}` : ""} at ${c.company_name}
-${job ? `ROLE THEY'RE HIRING FOR: ${job.title}\n${htmlToText(job.description ?? "").slice(0, 2500)}` : "No specific open role; ask about upcoming sales hiring."}
-${c.notes ? `SENDER'S NOTES ABOUT THIS PERSON: ${c.notes}` : ""}
+${job ? `ROLE THEY'RE HIRING FOR: ${job.title}\n${untrusted("job_description", htmlToText(job.description ?? "").slice(0, 2500))}` : "No specific open role; ask about upcoming sales hiring."}
+${c.notes ? `SENDER'S NOTES ABOUT THIS PERSON: ${untrusted("sender_notes", c.notes)}` : ""}
 
 Return JSON: {"subject": "short, specific subject (max 7 words)", "email1": "intro", "email2": "follow-up 4 days later, adds one proof point from the facts", "email3": "brief final note 10 days later", "li_connect": "LinkedIn connection note, max 280 characters", "li_message": "LinkedIn message after connecting, max 500 characters"}`,
     { maxTokens: 1800 }

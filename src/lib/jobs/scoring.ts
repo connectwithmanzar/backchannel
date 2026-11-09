@@ -3,7 +3,7 @@ import { scoreJob, parseMinOteByMarket, type SearchProfile } from "@/lib/score";
 import { companyQuality, signalsFromRows } from "@/lib/companyQuality";
 import { toMarket, countryToMarkets } from "@/lib/jobs/market";
 import type { Job, Market, RemoteType } from "@/lib/collector/types";
-import { createAIClient, hasAIKey, AI_MODEL } from "@/lib/ai";
+import { createAIClient, hasAIKey, AI_MODEL, untrusted, DATA_NOTICE } from "@/lib/ai";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -27,11 +27,11 @@ async function aiExplain(
   if (!hasAIKey()) return null;
 
   const client = createAIClient();
-  const prompt = `You are a career coach. Given a sales job and a candidate profile, write exactly 2 sentences explaining why the fit score is ${score}/100.
+  const prompt = `You are a career coach. ${DATA_NOTICE} Given a sales job and a candidate profile, write exactly 2 sentences explaining why the fit score is ${score}/100.
 
 Job: ${job.title} at ${job.company} (${job.location})
 Role type: ${job.roleFamily}
-Description excerpt: ${job.description.slice(0, 600)}
+Description excerpt: ${untrusted("job_description", job.description.slice(0, 600))}
 
 Candidate profile:
 - Target roles: ${profile.targetFamilies.join(", ")}
