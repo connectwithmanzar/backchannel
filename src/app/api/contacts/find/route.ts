@@ -18,13 +18,13 @@ function monthStart() {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
 }
 
-// POST /api/contacts/find { action: "search", company, domain } | { action: "reveal", person_id }
+// POST /api/contacts/find { action: "search", company, domain, refresh? } | { action: "reveal", person_id }
 export async function POST(req: NextRequest) {
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "Please sign in." }, { status: 401 });
   if (!apolloConfigured()) return NextResponse.json({ error: "People search isn't set up yet. Add APOLLO_API_KEY in Vercel, then redeploy." }, { status: 503 });
-  if (!rateLimit(`find:${user.id}`, 30, 3600_000)) {
+  if (!rateLimit(`find:${user.id}`, 60, 3600_000)) {
     return NextResponse.json({ error: `Slow down a little. Try again in ${retryAfter(`find:${user.id}`)}s.` }, { status: 429 });
   }
 
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       }
       const { data: cached } = await svc.from("contact_lookups").select("result, created_at")
         .eq("user_id", user.id).eq("kind", "search").eq("company_key", domain).maybeSingle();
-      if (cached && Date.now() - Date.parse(cached.created_at) < CACHE_DAYS * 864e5) {
+      if (!b.refresh && cached && Date.now() - Date.parse(cached.created_at) < CACHE_DAYS * 864e5) {
         return NextResponse.json({ ok: true, people: cached.result, cached: true });
       }
       if ((await usedThisMonth("search")) >= SEARCH_CAP) {

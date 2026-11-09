@@ -13,6 +13,7 @@ export default function FindPeople({ configured }: { configured: boolean }) {
   const [company, setCompany] = useState("");
   const [domain, setDomain] = useState("");
   const [people, setPeople] = useState<Person[] | null>(null);
+  const [fromCache, setFromCache] = useState(false);
   const [revealed, setRevealed] = useState<Record<string, Revealed>>({});
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -23,12 +24,13 @@ export default function FindPeople({ configured }: { configured: boolean }) {
     return { ok: res.ok, data };
   }
 
-  async function search() {
+  async function search(refresh = false) {
     setBusy("search"); setMsg(null); setPeople(null);
-    const { ok, data } = await call("search", { company, domain });
+    const { ok, data } = await call("search", { company, domain, refresh });
     setBusy("");
     if (!ok) { setMsg({ ok: false, text: data.error ?? "Search failed." }); return; }
     setPeople(data.people);
+    setFromCache(!!data.cached);
     if (!data.people.length) setMsg({ ok: true, text: "No matching people found for that company. Try another, or add someone you know below." });
   }
 
@@ -68,6 +70,9 @@ export default function FindPeople({ configured }: { configured: boolean }) {
             <button type="submit" className={btnPrimary} disabled={busy === "search" || !company.trim() || !domain.trim()}>{busy === "search" ? "Searching…" : "Find people"}</button>
           </form>
           {msg && <p role="status" className={`text-sm ${msg.ok ? "text-good" : "text-warn"}`}>{msg.text}</p>}
+          {people && people.length > 0 && fromCache && (
+            <p className="text-xs text-muted">Saved result from an earlier search. <button type="button" className="font-semibold text-accent hover:underline" disabled={!!busy} onClick={() => search(true)}>Search again</button></p>
+          )}
           {people && people.length > 0 && (
             <ul className="flex flex-col divide-y divide-line">
               {people.map((p) => {

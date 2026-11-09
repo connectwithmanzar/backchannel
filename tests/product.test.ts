@@ -12,7 +12,7 @@ import { parseJobUrl, buildPastedJob } from "../src/lib/jobs/paste";
 import { scoreJob, parseMinOteByMarket, type SearchProfile } from "../src/lib/score";
 import { companyQuality, signalsFromRows } from "../src/lib/companyQuality";
 import type { Job } from "../src/lib/collector/types";
-import { cleanDomain, classifyTitle, parsePeople, buildSearchUrl } from "../src/lib/contacts/apollo";
+import { cleanDomain, classifyTitle, parsePeople, buildSearchUrl, mergePeople, HIRING_TITLES, RECRUITER_TITLES } from "../src/lib/contacts/apollo";
 
 test("sales role filter: keeps targets, drops noise", () => {
   assert.equal(roleFamily("Senior Sales Development Representative, EMEA"), "SDR/BDR");
@@ -211,4 +211,14 @@ test("people search: parses Apollo's response shape and ignores junk", () => {
   assert.equal(people[0].lastHint, "Va***z");
   assert.deepEqual(parsePeople(null, "x"), []);
   assert.deepEqual(parsePeople({ people: "nope" }, "x"), []);
+});
+
+test("people search: sales leaders come first, recruiters fill the gap without duplicates", () => {
+  const p = (id: string, role: "hiring_manager" | "recruiter") => ({ id, firstName: id, lastHint: "", title: "", company: "A", hasEmail: false, role });
+  const merged = mergePeople([p("h1", "hiring_manager"), p("h2", "hiring_manager")], [p("r1", "recruiter"), p("h1", "hiring_manager")], 3);
+  assert.deepEqual(merged.map((x) => x.id), ["h1", "h2", "r1"]);
+  assert.equal(mergePeople(Array.from({ length: 20 }, (_, i) => p(`x${i}`, "recruiter")), []).length, 15);
+  const hiringUrl = buildSearchUrl("acme.com", HIRING_TITLES);
+  assert.ok(hiringUrl.includes("head+of+sales") && !hiringUrl.includes("recruiter"));
+  assert.ok(buildSearchUrl("acme.com", RECRUITER_TITLES).includes("recruiter"));
 });

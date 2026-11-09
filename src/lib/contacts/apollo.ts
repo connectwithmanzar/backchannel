@@ -17,10 +17,13 @@ export interface FoundPerson {
 
 export interface RevealedPerson { id: string; name: string; title: string; linkedinUrl: string | null }
 
-export const SEARCH_TITLES = [
+export const HIRING_TITLES = [
   "head of sales", "vp sales", "vice president sales", "director of sales", "sales development manager", "head of sdr",
-  "director of revenue", "head of revenue", "recruiter", "talent acquisition", "head of talent",
+  "director of revenue", "head of revenue", "sales manager", "head of business development",
 ];
+export const RECRUITER_TITLES = ["recruiter", "talent acquisition", "head of talent"];
+export const MIN_HIRING_PEOPLE = 5; // below this, a second search adds recruiters
+export const MAX_PEOPLE = 15;
 
 export function apolloConfigured(): boolean {
   return (process.env.APOLLO_API_KEY ?? "").length > 10;
@@ -39,10 +42,10 @@ export function classifyTitle(title: string): PersonRole {
   return "other";
 }
 
-export function buildSearchUrl(domain: string): string {
+export function buildSearchUrl(domain: string, titles: string[] = HIRING_TITLES): string {
   const p = new URLSearchParams();
   p.append("q_organization_domains_list[]", domain);
-  for (const t of SEARCH_TITLES) p.append("person_titles[]", t);
+  for (const t of titles) p.append("person_titles[]", t);
   p.append("include_similar_titles", "true");
   p.append("per_page", "15");
   return `${BASE}/mixed_people/api_search?${p.toString()}`;
@@ -82,8 +85,17 @@ async function call(url: string, init: RequestInit): Promise<unknown> {
   return res.json();
 }
 
+/** Hiring-side people first (they are the best referral asks); recruiters only fill the gap. */
+export function mergePeople(first: FoundPerson[], second: FoundPerson[], limit = MAX_PEOPLE): FoundPerson[] {
+  const seen = new Set<string>();
+  return [...first, ...second].filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true))).slice(0, limit);
+}
+
 export async function searchPeople(domain: string, companyName: string): Promise<FoundPerson[]> {
-  return parsePeople(await call(buildSearchUrl(domain), { method: "POST" }), companyName);
+  const hiring = parsePeople(await call(buildSearchUrl(domain, HIRING_TITLES), { method: "POST" }), companyName);
+  if (hiring.length >= MIN_HIRING_PEOPLE) return mergePeople(hiring, []);
+  const recruiters = parsePeople(await call(buildSearchUrl(domain, RECRUITER_TITLES), { method: "POST" }), companyName);
+  return mergePeople(hiring, recruiters);
 }
 
 /** Full name and LinkedIn link for one person. May use Apollo credits; never requests email or phone. */
