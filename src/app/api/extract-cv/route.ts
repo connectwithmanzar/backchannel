@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as pdfParseModule from "pdf-parse";
 import { createClient } from "@/lib/supabase/server";
 import { rateLimit, retryAfter } from "@/lib/rate-limit";
 import { createAIClient, hasAIKey, AI_MODEL, NO_AI_MESSAGE, parseJsonLoose } from "@/lib/ai";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const pdfParse: (buf: Buffer) => Promise<{ text: string }> = (pdfParseModule as any).default ?? pdfParseModule;
+
+// pdf-parse is loaded only for PDFs: importing it at the top crashes the whole route on Vercel.
+async function pdfToText(buffer: Buffer): Promise<string> {
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: new Uint8Array(buffer) });
+  try {
+    const result = await parser.getText();
+    return result.text;
+  } finally {
+    await parser.destroy();
+  }
+}
 
 export const runtime = "nodejs";
 
@@ -53,8 +62,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
 
     if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-      const parsed = await pdfParse(buffer);
-      cvText = parsed.text;
+      cvText = await pdfToText(buffer);
     } else {
       cvText = buffer.toString("utf-8");
     }
@@ -62,8 +70,9 @@ export async function POST(request: NextRequest) {
     if (!cvText.trim()) {
       return NextResponse.json({ error: "Could not read text from file" }, { status: 400 });
     }
-  } catch {
-    return NextResponse.json({ error: "Failed to read file" }, { status: 400 });
+  } catch (err) {
+    console.error("extract-cv: reading file failed:", err);
+    return NextResponse.json({ error: "Couldn't read that PDF. Try a .txt or Word-exported text file instead." }, { status: 400 });
   }
 
   try {

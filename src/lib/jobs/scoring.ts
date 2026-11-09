@@ -110,7 +110,9 @@ export async function scoreForUser(svc: SupabaseClient, userId: string, opts: { 
 
   // 2) AI explanations for the best matches, 5 at a time, within ~45 seconds.
   let explained = 0;
-  if (hasAIKey()) {
+  // No profile yet means the explanation would be generic, so don't spend AI on it.
+  const hasProfileData = profile.tools.length > 0 || profile.markets.length > 0 || profile.minOteUsd > 0;
+  if (hasAIKey() && hasProfileData) {
     const top = !opts.ai ? [] : scored.filter((s) => s.result.score >= 60).sort((a, b) => b.result.score - a.result.score).slice(0, 30);
     for (let i = 0; i < top.length && Date.now() < deadline; i += 5) {
       const chunk = top.slice(i, i + 5);

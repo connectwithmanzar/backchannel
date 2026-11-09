@@ -41,8 +41,8 @@ export function scoreJob(job: Job, p: SearchProfile): ScoredJob {
   const score = Math.round(role * 0.35 + mkt * 0.25 + tools * 0.2 + pay * 0.2);
   const bits = [
     p.targetFamilies.includes(job.roleFamily) ? `${job.roleFamily} is one of your target role types` : `${job.roleFamily} is outside your target role types`,
-    p.markets.includes(job.market) ? `the location fits your markets` : `the location is outside your markets`,
-    matchedTools.length ? `it mentions ${matchedTools.join(", ")}` : `it doesn't name your tools`,
+    !p.markets.length ? `you haven't picked target markets yet` : p.markets.includes(job.market) ? `the location fits your markets` : `the location is outside your markets`,
+    matchedTools.length ? `it mentions ${matchedTools.join(", ")}` : p.tools.length ? `it doesn't name your tools` : `you haven't added your tools yet`,
     payUsdMax === undefined ? `pay isn't published` : `pay is published`,
   ];
   return {
