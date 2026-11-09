@@ -15,6 +15,7 @@ import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage } from "../src/lib/outreach/limits";
 import { validateTemplate, renderTemplate, autoSendDecision, OPT_OUT, unknownFields } from "../src/lib/outreach/templates";
 import { compareOffers, type OfferInput } from "../src/lib/offers";
+import { isCronAuthorized } from "../src/lib/owner";
 import { pickProvider, adaptGroqBody } from "../src/lib/ai";
 import { cleanDomain, classifyTitle, parsePeople, buildSearchUrl, mergePeople, HIRING_TITLES, RECRUITER_TITLES } from "../src/lib/contacts/apollo";
 
@@ -329,4 +330,15 @@ test("Groq requests: low reasoning and headroom so short answers are not cut off
   assert.equal("max_tokens" in out, false);
   const other = adaptGroqBody({ model: "llama-3.3-70b-versatile", messages: [] });
   assert.equal("reasoning_effort" in other, false);
+});
+
+test("cron auth: needs the exact secret, tolerates stray whitespace, fails closed", () => {
+  assert.equal(isCronAuthorized("Bearer abc123", "abc123"), true);
+  assert.equal(isCronAuthorized("Bearer abc123", "abc123\n"), true);   // newline saved with the value
+  assert.equal(isCronAuthorized("Bearer abc123 ", " abc123"), true);
+  assert.equal(isCronAuthorized("Bearer wrong", "abc123"), false);
+  assert.equal(isCronAuthorized("abc123", "abc123"), false);          // missing the Bearer prefix
+  assert.equal(isCronAuthorized(null, "abc123"), false);
+  assert.equal(isCronAuthorized("Bearer ", ""), false);                // no secret configured: always closed
+  assert.equal(isCronAuthorized("Bearer undefined", undefined), false);
 });
