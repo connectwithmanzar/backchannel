@@ -294,9 +294,11 @@ test("offers: yearly cash converts to USD and ranks open offers", () => {
   assert.equal(compareOffers([{ ...base, id: "x", base: 1000 }])[0].isBest, false); // a single offer is not "best"
 });
 
-test("AI provider: Groq first, then OpenRouter, then Anthropic, never a free Gemini", () => {
+test("AI provider: Groq, then Gemini, then OpenRouter, then Anthropic", () => {
   assert.equal(pickProvider({}).name, "none");
   assert.equal(pickProvider({ GROQ_API_KEY: "gsk_abcdefghijk", OPENROUTER_API_KEY: "sk-or-abcdefghij" }).name, "groq");
+  assert.equal(pickProvider({ GEMINI_API_KEY: "AIza-abcdefghij", OPENROUTER_API_KEY: "sk-or-abcdefghij" }).name, "gemini");
+  assert.equal(pickProvider({ GEMINI_API_KEY: "AIza-abcdefghij" }).baseURL, "https://generativelanguage.googleapis.com/v1beta/openai/");
   assert.equal(pickProvider({ OPENROUTER_API_KEY: "sk-or-abcdefghij", ANTHROPIC_API_KEY: "sk-ant-abcdefghij" }).name, "openrouter");
   assert.equal(pickProvider({ ANTHROPIC_API_KEY: "sk-ant-abcdefghij" }).name, "anthropic");
   assert.equal(pickProvider({ GROQ_API_KEY: "short" }).name, "none");

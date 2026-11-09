@@ -28,11 +28,11 @@ export default function LoginPage() {
     }
   }
 
-  async function signInWithGoogle() {
+  async function signInWith(provider: "google" | "linkedin_oidc") {
     setError("");
     const supabase = createClient();
     const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider: "google",
+      provider,
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
     if (authError) setError(authError.message);
@@ -97,15 +97,20 @@ export default function LoginPage() {
           </form>
         )}
 
-        {!sent && process.env.NEXT_PUBLIC_GOOGLE_LOGIN === "1" && (
-          <div className="mt-4 border-t border-line pt-4">
-            <button
-              type="button"
-              onClick={signInWithGoogle}
-              className="w-full rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-semibold transition hover:border-fg/40"
-            >
-              Continue with Google
-            </button>
+        {!sent && (process.env.NEXT_PUBLIC_GOOGLE_LOGIN === "1" || process.env.NEXT_PUBLIC_LINKEDIN_LOGIN === "1") && (
+          <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
+            {process.env.NEXT_PUBLIC_GOOGLE_LOGIN === "1" && (
+              <button type="button" onClick={() => signInWith("google")}
+                className="w-full rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-semibold transition hover:border-fg/40">
+                Continue with Google
+              </button>
+            )}
+            {process.env.NEXT_PUBLIC_LINKEDIN_LOGIN === "1" && (
+              <button type="button" onClick={() => signInWith("linkedin_oidc")}
+                className="w-full rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-semibold transition hover:border-fg/40">
+                Continue with LinkedIn
+              </button>
+            )}
           </div>
         )}
       </div>

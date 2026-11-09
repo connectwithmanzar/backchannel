@@ -2,11 +2,11 @@ import OpenAI from "openai";
 
 // Provider choice, first key found wins:
 //   GROQ_API_KEY       → Groq (free tier, no inference data kept by default), open model gpt-oss-120b
+//   GEMINI_API_KEY     → Google Gemini via its OpenAI-compatible endpoint (free tier; Google's terms say free-tier
+//                        content may be used to improve products and read by people, so only use it for data you are fine sharing)
 //   OPENROUTER_API_KEY → OpenRouter (model "anthropic/claude-haiku-4-5")
 //   ANTHROPIC_API_KEY  → Anthropic's OpenAI-compatible endpoint (model "claude-haiku-4-5")
-// Free Gemini is deliberately not an option: Google's terms say free-tier content is used to improve
-// their products and may be read by people, and CVs and emails are personal information.
-export type AiProvider = { name: "groq" | "openrouter" | "anthropic" | "none"; baseURL: string; apiKey: string; model: string; smartModel: string };
+export type AiProvider = { name: "groq" | "gemini" | "openrouter" | "anthropic" | "none"; baseURL: string; apiKey: string; model: string; smartModel: string };
 
 const hasKey = (v: string | undefined) => (v ?? "").length > 10;
 
@@ -14,6 +14,10 @@ export function pickProvider(env: Record<string, string | undefined>): AiProvide
   if (hasKey(env.GROQ_API_KEY)) {
     const model = env.GROQ_MODEL ?? "openai/gpt-oss-120b";
     return { name: "groq", baseURL: "https://api.groq.com/openai/v1", apiKey: env.GROQ_API_KEY!, model, smartModel: env.AI_MODEL_SMART ?? model };
+  }
+  if (hasKey(env.GEMINI_API_KEY)) {
+    const model = env.GEMINI_MODEL ?? "gemini-2.5-flash";
+    return { name: "gemini", baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/", apiKey: env.GEMINI_API_KEY!, model, smartModel: env.AI_MODEL_SMART ?? model };
   }
   if (hasKey(env.OPENROUTER_API_KEY)) {
     return { name: "openrouter", baseURL: "https://openrouter.ai/api/v1", apiKey: env.OPENROUTER_API_KEY!, model: "anthropic/claude-haiku-4-5", smartModel: env.AI_MODEL_SMART ?? "anthropic/claude-sonnet-4-5" };
@@ -63,7 +67,7 @@ export function hasAIKey(): boolean {
   return provider.name !== "none";
 }
 
-export const NO_AI_MESSAGE = "AI isn't set up yet. Add GROQ_API_KEY (free), OPENROUTER_API_KEY or ANTHROPIC_API_KEY in Vercel → Settings → Environment Variables, then redeploy.";
+export const NO_AI_MESSAGE = "AI isn't set up yet. Add GROQ_API_KEY or GEMINI_API_KEY (both free), OPENROUTER_API_KEY or ANTHROPIC_API_KEY in Vercel → Settings → Environment Variables, then redeploy.";
 
 /** One-shot text completion. */
 export async function aiText(system: string, user: string, opts: { maxTokens?: number; smart?: boolean } = {}): Promise<string> {
