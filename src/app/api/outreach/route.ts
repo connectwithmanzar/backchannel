@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { serviceClient } from "@/lib/supabase/service";
-import { generateSequence, OPT_OUT, sendStep, startSequence, stopContact } from "@/lib/outreach/engine";
+import { checkReplies, generateSequence, OPT_OUT, sendStep, startSequence, stopContact } from "@/lib/outreach/engine";
+import { accessToken, threadReplies } from "@/lib/outreach/gmail";
 import { rateLimit, retryAfter } from "@/lib/rate-limit";
 import { validateTemplate } from "@/lib/outreach/templates";
 
@@ -74,6 +75,24 @@ export async function POST(req: NextRequest) {
         const { error } = await db.from("preferences").upsert(patch, { onConflict: "user_id" });
         if (error) throw error;
         return NextResponse.json({ ok: true });
+      }
+      case "check_replies": {
+        if (!rateLimit(`chk:${user.id}`, 12, 10 * 60_000)) return NextResponse.json({ ok: true, replies: 0, bounces: 0, skipped: true });
+        return NextResponse.json({ ok: true, ...(await checkReplies(serviceClient(), user.id, Date.now() + 20_000)) });
+      }
+      case "view_reply": {
+        const { data: own } = await db.from("contacts").select("id").eq("id", b.contact_id).maybeSingle();
+        if (!own) return NextResponse.json({ error: "Contact not found." }, { status: 404 });
+        const svc = serviceClient();
+        const [{ data: acct }, { data: rows }] = await Promise.all([
+          svc.from("gmail_accounts").select("email, refresh_token").eq("user_id", user.id).maybeSingle(),
+          svc.from("outreach").select("gmail_thread_id").eq("contact_id", b.contact_id).not("gmail_thread_id", "is", null).limit(1),
+        ]);
+        if (!acct) return NextResponse.json({ error: "Connect your Gmail first." }, { status: 400 });
+        const threadId = rows?.[0]?.gmail_thread_id;
+        if (!threadId) return NextResponse.json({ ok: true, messages: [] });
+        const messages = await threadReplies(await accessToken(acct.refresh_token), threadId, acct.email);
+        return NextResponse.json({ ok: true, messages });
       }
       case "save_template": {
         const subject = String(b.subject ?? "").trim(), body = String(b.body ?? "").trim();

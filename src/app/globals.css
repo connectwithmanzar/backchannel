@@ -19,3 +19,7 @@
 body { background: var(--bg); color: var(--fg); }
 h1, h2, h3 { font-family: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif; text-wrap: balance; letter-spacing: -0.01em; }
 .num { font-variant-numeric: tabular-nums; }
+
+/* Height of the phone bottom tab bar, so floating buttons sit above it. */
+:root { --tabbar-h: 0px; }
+@media (max-width: 767px) { :root { --tabbar-h: 52px; } }

@@ -25,7 +25,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       </head>
       <body className="font-sans text-[15px] leading-relaxed antialiased">
         {user && <Nav email={user.email ?? ""} />}
-        <main className="mx-auto max-w-6xl px-4 pb-24">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 pb-24 max-md:pb-44">{children}</main>
         {user && <ChatWidget />}
       </body>
     </html>

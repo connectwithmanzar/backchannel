@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Empty, Pill, btn, btnPrimary, input, label } from "@/components/ui";
 import { postJson, copyText } from "@/lib/api";
@@ -31,6 +31,30 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
   const [open, setOpen] = useState<string | null>(null);
   const [limit, setLimit] = useState(settings.limit);
   const [sig, setSig] = useState(settings.signature);
+  const [replyView, setReplyView] = useState<Record<string, { loading: boolean; error?: string; messages?: { from: string; date: string; text: string }[] }>>({});
+  const [checking, setChecking] = useState(false);
+
+  async function checkNow(quiet = false) {
+    setChecking(true);
+    try {
+      const r = (await postJson("/api/outreach", { action: "check_replies" })) as { replies?: number; bounces?: number };
+      const n = (r.replies ?? 0) + (r.bounces ?? 0);
+      if (n > 0) { setMsg({ ok: true, text: `${r.replies ? `${r.replies} new repl${r.replies === 1 ? "y" : "ies"}` : ""}${r.replies && r.bounces ? " and " : ""}${r.bounces ? `${r.bounces} bounced address${r.bounces === 1 ? "" : "es"}` : ""} found. Those sequences stopped.` }); router.refresh(); }
+      else if (!quiet) setMsg({ ok: true, text: "No new replies." });
+    } catch (e) { if (!quiet) setMsg({ ok: false, text: (e as Error).message }); }
+    finally { setChecking(false); }
+  }
+  // Reply check does not depend on any scheduler: it also runs whenever you open this page.
+  useEffect(() => { if (gmailEmail) void checkNow(true); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadReply(contactId: string) {
+    setReplyView((v) => ({ ...v, [contactId]: { loading: true } }));
+    try {
+      const r = (await postJson("/api/outreach", { action: "view_reply", contact_id: contactId })) as { messages?: { from: string; date: string; text: string }[] };
+      setReplyView((v) => ({ ...v, [contactId]: { loading: false, messages: r.messages ?? [] } }));
+    } catch (e) { setReplyView((v) => ({ ...v, [contactId]: { loading: false, error: (e as Error).message } })); }
+  }
 
   async function act(key: string, url: string, body: object, ok: string, after?: () => void) {
     setBusy(key); setMsg(null);
@@ -115,6 +139,12 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
         </form>
       </Card>
 
+      {gmailEmail && contacts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button className={btn} disabled={checking} onClick={() => checkNow(false)}>{checking ? "Checking your inbox…" : "Check replies now"}</button>
+          <span className="text-xs text-muted">Replies are also checked when you open this page and every hour.</span>
+        </div>
+      )}
       {contacts.length ? (
         <ul className="flex flex-col gap-3">
           {contacts.map((c) => {
@@ -129,6 +159,19 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
                 {open === c.id && (
                   <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
                     {c.steps.map((s) => <StepEditor key={s.id} s={s} busy={busy} gmail={!!gmailEmail} act={act} />)}
+                    {c.steps.some((s) => s.status === "replied" || s.status === "sent") && gmailEmail && (
+                      <div className="rounded-lg border border-line bg-sunk p-3">
+                        <button className={btn} disabled={replyView[c.id]?.loading} onClick={() => loadReply(c.id)}>{replyView[c.id]?.loading ? "Loading…" : replyView[c.id]?.messages ? "Refresh replies" : "View replies"}</button>
+                        {replyView[c.id]?.error && <p className="mt-2 text-sm text-warn">{replyView[c.id]?.error}</p>}
+                        {replyView[c.id]?.messages?.length === 0 && <p className="mt-2 text-sm text-muted">No reply in the thread yet.</p>}
+                        {replyView[c.id]?.messages?.map((m, i) => (
+                          <div key={i} className="mt-2 rounded-lg bg-surface p-3">
+                            <div className="text-xs text-muted">{m.from}{m.date ? ` · ${m.date}` : ""}</div>
+                            <p className="mt-1 whitespace-pre-line text-sm">{m.text || "(no text in this message)"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex flex-wrap gap-2">
                       <button className={btn} disabled={!!busy} onClick={() => act(c.id + "re", "/api/outreach", { action: "regenerate", contact_id: c.id }, "Rewritten.")}>{busy === c.id + "re" ? "Rewriting…" : "Rewrite unsent steps with AI"}</button>
                       <button className={btn} disabled={!!busy} onClick={() => act(c.id + "rp", "/api/outreach", { action: "mark_replied", contact_id: c.id }, "Marked as replied. Sequence stopped.")}>They replied</button>

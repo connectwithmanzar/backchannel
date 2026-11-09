@@ -209,12 +209,8 @@ export async function stopContact(svc: SupabaseClient, contactId: string, why: "
   }
 }
 
-/** Daily run: detect replies (and stop those sequences), then send due follow-ups within the limit. */
-export async function runOutreach(svc: SupabaseClient, userId: string, deadline: number) {
-  const { data: acct } = await svc.from("gmail_accounts").select("email, refresh_token").eq("user_id", userId).maybeSingle();
-  if (!acct) return { replies: 0, sent: 0, reason: "Gmail not connected" };
-  const token = await accessToken(acct.refresh_token);
-
+/** Looks at every thread you have sent into: a reply stops that sequence, a bounce marks the address bad. */
+export async function detectReplies(svc: SupabaseClient, userId: string, token: string, myEmail: string, deadline: number) {
   let replies = 0;
   let bounces = 0;
   const { data: sent } = await svc.from("outreach").select("contact_id, gmail_thread_id").eq("user_id", userId).eq("status", "sent").not("gmail_thread_id", "is", null);
@@ -222,11 +218,28 @@ export async function runOutreach(svc: SupabaseClient, userId: string, deadline:
   for (const [contactId, threadId] of threads) {
     if (Date.now() > deadline) break;
     try {
-      const state = await threadState(token, threadId, acct.email);
+      const state = await threadState(token, threadId, myEmail);
       if (state.bounce) { await markBounced(svc, contactId); bounces++; }
       else if (state.reply) { await stopContact(svc, contactId, "replied"); replies++; }
-    } catch { /* skip */ }
+    } catch { /* skip this thread, try the rest */ }
   }
+  return { replies, bounces };
+}
+
+/** Reply check for one user on demand, without sending anything. */
+export async function checkReplies(svc: SupabaseClient, userId: string, deadline: number) {
+  const { data: acct } = await svc.from("gmail_accounts").select("email, refresh_token").eq("user_id", userId).maybeSingle();
+  if (!acct) return { replies: 0, bounces: 0 };
+  return detectReplies(svc, userId, await accessToken(acct.refresh_token), acct.email, deadline);
+}
+
+/** Daily run: detect replies (and stop those sequences), then send due follow-ups within the limit. */
+export async function runOutreach(svc: SupabaseClient, userId: string, deadline: number) {
+  const { data: acct } = await svc.from("gmail_accounts").select("email, refresh_token").eq("user_id", userId).maybeSingle();
+  if (!acct) return { replies: 0, sent: 0, reason: "Gmail not connected" };
+  const token = await accessToken(acct.refresh_token);
+
+  const { replies, bounces } = await detectReplies(svc, userId, token, acct.email, deadline);
 
   const stats = await recentBounceStats(svc, userId);
   if (bouncePaused(stats.sent, stats.bounced)) return { replies, bounces, sent: 0, reason: "Auto-send paused: more than 2% of recent emails bounced" };

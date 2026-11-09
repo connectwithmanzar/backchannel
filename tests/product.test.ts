@@ -16,6 +16,7 @@ import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage } from ".
 import { validateTemplate, renderTemplate, autoSendDecision, OPT_OUT, unknownFields } from "../src/lib/outreach/templates";
 import { compareOffers, type OfferInput } from "../src/lib/offers";
 import { isCronAuthorized } from "../src/lib/owner";
+import { extractReplyText } from "../src/lib/outreach/gmail";
 import { pickProvider, adaptGroqBody } from "../src/lib/ai";
 import { cleanDomain, classifyTitle, parsePeople, buildSearchUrl, mergePeople, HIRING_TITLES, RECRUITER_TITLES } from "../src/lib/contacts/apollo";
 
@@ -341,4 +342,12 @@ test("cron auth: needs the exact secret, tolerates stray whitespace, fails close
   assert.equal(isCronAuthorized(null, "abc123"), false);
   assert.equal(isCronAuthorized("Bearer ", ""), false);                // no secret configured: always closed
   assert.equal(isCronAuthorized("Bearer undefined", undefined), false);
+});
+
+test("reply text: reads the plain part and drops the quoted original", () => {
+  const body = "Thanks, happy to chat Tuesday.\n\nOn Mon, 9 Nov 2026 at 21:40, Manzar <me@gmail.com> wrote:\n> Hi Priya,\n> I saw Acme is hiring.";
+  const payload = { mimeType: "multipart/alternative", parts: [{ mimeType: "text/html", body: { data: Buffer.from("<p>x</p>").toString("base64url") } }, { mimeType: "text/plain", body: { data: Buffer.from(body).toString("base64url") } }] };
+  assert.equal(extractReplyText(payload, "snippet"), "Thanks, happy to chat Tuesday.");
+  assert.equal(extractReplyText({ mimeType: "text/html" }, "Just the snippet"), "Just the snippet");
+  assert.equal(extractReplyText(undefined, ""), "");
 });

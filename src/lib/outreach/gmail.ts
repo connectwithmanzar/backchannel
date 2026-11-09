@@ -97,3 +97,34 @@ export async function threadState(token: string, threadId: string, myEmail: stri
   }
   return state;
 }
+
+type Part = { mimeType?: string; body?: { data?: string }; parts?: Part[] };
+
+/** Plain text of a message, without the quoted copy of your own earlier email. */
+export function extractReplyText(payload: Part | undefined, snippet = ""): string {
+  const find = (p: Part | undefined): string | null => {
+    if (!p) return null;
+    if (p.mimeType === "text/plain" && p.body?.data) return Buffer.from(p.body.data, "base64url").toString("utf8");
+    for (const child of p.parts ?? []) { const t = find(child); if (t) return t; }
+    return null;
+  };
+  const text = (find(payload) ?? snippet).replace(/\r\n/g, "\n");
+  const cut = text.search(/^On .{5,120}wrote:\s*$/m);
+  const own = (cut > 0 ? text.slice(0, cut) : text).split("\n").filter((l) => !l.trim().startsWith(">")).join("\n");
+  return own.trim().slice(0, 4000);
+}
+
+export interface ThreadReply { from: string; date: string; text: string }
+
+/** What other people wrote in a thread (replies only, not bounce notices). */
+export async function threadReplies(token: string, threadId: string, myEmail: string): Promise<ThreadReply[]> {
+  const t = await gmailGet(token, `/threads/${threadId}?format=full`);
+  const out: ThreadReply[] = [];
+  for (const m of (t.messages ?? []) as { snippet?: string; payload?: Part & { headers?: { name: string; value: string }[] } }[]) {
+    const header = (n: string) => m.payload?.headers?.find((h) => h.name.toLowerCase() === n)?.value ?? "";
+    const from = header("from");
+    if (!from || from.toLowerCase().includes(myEmail.toLowerCase()) || isBounceMessage(from, header("subject"))) continue;
+    out.push({ from, date: header("date"), text: extractReplyText(m.payload, m.snippet) });
+  }
+  return out;
+}

@@ -37,13 +37,13 @@ export default function ChatWidget() {
     <>
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls="bc-chat"
         className="fixed z-40 rounded-full bg-accent px-5 py-3 font-semibold text-accent-ink shadow-lg"
-        style={{ right: "calc(env(safe-area-inset-right,0px) + 20px)", bottom: "calc(env(safe-area-inset-bottom,0px) + 20px)" }}>
+        style={{ right: "calc(env(safe-area-inset-right,0px) + 20px)", bottom: "calc(env(safe-area-inset-bottom,0px) + var(--tabbar-h, 0px) + 20px)" }}>
         {open ? "Close" : "Ask Backchannel"}
       </button>
       {open && (
         <div id="bc-chat" role="dialog" aria-label="Backchannel assistant"
           className="fixed z-40 flex flex-col rounded-2xl border border-line bg-surface shadow-2xl"
-          style={{ right: "calc(env(safe-area-inset-right,0px) + 16px)", bottom: "calc(env(safe-area-inset-bottom,0px) + 80px)", width: "min(400px, calc(100vw - 32px))", height: "min(560px, calc(100vh - 140px))" }}>
+          style={{ right: "calc(env(safe-area-inset-right,0px) + 16px)", bottom: "calc(env(safe-area-inset-bottom,0px) + var(--tabbar-h, 0px) + 80px)", width: "min(400px, calc(100vw - 32px))", height: "min(560px, calc(100vh - 140px))" }}>
           <div className="border-b border-line px-4 py-3"><b className="font-display text-lg">Backchannel AI</b><div className="text-xs text-muted">Answers from your roles, applications and outreach</div></div>
           <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-3 text-sm">
             {!msgs.length && <div className="rounded-xl bg-sunk p-3">Ask me about your best matches, pay, visas, what to do today, or interview prep.</div>}
