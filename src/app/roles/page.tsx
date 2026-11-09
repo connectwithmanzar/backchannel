@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { scoreJob, parseMinOteByMarket, type SearchProfile } from "@/lib/score";
 import { companyQuality, signalsFromRows } from "@/lib/companyQuality";
 import { toMarket, countryToMarkets } from "@/lib/jobs/market";
@@ -49,11 +49,11 @@ export default async function RolesPage() {
   const t0 = Date.now();
   const marks: Record<string, number> = {};
   const mark = <T,>(label: string, p: PromiseLike<T>) => Promise.resolve(p).then((v) => { marks[label] = Date.now() - t0; return v; });
-  const supabase = await createClient();
+  const [supabase, user] = await Promise.all([createClient(), getSessionUser()]);
   marks.client = Date.now() - t0;
 
   // Independent queries run together instead of one after another.
-  const [{ data: profileRow }, { data: rows }, { data: { user } }] = await Promise.all([
+  const [{ data: profileRow }, { data: rows }, { data: scoreRows }] = await Promise.all([
     mark("profile", supabase.from("profiles").select("name, tools, markets, min_ote_usd, min_ote_by_market").maybeSingle()),
     mark("jobs", supabase
       .from("jobs")
@@ -61,7 +61,9 @@ export default async function RolesPage() {
       .eq("is_active", true)
       .order("last_checked_at", { ascending: false })
       .limit(500)),
-    mark("auth", supabase.auth.getUser()),
+    user
+      ? mark("scores", supabase.from("job_scores").select("job_id, score, parts, explanation, model, reaction").eq("user_id", user.id))
+      : Promise.resolve({ data: null }),
   ]);
 
   const profile: SearchProfile = {
@@ -121,21 +123,14 @@ export default async function RolesPage() {
   // Load this user's existing job scores / reactions
   const owner = isOwner(user?.email);
   const reactions: Record<string, JobReaction> = {};
-  if (user) {
-    const { data: scoreRows } = await mark("scores", supabase
-      .from("job_scores")
-      .select("job_id, score, parts, explanation, model, reaction")
-      .eq("user_id", user.id));
-
-    for (const row of scoreRows ?? []) {
-      reactions[row.job_id] = {
-        job_id: row.job_id,
-        reaction: row.reaction ?? null,
-        score: row.score ?? undefined,
-        explanation: row.explanation ?? undefined,
-        model: row.model ?? undefined,
-      };
-    }
+  for (const row of scoreRows ?? []) {
+    reactions[row.job_id] = {
+      job_id: row.job_id,
+      reaction: row.reaction ?? null,
+      score: row.score ?? undefined,
+      explanation: row.explanation ?? undefined,
+      model: row.model ?? undefined,
+    };
   }
 
   console.log(JSON.stringify({ page: "roles-timing", totalMs: Date.now() - t0, marks, rows: (rows ?? []).length, descKB: Math.round((rows ?? []).reduce((n, r) => n + (r.description?.length ?? 0), 0) / 1024) }));
