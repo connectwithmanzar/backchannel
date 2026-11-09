@@ -112,7 +112,7 @@ export default function Nav({ email }: { email: string }) {
         </div>
       </header>
 
-      <nav aria-label="Main (mobile)" className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface md:hidden"
+      <nav aria-label="Main (mobile)" className={`fixed inset-x-0 bottom-0 ${open?.startsWith("bottom") ? "z-50" : "z-20"} border-t border-line bg-surface md:hidden`}
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         <div className="mx-auto grid max-w-md grid-cols-5">
           {PRIMARY.map((l) => (
