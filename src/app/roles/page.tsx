@@ -1,4 +1,5 @@
 import { createClient, getSessionUser } from "@/lib/supabase/server";
+import { getSharedJobs, JOB_COLUMNS } from "@/lib/jobs/shared-cache";
 import { scoreJob, parseMinOteByMarket, type SearchProfile } from "@/lib/score";
 import { companyQuality, signalsFromRows } from "@/lib/companyQuality";
 import { toMarket, countryToMarkets } from "@/lib/jobs/market";
@@ -53,18 +54,18 @@ export default async function RolesPage() {
   marks.client = Date.now() - t0;
 
   // Independent queries run together instead of one after another.
-  const [{ data: profileRow }, { data: rows }, { data: scoreRows }] = await Promise.all([
+  const [{ data: profileRow }, sharedJobs, { data: ownJobs }, { data: scoreRows }] = await Promise.all([
     mark("profile", supabase.from("profiles").select("name, tools, markets, min_ote_usd, min_ote_by_market").maybeSingle()),
-    mark("jobs", supabase
-      .from("jobs")
-      .select("id, title, location, remote_type, market, board, url, posted_at, last_checked_at, currency, ote_min, ote_max, base_min, base_max, pay_band_status, visa_sponsorship, description, company_name, company_id, companies(name)")
-      .eq("is_active", true)
-      .order("last_checked_at", { ascending: false })
-      .limit(500)),
+    // Shared jobs come from a 5-minute cache; the jobs you pasted yourself are read fresh (row-level security shows only yours).
+    mark("shared", getSharedJobs()),
+    mark("own", supabase.from("jobs").select(JOB_COLUMNS).eq("is_active", true).not("added_by", "is", null)),
     user
       ? mark("scores", supabase.from("job_scores").select("job_id, score, parts, explanation, model, reaction").eq("user_id", user.id))
       : Promise.resolve({ data: null }),
   ]);
+  const rows = [...sharedJobs, ...(ownJobs ?? [])]
+    .sort((a, b) => (b.last_checked_at ?? "").localeCompare(a.last_checked_at ?? ""))
+    .slice(0, 500);
 
   const profile: SearchProfile = {
     name: profileRow?.name ?? "You",

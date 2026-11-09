@@ -5,6 +5,8 @@ import { isOwner } from "@/lib/owner";
 import { discoverBoard } from "@/lib/collectors/ats";
 import { runIngestion } from "@/lib/jobs/ingest";
 import { isExcludedCompany } from "@/data/companies";
+import { revalidateTag } from "next/cache";
+import { SHARED_JOBS_TAG } from "@/lib/jobs/shared-cache";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -37,6 +39,7 @@ export async function POST(req: NextRequest) {
     ).select("id").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const run = await runIngestion({ companyId: data.id, repair: false });
+    revalidateTag(SHARED_JOBS_TAG, { expire: 0 });
     return NextResponse.json({ ok: true, found, sales_roles: run.sales_roles });
   }
 
@@ -47,6 +50,7 @@ export async function POST(req: NextRequest) {
     const { error } = await svc.from("companies").update({ enabled: !!body.enabled }).eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!body.enabled) await svc.from("jobs").update({ is_active: false }).eq("company_id", id);
+    revalidateTag(SHARED_JOBS_TAG, { expire: 0 });
     return NextResponse.json({ ok: true });
   }
 
@@ -58,11 +62,13 @@ export async function POST(req: NextRequest) {
     const { error } = await svc.from("companies").update({ ats_type: found.ats, ats_slug: found.slug, collect_error: null }).eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const run = await runIngestion({ companyId: id, repair: false });
+    revalidateTag(SHARED_JOBS_TAG, { expire: 0 });
     return NextResponse.json({ ok: true, found, sales_roles: run.sales_roles });
   }
 
   if (body.action === "run") {
     const run = await runIngestion({ companyId: id });
+    revalidateTag(SHARED_JOBS_TAG, { expire: 0 });
     return NextResponse.json({ ok: true, ...run });
   }
 
