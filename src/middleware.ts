@@ -33,7 +33,10 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // The token signature is checked locally (no network call) and an expired session is still refreshed.
+  // Routes that change data re-check with the strict getUser() themselves.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims?.sub ? { id: claimsData.claims.sub } : null;
 
   const { pathname } = request.nextUrl;
   const isPublic = pathname.startsWith("/login") || pathname.startsWith("/auth");
