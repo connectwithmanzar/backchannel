@@ -46,18 +46,22 @@ function toRoleFamily(title: string): RoleFamily {
 }
 
 export default async function RolesPage() {
+  const t0 = Date.now();
+  const marks: Record<string, number> = {};
+  const mark = <T,>(label: string, p: PromiseLike<T>) => Promise.resolve(p).then((v) => { marks[label] = Date.now() - t0; return v; });
   const supabase = await createClient();
+  marks.client = Date.now() - t0;
 
   // Independent queries run together instead of one after another.
   const [{ data: profileRow }, { data: rows }, { data: { user } }] = await Promise.all([
-    supabase.from("profiles").select("name, tools, markets, min_ote_usd, min_ote_by_market").maybeSingle(),
-    supabase
+    mark("profile", supabase.from("profiles").select("name, tools, markets, min_ote_usd, min_ote_by_market").maybeSingle()),
+    mark("jobs", supabase
       .from("jobs")
       .select("id, title, location, remote_type, market, board, url, posted_at, last_checked_at, currency, ote_min, ote_max, base_min, base_max, pay_band_status, visa_sponsorship, description, company_name, company_id, companies(name)")
       .eq("is_active", true)
       .order("last_checked_at", { ascending: false })
-      .limit(500),
-    supabase.auth.getUser(),
+      .limit(500)),
+    mark("auth", supabase.auth.getUser()),
   ]);
 
   const profile: SearchProfile = {
@@ -108,6 +112,7 @@ export default async function RolesPage() {
     // Scoring used the full text; the browser only needs a short preview.
     .map((j) => ({ ...j, description: j.description.slice(0, 600) }));
 
+  marks.scored = Date.now() - t0;
   const lastChecked = visibleRows[0]?.last_checked_at ?? null;
   const seedCount = COMPANY_SEEDS.filter(
     (s) => s.enabled && !isExcludedCompany(s.name, s.domain, s.ats_slug)
@@ -117,10 +122,10 @@ export default async function RolesPage() {
   const owner = isOwner(user?.email);
   const reactions: Record<string, JobReaction> = {};
   if (user) {
-    const { data: scoreRows } = await supabase
+    const { data: scoreRows } = await mark("scores", supabase
       .from("job_scores")
       .select("job_id, score, parts, explanation, model, reaction")
-      .eq("user_id", user.id);
+      .eq("user_id", user.id));
 
     for (const row of scoreRows ?? []) {
       reactions[row.job_id] = {
@@ -133,6 +138,7 @@ export default async function RolesPage() {
     }
   }
 
+  console.log(JSON.stringify({ page: "roles-timing", totalMs: Date.now() - t0, marks, rows: (rows ?? []).length, descKB: Math.round((rows ?? []).reduce((n, r) => n + (r.description?.length ?? 0), 0) / 1024) }));
   return (
     <section className="py-6">
       <div className="text-xs font-semibold uppercase tracking-wider text-muted">
