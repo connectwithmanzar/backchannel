@@ -3,7 +3,7 @@ import { serviceClient } from "@/lib/supabase/service";
 import { isCronAuthorized } from "@/lib/owner";
 import { scoreForUser } from "@/lib/jobs/scoring";
 import { autoPrepare } from "@/lib/apps/auto";
-import { runOutreach } from "@/lib/outreach/engine";
+import { inSendWindow, runOutreach } from "@/lib/outreach/engine";
 import { runDigest } from "@/lib/notify";
 
 export const runtime = "nodejs";
@@ -14,7 +14,8 @@ export const maxDuration = 300;
 export async function GET(req: NextRequest) {
   if (!isCronAuthorized(req.headers.get("authorization"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const svc = serviceClient();
-  const end = Date.now() + 270_000;
+  const startedAt = Date.now();
+  const end = startedAt + 270_000;
   const { data: { users } } = await svc.auth.admin.listUsers({ perPage: 1000 });
   const share = Math.max(30_000, Math.floor(260_000 / Math.max(1, users?.length ?? 1)));
   const results = [];
@@ -31,5 +32,9 @@ export async function GET(req: NextRequest) {
     await step("telegram", () => runDigest(u.id));
     results.push(r);
   }
+  console.log(JSON.stringify({
+    job: "daily", users: results.length, ms: Date.now() - startedAt, inSendWindow: inSendWindow(),
+    outreach: results.map((r) => r.outreach),
+  }));
   return NextResponse.json({ ok: true, results });
 }

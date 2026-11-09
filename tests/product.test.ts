@@ -6,6 +6,7 @@ import { toMarket, countryToMarkets } from "../src/lib/jobs/market";
 import { matchSensitive } from "../src/lib/apps/prepare";
 import { parseJsonLoose } from "../src/lib/ai";
 import { buildMime } from "../src/lib/outreach/gmail";
+import { inSendWindow } from "../src/lib/outreach/engine";
 
 test("sales role filter: keeps targets, drops noise", () => {
   assert.equal(roleFamily("Senior Sales Development Representative, EMEA"), "SDR/BDR");
@@ -81,4 +82,12 @@ test("email MIME is valid base64url with UTF-8 subject", () => {
   const decoded = Buffer.from(raw, "base64url").toString("utf8");
   assert.match(decoded, /^From: me@x.com/);
   assert.match(decoded, /Subject: =\?UTF-8\?B\?/);
+});
+
+test("send window: Mon-Fri 9:00-18:00 IST, and the daily cron fires inside it", () => {
+  assert.equal(inSendWindow(new Date("2026-11-10T03:30:00Z")), true);  // Tue 09:00 IST, start is inclusive
+  assert.equal(inSendWindow(new Date("2026-11-10T05:00:00Z")), true);  // Tue 10:30 IST, the daily cron
+  assert.equal(inSendWindow(new Date("2026-11-10T12:30:00Z")), false); // Tue 18:00 IST, end is exclusive
+  assert.equal(inSendWindow(new Date("2026-11-10T01:45:00Z")), false); // Tue 07:15 IST, the old cron time
+  assert.equal(inSendWindow(new Date("2026-11-14T05:00:00Z")), false); // Saturday
 });
