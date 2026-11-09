@@ -7,6 +7,7 @@ import { matchSensitive } from "../src/lib/apps/prepare";
 import { parseJsonLoose } from "../src/lib/ai";
 import { buildMime } from "../src/lib/outreach/gmail";
 import { inSendWindow } from "../src/lib/outreach/engine";
+import { trackOf, weeklyFunnel } from "../src/lib/funnel";
 
 test("sales role filter: keeps targets, drops noise", () => {
   assert.equal(roleFamily("Senior Sales Development Representative, EMEA"), "SDR/BDR");
@@ -90,4 +91,29 @@ test("send window: Mon-Fri 9:00-18:00 IST, and the daily cron fires inside it", 
   assert.equal(inSendWindow(new Date("2026-11-10T12:30:00Z")), false); // Tue 18:00 IST, end is exclusive
   assert.equal(inSendWindow(new Date("2026-11-10T01:45:00Z")), false); // Tue 07:15 IST, the old cron time
   assert.equal(inSendWindow(new Date("2026-11-14T05:00:00Z")), false); // Saturday
+});
+
+test("tracks: India and Gulf are fast, the rest stretch", () => {
+  for (const m of ["India", "UAE", "Saudi Arabia", "Qatar"]) assert.equal(trackOf(m), "fast", m);
+  for (const m of ["US", "UK", "Europe", "Remote", null, undefined]) assert.equal(trackOf(m), "stretch", String(m));
+});
+
+test("weekly funnel: this week vs last week, reply rate per 100 emails", () => {
+  const now = Date.parse("2026-11-10T12:00:00Z");
+  const at = (daysAgo: number) => new Date(now - daysAgo * 864e5).toISOString();
+  const events = [
+    { type: "outreach_sent", occurred_at: at(1) }, { type: "outreach_sent", occurred_at: at(2) },
+    { type: "outreach_sent", occurred_at: at(3) }, { type: "outreach_sent", occurred_at: at(4) },
+    { type: "reply", occurred_at: at(1) }, { type: "interview", occurred_at: at(2) },
+    { type: "outreach_sent", occurred_at: at(9) }, { type: "applied", occurred_at: at(10) },
+    { type: "applied", occurred_at: at(20) },
+  ];
+  const f = weeklyFunnel(events, now);
+  assert.equal(f.thisWeek.sent, 4);
+  assert.equal(f.thisWeek.replies, 1);
+  assert.equal(f.replyRate, 25);
+  assert.equal(f.thisWeek.interviews, 1);
+  assert.equal(f.lastWeek.sent, 1);
+  assert.equal(f.lastWeek.applied, 1);
+  assert.equal(weeklyFunnel([], now).replyRate, null);
 });
