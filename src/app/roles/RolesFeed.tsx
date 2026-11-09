@@ -102,6 +102,11 @@ export default function RolesFeed({
     });
   }
 
+  async function removePasted(jobId: string) {
+    const res = await fetch(`/api/jobs/paste?id=${encodeURIComponent(jobId)}`, { method: "DELETE" });
+    if (res.ok) window.location.reload();
+  }
+
   const rows = useMemo(() => {
     const r = jobs.filter((j) => {
       const rxn = reactions[j.id]?.reaction;
@@ -283,6 +288,9 @@ export default function RolesFeed({
                         onClick={() => setReaction(j.id, rxn === "applied" ? null : "applied")} />
                       <ReactionButton icon="✕" label="Skip" active={rxn === "skipped"} danger
                         onClick={() => setReaction(j.id, rxn === "skipped" ? null : "skipped")} />
+                      {j.board === "pasted" && (
+                        <ReactionButton icon="🗑" label="Remove" active={false} danger onClick={() => removePasted(j.id)} />
+                      )}
                     </div>
                   </div>
                 )}

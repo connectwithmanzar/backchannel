@@ -76,3 +76,16 @@ export async function POST(req: NextRequest) {
   const { data: sc } = await svc.from("job_scores").select("score").eq("user_id", user.id).eq("job_id", saved.id).maybeSingle();
   return NextResponse.json({ ok: true, job_id: saved.id, title, company, score: sc?.score ?? null });
 }
+
+// DELETE /api/jobs/paste?id=... removes a job this user pasted. Shared jobs can never be deleted here.
+export async function DELETE(req: NextRequest) {
+  const db = await createClient();
+  const { data: { user } } = await db.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Please sign in." }, { status: 401 });
+  const id = req.nextUrl.searchParams.get("id") ?? "";
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: "Missing job id." }, { status: 400 });
+  const { data, error } = await serviceClient().from("jobs").delete().eq("id", id).eq("added_by", user.id).eq("source", "pasted").select("id");
+  if (error) return NextResponse.json({ error: "Couldn't remove that job." }, { status: 500 });
+  if (!data?.length) return NextResponse.json({ error: "That job isn't one you added." }, { status: 404 });
+  return NextResponse.json({ ok: true });
+}
