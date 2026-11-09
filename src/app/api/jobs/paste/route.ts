@@ -1,0 +1,78 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { serviceClient } from "@/lib/supabase/service";
+import { aiJson, hasAIKey, NO_AI_MESSAGE } from "@/lib/ai";
+import { rateLimit, retryAfter } from "@/lib/rate-limit";
+import { isExcludedCompany } from "@/data/companies";
+import { isBlocked } from "@/lib/outreach/engine";
+import { scoreForUser } from "@/lib/jobs/scoring";
+import { buildPastedJob, fetchJobPage, parseJobUrl } from "@/lib/jobs/paste";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+type Extracted = { title?: string | null; company?: string | null; location?: string | null };
+
+const SYSTEM = `You read a pasted job post and return only what it states. Never guess or invent.
+Return JSON: {"title": string|null, "company": string|null, "location": string|null}.
+"location" is the place or work arrangement as written (e.g. "Remote, India" or "Dubai, UAE"). Use null for anything the text does not say.`;
+
+// POST /api/jobs/paste { url?, text?, title?, company?, location? }: saves a job for the signed-in user only.
+export async function POST(req: NextRequest) {
+  const db = await createClient();
+  const { data: { user } } = await db.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Please sign in." }, { status: 401 });
+  if (!rateLimit(`paste:${user.id}`, 40, 3600_000)) {
+    return NextResponse.json({ error: `Too many in a row. Try again in ${retryAfter(`paste:${user.id}`)}s.` }, { status: 429 });
+  }
+
+  const b = await req.json().catch(() => ({}));
+  const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  let text = str(b.text, 20_000);
+  let url: string | null = null;
+
+  if (b.url) {
+    const parsed = parseJobUrl(String(b.url));
+    if (!parsed.ok) return NextResponse.json({ error: parsed.reason }, { status: 400 });
+    url = parsed.url;
+    if (!text) {
+      if (!parsed.fetchable) {
+        return NextResponse.json({ error: "Backchannel doesn't read that site itself (LinkedIn, Naukri and similar forbid it). Paste the job text next to the link and I'll do the rest." }, { status: 422 });
+      }
+      const page = await fetchJobPage(parsed.url);
+      if (!page) return NextResponse.json({ error: "Couldn't read that page. Paste the job text instead." }, { status: 422 });
+      text = page;
+    }
+  }
+  if (text.length < 80) return NextResponse.json({ error: "Paste the job text (at least a few lines), or a link to a public careers page." }, { status: 400 });
+
+  let title = str(b.title, 200), company = str(b.company, 200), location = str(b.location, 200);
+  if (!title || !company) {
+    if (!hasAIKey()) return NextResponse.json({ error: `${NO_AI_MESSAGE} Or fill in the title and company yourself.` }, { status: 503 });
+    try {
+      const x = await aiJson<Extracted>(SYSTEM, `JOB POST:\n${text.slice(0, 8000)}`, { maxTokens: 300 });
+      title = title || (x.title ?? "").trim();
+      company = company || (x.company ?? "").trim();
+      location = location || (x.location ?? "").trim();
+    } catch {
+      return NextResponse.json({ error: "Couldn't read that post. Fill in the title and company and try again." }, { status: 422 });
+    }
+  }
+  if (!title || !company) return NextResponse.json({ error: "I couldn't find the job title and company. Please fill them in." }, { status: 422 });
+
+  if (isExcludedCompany(company, url) || (await isBlocked(db, user.id, "", company))) {
+    return NextResponse.json({ error: `${company} is on your stealth or excluded list, so it won't be added.` }, { status: 400 });
+  }
+
+  const svc = serviceClient();
+  const row = buildPastedJob(user.id, { title, company, location: location || "Not stated" }, text, url);
+  const { data: saved, error } = await svc.from("jobs").upsert(row, { onConflict: "dedupe_hash" }).select("id").single();
+  if (error) {
+    console.error("paste-job: save failed:", error.message);
+    return NextResponse.json({ error: "Couldn't save that job. If this keeps happening, the latest database update may not have been run." }, { status: 500 });
+  }
+
+  await scoreForUser(svc, user.id, { deadline: Date.now() + 20_000, ai: false });
+  const { data: sc } = await svc.from("job_scores").select("score").eq("user_id", user.id).eq("job_id", saved.id).maybeSingle();
+  return NextResponse.json({ ok: true, job_id: saved.id, title, company, score: sc?.score ?? null });
+}

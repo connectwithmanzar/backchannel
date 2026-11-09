@@ -8,6 +8,7 @@ import { parseJsonLoose } from "../src/lib/ai";
 import { buildMime } from "../src/lib/outreach/gmail";
 import { inSendWindow } from "../src/lib/outreach/engine";
 import { trackOf, weeklyFunnel } from "../src/lib/funnel";
+import { parseJobUrl, buildPastedJob } from "../src/lib/jobs/paste";
 
 test("sales role filter: keeps targets, drops noise", () => {
   assert.equal(roleFamily("Senior Sales Development Representative, EMEA"), "SDR/BDR");
@@ -116,4 +117,30 @@ test("weekly funnel: this week vs last week, reply rate per 100 emails", () => {
   assert.equal(f.lastWeek.sent, 1);
   assert.equal(f.lastWeek.applied, 1);
   assert.equal(weeklyFunnel([], now).replyRate, null);
+});
+
+test("paste-a-job: only public ATS links are fetched, never LinkedIn or Naukri", () => {
+  const ok = parseJobUrl("https://jobs.lever.co/acme/123");
+  assert.deepEqual(ok, { ok: true, url: "https://jobs.lever.co/acme/123", fetchable: true });
+  for (const u of ["https://www.linkedin.com/jobs/view/1", "https://www.naukri.com/job-listings-x", "https://wellfound.com/jobs/1"]) {
+    const r = parseJobUrl(u);
+    assert.equal(r.ok && r.fetchable, false, u);
+  }
+  assert.equal(parseJobUrl("http://jobs.lever.co/acme/1").ok, false);
+  assert.equal(parseJobUrl("not a url").ok, false);
+  assert.equal(parseJobUrl("https://169.254.169.254/latest").ok && (parseJobUrl("https://169.254.169.254/latest") as { fetchable: boolean }).fetchable, false);
+});
+
+test("paste-a-job: row belongs to one user and hashes differently per user", () => {
+  const f = { title: "Senior SDR", company: "Acme", location: "Remote, India" };
+  const text = "Senior SDR at Acme. Remote in India. Base pay INR 1800000 - 2400000. Own outbound to mid-market.";
+  const a = buildPastedJob("user-a", f, text, null);
+  const b = buildPastedJob("user-b", f, text, null);
+  assert.equal(a.added_by, "user-a");
+  assert.equal(a.source, "pasted");
+  assert.equal(a.company_id, null);
+  assert.equal(a.company_name, "Acme");
+  assert.equal(a.source_type, "public");
+  assert.notEqual(a.dedupe_hash, b.dedupe_hash);
+  assert.equal(a.market, "India");
 });

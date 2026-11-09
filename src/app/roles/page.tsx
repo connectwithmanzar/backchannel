@@ -5,6 +5,7 @@ import type { Job, Market, RemoteType, RoleFamily } from "@/lib/collector/types"
 import { htmlToText } from "@/lib/collector/fetchers";
 import RolesFeed, { type JobReaction } from "./RolesFeed";
 import RunNowButton from "./RunNowButton";
+import PasteJob from "./PasteJob";
 import ScoreNowButton from "./ScoreNowButton";
 import TelegramButton from "./TelegramButton";
 import { isTelegramConfigured } from "@/lib/telegram";
@@ -51,7 +52,7 @@ export default async function RolesPage() {
     supabase.from("profiles").select("name, tools, markets, min_ote_usd").maybeSingle(),
     supabase
       .from("jobs")
-      .select("id, title, location, remote_type, market, board, url, posted_at, last_checked_at, currency, ote_min, ote_max, base_min, base_max, pay_band_status, visa_sponsorship, description, companies(name)")
+      .select("id, title, location, remote_type, market, board, url, posted_at, last_checked_at, currency, ote_min, ote_max, base_min, base_max, pay_band_status, visa_sponsorship, description, company_name, companies(name)")
       .eq("is_active", true)
       .order("last_checked_at", { ascending: false })
       .limit(500),
@@ -74,7 +75,7 @@ export default async function RolesPage() {
 
   const jobs: Job[] = visibleRows.map((row) => ({
     id: row.id,
-    company: (row.companies as unknown as { name: string } | null)?.name ?? "Unknown",
+    company: (row.companies as unknown as { name: string } | null)?.name ?? row.company_name ?? "Unknown",
     title: row.title,
     location: row.location ?? "",
     remoteType: (row.remote_type ?? "unknown") as RemoteType,
@@ -157,6 +158,8 @@ export default async function RolesPage() {
           </p>
         )}
       </div>
+
+      <PasteJob />
 
       {jobs.length === 0 && (
         <div className="mt-4 rounded-card bg-signal-soft px-4 py-3 text-sm text-signal">

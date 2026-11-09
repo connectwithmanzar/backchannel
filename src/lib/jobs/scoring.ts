@@ -70,13 +70,13 @@ export async function scoreForUser(svc: SupabaseClient, userId: string, opts: { 
   const { data: existing } = await svc.from("job_scores").select("job_id, model").eq("user_id", userId);
   const scoredBefore = new Map((existing ?? []).map((r: { job_id: string; model: string | null }) => [r.job_id, r.model]));
 
-  const { data: jobRows } = await svc.from("jobs").select("*, companies(name)").eq("is_active", true).order("last_checked_at", { ascending: false }).limit(2000);
+  const { data: jobRows } = await svc.from("jobs").select("*, companies(name)").eq("is_active", true).or(`added_by.is.null,added_by.eq.${userId}`).order("last_checked_at", { ascending: false }).limit(2000);
   const targets = (jobRows ?? []).filter((r) => rescoreAll || !scoredBefore.has(r.id) || !scoredBefore.get(r.id));
 
   const scored = targets.map((row) => {
     const job: Job = {
       id: row.id,
-      company: (row.companies as { name: string } | null)?.name ?? "Unknown",
+      company: (row.companies as { name: string } | null)?.name ?? row.company_name ?? "Unknown",
       title: row.title,
       location: row.location ?? "",
       remoteType: (row.remote_type ?? "unknown") as RemoteType,

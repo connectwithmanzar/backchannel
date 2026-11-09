@@ -19,13 +19,13 @@ export async function prepareApplication(db: SupabaseClient, userId: string, job
   const [{ data: profile }, { data: prefs }, { data: job }] = await Promise.all([
     db.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
     db.from("preferences").select("standard_answers").eq("user_id", userId).maybeSingle(),
-    db.from("jobs").select("id, title, location, url, description, companies(name)").eq("id", jobId).single(),
+    db.from("jobs").select("id, title, location, url, description, company_name, companies(name)").eq("id", jobId).single(),
   ]);
   if (!job) throw new Error("That role no longer exists.");
   if (!profile?.cv_text || profile.cv_text.length < 200) {
     throw new Error("Upload your CV on My profile first. Autopilot only uses facts from your CV.");
   }
-  const company = (job.companies as unknown as { name: string } | null)?.name ?? "the company";
+  const company = (job.companies as unknown as { name: string } | null)?.name ?? job.company_name ?? "the company";
   const scorecard = [
     profile.current_role && `Current role: ${profile.current_role}`,
     profile.years_in_sales && `Years in sales: ${profile.years_in_sales}`,
