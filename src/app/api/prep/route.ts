@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   try {
     const content = await aiText(SYSTEM,
       `JOB: ${job.title} at ${company} (${job.location})\n${htmlToText(job.description ?? "").slice(0, 6000)}\n\nSCORECARD:\n${scorecard || "(none on file)"}\n\nCV (the only source of facts):\n${p.cv_text.slice(0, 10000)}`,
-      { maxTokens: 1500, smart: true });
+      { maxTokens: 1200 });
     if (!content) return NextResponse.json({ error: "The AI gave no answer. Try again." }, { status: 502 });
     await db.from("interview_preps").upsert({ user_id: user.id, job_id: jobId, content, created_at: new Date().toISOString() }, { onConflict: "user_id,job_id" });
     return NextResponse.json({ ok: true, content, saved: false });
