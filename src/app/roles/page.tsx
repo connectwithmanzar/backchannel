@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { scoreJob, type SearchProfile } from "@/lib/score";
+import { scoreJob, parseMinOteByMarket, type SearchProfile } from "@/lib/score";
+import { companyQuality, signalsFromRows } from "@/lib/companyQuality";
 import { toMarket, countryToMarkets } from "@/lib/jobs/market";
 import type { Job, Market, RemoteType, RoleFamily } from "@/lib/collector/types";
 import { htmlToText } from "@/lib/collector/fetchers";
@@ -49,10 +50,10 @@ export default async function RolesPage() {
 
   // Independent queries run together instead of one after another.
   const [{ data: profileRow }, { data: rows }, { data: { user } }] = await Promise.all([
-    supabase.from("profiles").select("name, tools, markets, min_ote_usd").maybeSingle(),
+    supabase.from("profiles").select("name, tools, markets, min_ote_usd, min_ote_by_market").maybeSingle(),
     supabase
       .from("jobs")
-      .select("id, title, location, remote_type, market, board, url, posted_at, last_checked_at, currency, ote_min, ote_max, base_min, base_max, pay_band_status, visa_sponsorship, description, company_name, companies(name)")
+      .select("id, title, location, remote_type, market, board, url, posted_at, last_checked_at, currency, ote_min, ote_max, base_min, base_max, pay_band_status, visa_sponsorship, description, company_name, company_id, companies(name)")
       .eq("is_active", true)
       .order("last_checked_at", { ascending: false })
       .limit(500),
@@ -65,6 +66,7 @@ export default async function RolesPage() {
     markets: [...new Set<Market>((profileRow?.markets ?? []).flatMap(countryToMarkets))],
     tools: profileRow?.tools ?? [],
     minOteUsd: profileRow?.min_ote_usd ?? 0,
+    minOteByMarket: parseMinOteByMarket(profileRow?.min_ote_by_market),
     prefersRemote: false,
   };
 
@@ -73,6 +75,7 @@ export default async function RolesPage() {
     (row) => !isExcludedCompany((row.companies as unknown as { name: string } | null)?.name, row.url)
   );
 
+  const signals = signalsFromRows(visibleRows);
   const jobs: Job[] = visibleRows.map((row) => ({
     id: row.id,
     company: (row.companies as unknown as { name: string } | null)?.name ?? row.company_name ?? "Unknown",
@@ -96,6 +99,7 @@ export default async function RolesPage() {
     visaSponsorship: (row.visa_sponsorship ?? "unknown") as "yes" | "no" | "unknown",
     roleFamily: toRoleFamily(row.title),
     description: htmlToText(row.description ?? ""),
+    companyQuality: companyQuality(signals.get(row.company_id ?? "")),
   }));
 
   const scored = jobs

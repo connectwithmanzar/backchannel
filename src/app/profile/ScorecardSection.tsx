@@ -4,6 +4,13 @@ import type { Profile } from "./ProfileClient";
 
 const SEGMENTS = ["SMB", "Mid-market", "Enterprise"];
 const MOTIONS = ["Outbound", "Inbound", "Full-cycle"];
+const FLOOR_MARKETS: [string, string][] = [
+  ["india", "India (on-site or hybrid)"],
+  ["remote-in", "Remote from India"],
+  ["emea", "Europe and Gulf (EMEA)"],
+  ["us", "United States and Canada"],
+  ["global", "Global or other"],
+];
 const MARKETS = ["India (onsite)", "India (hybrid)", "Remote India→US", "Remote India→EU", "UK", "Germany", "Netherlands", "France", "Ireland", "Singapore", "UAE"];
 const TITLES = ["Senior SDR", "Founding BDR", "SDR", "BDR", "Account Executive (SMB)", "Account Executive (Mid-market)", "GTM Engineer", "Sales Manager"];
 
@@ -254,6 +261,33 @@ export default function ScorecardSection({
           placeholder="e.g. 80000"
         />
         <p className="mt-1 text-xs text-muted">Roles below this are shown but ranked lower</p>
+      </div>
+
+      {/* Minimum OTE per market */}
+      <div>
+        <label className="mb-1 block text-sm font-medium">Different minimum for a market (optional, USD/year)</label>
+        <p className="mb-2 text-xs text-muted">Pay differs a lot by country. Leave a box empty to use the minimum above.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {FLOOR_MARKETS.map(([key, name]) => (
+            <label key={key} className="grid gap-1 text-xs text-muted">
+              {name}
+              <input
+                type="number"
+                min={0}
+                step={5000}
+                className="w-full rounded-lg border border-line bg-sunk px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+                value={p.min_ote_by_market?.[key] ?? ""}
+                onChange={(e) => {
+                  const next = { ...(p.min_ote_by_market ?? {}) };
+                  if (e.target.valueAsNumber > 0) next[key] = e.target.valueAsNumber;
+                  else delete next[key];
+                  onChange({ min_ote_by_market: next });
+                }}
+                placeholder="same as above"
+              />
+            </label>
+          ))}
+        </div>
       </div>
 
       <button

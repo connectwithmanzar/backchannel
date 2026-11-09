@@ -44,6 +44,7 @@ export interface Job {
   visaSponsorship: "yes" | "no" | "unknown";
   roleFamily: RoleFamily;
   description: string;
+  companyQuality?: number; // 0-100, see lib/companyQuality.ts
 }
 
 export type RoleFamily = "SDR/BDR" | "GTM Engineer" | "Account Executive" | "Sales leadership" | "Other sales";

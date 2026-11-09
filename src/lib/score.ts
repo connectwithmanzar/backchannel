@@ -6,7 +6,21 @@ export interface SearchProfile {
   markets: Market[];
   tools: string[];
   minOteUsd: number;
+  minOteByMarket?: Partial<Record<Market, number>>;
   prefersRemote: boolean;
+}
+
+const FLOOR_MARKETS: Market[] = ["india", "remote-in", "emea", "us", "global"];
+
+/** Reads the saved per-market minimums safely: only known markets, only positive numbers. */
+export function parseMinOteByMarket(v: unknown): Partial<Record<Market, number>> {
+  const out: Partial<Record<Market, number>> = {};
+  if (!v || typeof v !== "object") return out;
+  for (const m of FLOOR_MARKETS) {
+    const n = Number((v as Record<string, unknown>)[m]);
+    if (Number.isFinite(n) && n > 0) out[m] = n;
+  }
+  return out;
 }
 
 export interface ScoredJob extends Job {
@@ -36,14 +50,17 @@ export function scoreJob(job: Job, p: SearchProfile): ScoredJob {
   const matchedTools = p.tools.filter((t) => text.includes(t.toLowerCase()));
   const tools = matchedTools.length ? Math.min(100, 50 + matchedTools.length * 20) : 40;
   const payUsdMax = toUsd(job.payMax, job.currency);
-  const pay = payUsdMax === undefined ? 50 : payUsdMax >= p.minOteUsd ? 100 : 10;
+  const floor = p.minOteByMarket?.[job.market] ?? p.minOteUsd;
+  const pay = payUsdMax === undefined ? 50 : payUsdMax >= floor ? 100 : 10;
+  const company = job.companyQuality ?? 50;
 
-  const score = Math.round(role * 0.35 + mkt * 0.25 + tools * 0.2 + pay * 0.2);
+  const score = Math.round(role * 0.3 + mkt * 0.2 + tools * 0.15 + pay * 0.2 + company * 0.15);
   const bits = [
     p.targetFamilies.includes(job.roleFamily) ? `${job.roleFamily} is one of your target role types` : `${job.roleFamily} is outside your target role types`,
     !p.markets.length ? `you haven't picked target markets yet` : p.markets.includes(job.market) ? `the location fits your markets` : `the location is outside your markets`,
     matchedTools.length ? `it mentions ${matchedTools.join(", ")}` : p.tools.length ? `it doesn't name your tools` : `you haven't added your tools yet`,
-    payUsdMax === undefined ? `pay isn't published` : `pay is published`,
+    payUsdMax === undefined ? `pay isn't published` : payUsdMax >= floor ? `pay is published and meets your minimum` : `pay is published but below your minimum`,
+    ...(job.companyQuality !== undefined && job.companyQuality >= 70 ? [`the company is hiring broadly and shows its pay`] : job.companyQuality !== undefined && job.companyQuality <= 35 ? [`there is little hiring signal at this company`] : []),
   ];
   return {
     ...job,
@@ -53,6 +70,7 @@ export function scoreJob(job: Job, p: SearchProfile): ScoredJob {
       { label: "Market", value: mkt },
       { label: "Tools", value: tools },
       { label: "Pay", value: pay },
+      { label: "Company", value: company },
     ],
     explanation: bits[0][0].toUpperCase() + bits.slice(0).join("; ").slice(1) + ".",
     matchedTools,

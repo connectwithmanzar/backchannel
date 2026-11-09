@@ -9,6 +9,9 @@ import { buildMime } from "../src/lib/outreach/gmail";
 import { inSendWindow } from "../src/lib/outreach/engine";
 import { trackOf, weeklyFunnel } from "../src/lib/funnel";
 import { parseJobUrl, buildPastedJob } from "../src/lib/jobs/paste";
+import { scoreJob, parseMinOteByMarket, type SearchProfile } from "../src/lib/score";
+import { companyQuality, signalsFromRows } from "../src/lib/companyQuality";
+import type { Job } from "../src/lib/collector/types";
 
 test("sales role filter: keeps targets, drops noise", () => {
   assert.equal(roleFamily("Senior Sales Development Representative, EMEA"), "SDR/BDR");
@@ -143,4 +146,40 @@ test("paste-a-job: row belongs to one user and hashes differently per user", () 
   assert.equal(a.source_type, "public");
   assert.notEqual(a.dedupe_hash, b.dedupe_hash);
   assert.equal(a.market, "India");
+});
+
+const baseProfile: SearchProfile = { name: "T", targetFamilies: ["SDR/BDR"], markets: ["us", "india"], tools: [], minOteUsd: 50000, prefersRemote: false };
+const baseJob: Job = {
+  id: "j", company: "Acme", title: "SDR", location: "Austin", remoteType: "onsite", market: "us", sourceType: "careers", board: "greenhouse",
+  url: "", lastCheckedAt: "2026-11-10T00:00:00Z", currency: "USD", payMin: 40000, payMax: 60000, payBandStatus: "verified", visaSponsorship: "unknown",
+  roleFamily: "SDR/BDR", description: "",
+};
+
+test("pay floor can differ by market", () => {
+  const withUsFloor = { ...baseProfile, minOteByMarket: { us: 90000 } as SearchProfile["minOteByMarket"] };
+  assert.equal(scoreJob(baseJob, baseProfile).parts.find((p) => p.label === "Pay")?.value, 100);      // 60k >= 50k default
+  assert.equal(scoreJob(baseJob, withUsFloor).parts.find((p) => p.label === "Pay")?.value, 10);       // 60k < 90k for the US
+  assert.equal(scoreJob({ ...baseJob, market: "india" }, withUsFloor).parts.find((p) => p.label === "Pay")?.value, 100); // India keeps the default
+});
+
+test("saved per-market minimums ignore junk", () => {
+  assert.deepEqual(parseMinOteByMarket({ us: 90000, india: "40000", mars: 5, emea: -1, global: "abc" }), { us: 90000, india: 40000 });
+  assert.deepEqual(parseMinOteByMarket(null), {});
+});
+
+test("company quality rises with hiring and pay transparency", () => {
+  assert.equal(companyQuality(undefined), 50);
+  const one = companyQuality({ openSalesRoles: 1, payShare: 0 });
+  const five = companyQuality({ openSalesRoles: 5, payShare: 1 });
+  assert.ok(five > one);
+  assert.equal(five, 100);
+  const sig = signalsFromRows([{ company_id: "a", ote_max: 1 }, { company_id: "a" }, { company_id: null, ote_max: 5 }]);
+  assert.deepEqual(sig.get("a"), { openSalesRoles: 2, payShare: 0.5 });
+  assert.equal(sig.size, 1);
+});
+
+test("score weights still add up: strong company lifts the score", () => {
+  const lo = scoreJob({ ...baseJob, companyQuality: 10 }, baseProfile).score;
+  const hi = scoreJob({ ...baseJob, companyQuality: 100 }, baseProfile).score;
+  assert.ok(hi > lo);
 });

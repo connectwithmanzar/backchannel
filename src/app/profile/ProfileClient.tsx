@@ -17,6 +17,7 @@ export type Profile = {
   target_titles?: string[];
   markets?: string[];
   min_ote_usd?: number;
+  min_ote_by_market?: Record<string, number>;
   stealth?: boolean;
   cv_file_path?: string;
   cv_text?: string;

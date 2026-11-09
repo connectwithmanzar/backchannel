@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { scoreJob, type SearchProfile } from "@/lib/score";
+import { scoreJob, parseMinOteByMarket, type SearchProfile } from "@/lib/score";
+import { companyQuality, signalsFromRows } from "@/lib/companyQuality";
 import { toMarket, countryToMarkets } from "@/lib/jobs/market";
 import type { Job, Market, RemoteType } from "@/lib/collector/types";
 import { createAIClient, hasAIKey, AI_MODEL } from "@/lib/ai";
@@ -57,13 +58,14 @@ Write 2 short, direct sentences. First sentence: main reason for the score. Seco
 export async function scoreForUser(svc: SupabaseClient, userId: string, opts: { rescoreAll?: boolean; deadline: number; ai?: boolean }) {
   const rescoreAll = !!opts.rescoreAll;
   const deadline = opts.deadline;
-  const { data: profileRow } = await svc.from("profiles").select("name, tools, markets, min_ote_usd").eq("user_id", userId).maybeSingle();
+  const { data: profileRow } = await svc.from("profiles").select("name, tools, markets, min_ote_usd, min_ote_by_market").eq("user_id", userId).maybeSingle();
   const profile: SearchProfile = {
     name: profileRow?.name ?? "You",
     targetFamilies: ["SDR/BDR", "GTM Engineer", "Account Executive"],
     markets: [...new Set<Market>((profileRow?.markets ?? []).flatMap(countryToMarkets))],
     tools: profileRow?.tools ?? [],
     minOteUsd: profileRow?.min_ote_usd ?? 0,
+    minOteByMarket: parseMinOteByMarket(profileRow?.min_ote_by_market),
     prefersRemote: false,
   };
 
@@ -71,6 +73,7 @@ export async function scoreForUser(svc: SupabaseClient, userId: string, opts: { 
   const scoredBefore = new Map((existing ?? []).map((r: { job_id: string; model: string | null }) => [r.job_id, r.model]));
 
   const { data: jobRows } = await svc.from("jobs").select("*, companies(name)").eq("is_active", true).or(`added_by.is.null,added_by.eq.${userId}`).order("last_checked_at", { ascending: false }).limit(2000);
+  const signals = signalsFromRows(jobRows ?? []);
   const targets = (jobRows ?? []).filter((r) => rescoreAll || !scoredBefore.has(r.id) || !scoredBefore.get(r.id));
 
   const scored = targets.map((row) => {
@@ -93,6 +96,7 @@ export async function scoreForUser(svc: SupabaseClient, userId: string, opts: { 
       visaSponsorship: (row.visa_sponsorship ?? "unknown") as "yes" | "no" | "unknown",
       roleFamily: toRoleFamily(row.title),
       description: row.description ?? "",
+      companyQuality: companyQuality(signals.get(row.company_id)),
     };
     return { job, result: scoreJob(job, profile) };
   });
@@ -111,7 +115,7 @@ export async function scoreForUser(svc: SupabaseClient, userId: string, opts: { 
   // 2) AI explanations for the best matches, 5 at a time, within ~45 seconds.
   let explained = 0;
   // No profile yet means the explanation would be generic, so don't spend AI on it.
-  const hasProfileData = profile.tools.length > 0 || profile.markets.length > 0 || profile.minOteUsd > 0;
+  const hasProfileData = profile.tools.length > 0 || profile.markets.length > 0 || profile.minOteUsd > 0 || Object.keys(profile.minOteByMarket ?? {}).length > 0;
   if (hasAIKey() && hasProfileData) {
     const top = !opts.ai ? [] : scored.filter((s) => s.result.score >= 60).sort((a, b) => b.result.score - a.result.score).slice(0, 30);
     for (let i = 0; i < top.length && Date.now() < deadline; i += 5) {
