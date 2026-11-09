@@ -92,7 +92,7 @@ async function autoSendPlan(db: SupabaseClient, userId: string, input: { name: s
 
 /** Creates the contact and its 5-step sequence. The first email starts as a draft for you to approve. */
 export async function startSequence(db: SupabaseClient, userId: string, input: { name: string; title?: string; email?: string; linkedin_url?: string; company_name: string; job_id?: string | null; notes?: string }) {
-  if (input.email && (await isBlocked(db, userId, input.email, input.company_name, input.name))) {
+  if (await isBlocked(db, userId, input.email ?? "", input.company_name, input.name)) {
     throw new Error(`${input.company_name} is on your blocklist (stealth). Backchannel won't contact them.`);
   }
   if (isExcludedCompany(input.company_name)) throw new Error(`${input.company_name} is excluded. Backchannel won't contact them.`);
@@ -122,14 +122,15 @@ export async function startSequence(db: SupabaseClient, userId: string, input: {
 }
 
 /** Sent and bounced counts over the last 14 days, used to pause automatic sending when addresses are bad. */
-async function recentBounceStats(svc: SupabaseClient, userId: string) {
+export async function recentBounceStats(svc: SupabaseClient, userId: string) {
   const since = new Date(Date.now() - 14 * DAY).toISOString();
-  const { data } = await svc.from("outreach").select("status, error").eq("user_id", userId).eq("channel", "email").gte("sent_at", since);
+  const { data } = await svc.from("outreach").select("error").eq("user_id", userId).eq("channel", "email").gte("sent_at", since);
   const rows = data ?? [];
-  return { sent: rows.length, bounced: rows.filter((r: { status: string; error: string | null }) => r.status === "failed" && r.error === "Bounced").length };
+  // A bounced row is later set to "stopped" with its error kept, so count the marker and not the status.
+  return { sent: rows.length, bounced: rows.filter((r: { error: string | null }) => r.error === "Bounced").length };
 }
 
-async function markBounced(svc: SupabaseClient, contactId: string) {
+export async function markBounced(svc: SupabaseClient, contactId: string) {
   await svc.from("outreach").update({ status: "failed", error: "Bounced" }).eq("contact_id", contactId).eq("status", "sent");
   await stopContact(svc, contactId, "stopped");
 }
@@ -140,20 +141,56 @@ async function sentToday(svc: SupabaseClient, userId: string) {
   return count ?? 0;
 }
 
+/**
+ * Takes the email for sending. The conditional update succeeds for exactly one caller, so the hourly check, the
+ * daily job and a double-click can never send the same email twice. sent_at is the claim marker.
+ */
+export async function claimStep(svc: SupabaseClient, id: string): Promise<boolean> {
+  const { data } = await svc.from("outreach").update({ sent_at: new Date().toISOString() })
+    .eq("id", id).in("status", ["draft", "scheduled", "failed"]).is("sent_at", null).select("id");
+  return (data?.length ?? 0) === 1;
+}
+
+async function releaseStep(svc: SupabaseClient, id: string, status: "draft" | "failed", error: string) {
+  await svc.from("outreach").update({ status, sent_at: null, error }).eq("id", id);
+}
+
+/** Auto-send is re-checked at send time: switching it off, editing the template or a lower fit cancels queued emails. */
+async function autoSendStillAllowed(svc: SupabaseClient, userId: string, contact: { name: string; job_id: string | null } | null) {
+  const [{ data: prefs }, { data: tpl }, scoreRes] = await Promise.all([
+    svc.from("preferences").select("autosend_enabled, autosend_min_fit, email_ramp_start").eq("user_id", userId).maybeSingle(),
+    svc.from("outreach_templates").select("approved_at").eq("user_id", userId).eq("name", "Default").maybeSingle(),
+    contact?.job_id ? svc.from("job_scores").select("score").eq("user_id", userId).eq("job_id", contact.job_id).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  return autoSendDecision({
+    enabled: prefs?.autosend_enabled === true, templateApproved: !!tpl?.approved_at,
+    fit: (scoreRes.data as { score: number | null } | null)?.score ?? null, minFit: prefs?.autosend_min_fit ?? 75,
+    rampStart: prefs?.email_ramp_start ?? null, recipientName: contact?.name ?? "",
+  });
+}
+
 /** Sends one email step now (respects the daily limit, blocklist and stop-on-reply). Uses the service client. */
 export async function sendStep(svc: SupabaseClient, userId: string, outreachId: string, opts: { auto?: boolean } = {}) {
   const [{ data: step }, { data: acct }, { data: prefs }] = await Promise.all([
-    svc.from("outreach").select("id, contact_id, status, subject, body, to_email, step_index, contacts(company_name, email, name, job_id)").eq("id", outreachId).eq("user_id", userId).single(),
+    svc.from("outreach").select("id, contact_id, status, channel, subject, body, to_email, step_index, sent_at, contacts(company_name, email, name, job_id)").eq("id", outreachId).eq("user_id", userId).single(),
     svc.from("gmail_accounts").select("email, refresh_token").eq("user_id", userId).maybeSingle(),
     svc.from("preferences").select("email_daily_limit, email_ramp_start").eq("user_id", userId).maybeSingle(),
   ]);
   if (!step) throw new Error("That email no longer exists.");
   if (!acct) throw new Error("Connect your Gmail first.");
-  if (!["draft", "scheduled", "failed"].includes(step.status)) throw new Error("This email was already sent or stopped.");
+  if (!["draft", "scheduled", "failed"].includes(step.status) || step.sent_at) throw new Error("This email was already sent, is being sent, or was stopped.");
   const contact = step.contacts as unknown as { company_name: string; email: string; name: string; job_id: string | null } | null;
   const to = step.to_email ?? contact?.email;
   if (!to) throw new Error("This contact has no email address.");
+  if (!(step.subject ?? "").trim()) throw new Error("Add a subject before sending.");
+
   if (opts.auto) {
+    // Only the first email of a sequence is ever sent automatically, and only while every auto-send condition still holds.
+    const allowed = step.step_index === 0 ? await autoSendStillAllowed(svc, userId, contact) : { auto: false, reason: "Follow-ups always need your approval" };
+    if (!allowed.auto) {
+      await releaseStep(svc, step.id, "draft", `Needs your approval: ${allowed.reason}.`);
+      throw new Error(`Not sent automatically: ${allowed.reason}.`);
+    }
     // Automatic sends wait for the recipient's own morning. Manual sends (you click Send) have no time restriction.
     const { data: job } = contact?.job_id ? await svc.from("jobs").select("market, location").eq("id", contact.job_id).maybeSingle() : { data: null };
     const tz = recipientTimezone({ market: job?.market, location: job?.location, email: to });
@@ -164,6 +201,14 @@ export async function sendStep(svc: SupabaseClient, userId: string, outreachId: 
     const stats = await recentBounceStats(svc, userId);
     if (bouncePaused(stats.sent, stats.bounced)) throw new Error("Automatic sending is paused: more than 2% of recent emails bounced. Check your addresses.");
   }
+
+  // A follow-up never goes before the email it follows up on.
+  if (step.channel === "email" && step.step_index > 0) {
+    const { data: earlier } = await svc.from("outreach").select("id").eq("contact_id", step.contact_id).eq("channel", "email")
+      .lt("step_index", step.step_index).in("status", ["draft", "scheduled", "failed", "task_open"]).limit(1);
+    if (earlier?.length) throw new Error("Send the earlier email in this sequence first.");
+  }
+
   const limit = effectiveDailyLimit(prefs?.email_daily_limit, prefs?.email_ramp_start);
   if ((await sentToday(svc, userId)) >= limit) throw new Error(`Daily limit of ${limit} emails reached (warm-up ramps 5, 10, 15, then 20 a day). It will go out tomorrow.`);
 
@@ -180,31 +225,50 @@ export async function sendStep(svc: SupabaseClient, userId: string, outreachId: 
     await stopContact(svc, step.contact_id, "replied");
     throw new Error("They already replied, so the sequence stopped.");
   }
+
+  if (!(await claimStep(svc, step.id))) throw new Error("This email is already being sent.");
+  // The claim counts toward today's total, so two sends racing past the check above cannot both fit under the cap.
+  if ((await sentToday(svc, userId)) > limit) {
+    await releaseStep(svc, step.id, step.status === "failed" ? "failed" : (step.status as "draft"), "");
+    throw new Error(`Daily limit of ${limit} emails reached. It will go out tomorrow.`);
+  }
+
+  // "Re:" only makes sense inside an existing thread.
+  const subject = !threadId ? (step.subject ?? "").replace(/^Re:\s*/i, "") : step.subject ?? "";
+  let sent;
   try {
-    const sent = await sendEmail(token, { from: acct.email, to, subject: step.subject ?? "", body: step.body ?? "", threadId });
-    await svc.from("outreach").update({ status: "sent", sent_at: new Date().toISOString(), gmail_message_id: sent.id, gmail_thread_id: sent.threadId, error: null }).eq("id", step.id);
-    await svc.from("funnel_events").insert({ user_id: userId, type: "outreach_sent", ref_id: step.id });
-    if (!prefs?.email_ramp_start) await svc.from("preferences").upsert({ user_id: userId, email_ramp_start: new Date().toISOString() }, { onConflict: "user_id" });
-    // Once the first email is sent, later steps get due dates from today. They stay drafts: you approve each one.
-    if (step.step_index === 0) {
-      const { data: later } = await svc.from("outreach").select("id, step_index").eq("contact_id", step.contact_id).gt("step_index", 0);
-      await Promise.all((later ?? []).map((l: { id: string; step_index: number }) =>
-        svc.from("outreach").update({ scheduled_for: new Date(Date.now() + SEQUENCE[l.step_index].day * DAY).toISOString() }).eq("id", l.id)));
-    }
-    return sent;
+    sent = await sendEmail(token, { from: acct.email, to, subject, body: step.body ?? "", threadId });
   } catch (e) {
-    await svc.from("outreach").update({ status: "failed", error: (e as Error).message }).eq("id", step.id);
+    await releaseStep(svc, step.id, "failed", (e as Error).message);
     throw e;
   }
+
+  // Gmail accepted it. From here on we never throw, so a failed save cannot cause a resend (the claim stays set).
+  const done = { status: "sent", gmail_message_id: sent.id, gmail_thread_id: sent.threadId, error: null };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { error } = await svc.from("outreach").update(done).eq("id", step.id);
+    if (!error) break;
+    console.error("outreach: saving the sent state failed", step.id, error.message);
+  }
+  await svc.from("funnel_events").insert({ user_id: userId, type: "outreach_sent", ref_id: step.id });
+  if (!prefs?.email_ramp_start) await svc.from("preferences").upsert({ user_id: userId, email_ramp_start: new Date().toISOString() }, { onConflict: "user_id" });
+  // Once the first email is sent, later steps get due dates from today. They stay drafts: you approve each one.
+  if (step.step_index === 0) {
+    const { data: later } = await svc.from("outreach").select("id, step_index").eq("contact_id", step.contact_id).gt("step_index", 0);
+    await Promise.all((later ?? []).map((l: { id: string; step_index: number }) =>
+      svc.from("outreach").update({ scheduled_for: new Date(Date.now() + SEQUENCE[l.step_index].day * DAY).toISOString() }).eq("id", l.id)));
+  }
+  return sent;
 }
 
 export async function stopContact(svc: SupabaseClient, contactId: string, why: "replied" | "stopped") {
   await svc.from("outreach").update({ status: "stopped" }).eq("contact_id", contactId).in("status", ["draft", "scheduled", "failed", "task_open"]);
   if (why === "replied") {
-    const { data: last } = await svc.from("outreach").select("id, user_id").eq("contact_id", contactId).eq("status", "sent").order("sent_at", { ascending: false }).limit(1);
-    if (last?.[0]) {
-      await svc.from("outreach").update({ status: "replied" }).eq("id", last[0].id);
-      await svc.from("funnel_events").insert({ user_id: last[0].user_id, type: "reply", ref_id: last[0].id });
+    // Every sent email of this contact becomes "replied" at once, so a later check finds nothing left to count again.
+    const { data: moved } = await svc.from("outreach").update({ status: "replied" }).eq("contact_id", contactId).eq("status", "sent").select("id, user_id, sent_at");
+    if (moved?.length) {
+      const last = [...moved].sort((a: { sent_at: string | null }, b: { sent_at: string | null }) => (b.sent_at ?? "").localeCompare(a.sent_at ?? ""))[0];
+      await svc.from("funnel_events").insert({ user_id: last.user_id, type: "reply", ref_id: last.id });
     }
   }
 }

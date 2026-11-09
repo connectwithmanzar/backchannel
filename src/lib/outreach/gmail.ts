@@ -1,6 +1,6 @@
 // Minimal Gmail API client using OAuth (no extra libraries).
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
-import { isBounceMessage } from "./limits";
+import { fromAddress, isAutoReply, isBounceMessage, isDelayNotice } from "./limits";
 const API = "https://gmail.googleapis.com/gmail/v1/users/me";
 export const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.readonly"];
 
@@ -91,8 +91,10 @@ export async function threadState(token: string, threadId: string, myEmail: stri
   for (const m of (t.messages ?? []) as { payload?: { headers?: { name: string; value: string }[] } }[]) {
     const header = (n: string) => m.payload?.headers?.find((h) => h.name.toLowerCase() === n)?.value ?? "";
     const from = header("from");
-    if (!from || from.toLowerCase().includes(myEmail.toLowerCase())) continue;
-    if (isBounceMessage(from, header("subject"))) state.bounce = true;
+    const subject = header("subject");
+    if (!from || fromAddress(from) === myEmail.trim().toLowerCase()) continue;
+    if (isBounceMessage(from, subject)) state.bounce = true;
+    else if (isDelayNotice(subject) || isAutoReply(subject)) continue;
     else state.reply = true;
   }
   return state;
@@ -123,7 +125,7 @@ export async function threadReplies(token: string, threadId: string, myEmail: st
   for (const m of (t.messages ?? []) as { snippet?: string; payload?: Part & { headers?: { name: string; value: string }[] } }[]) {
     const header = (n: string) => m.payload?.headers?.find((h) => h.name.toLowerCase() === n)?.value ?? "";
     const from = header("from");
-    if (!from || from.toLowerCase().includes(myEmail.toLowerCase()) || isBounceMessage(from, header("subject"))) continue;
+    if (!from || fromAddress(from) === myEmail.trim().toLowerCase() || isBounceMessage(from, header("subject")) || isDelayNotice(header("subject"))) continue;
     out.push({ from, date: header("date"), text: extractReplyText(m.payload, m.snippet) });
   }
   return out;

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { pickPreferenceFields, pickProfileFields } from "@/lib/profile-fields";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
 
   if (type === "profile") {
     const { error } = await supabase.from("profiles").upsert(
-      { ...payload, user_id: user.id, updated_at: new Date().toISOString() },
+      { ...pickProfileFields(payload), user_id: user.id, updated_at: new Date().toISOString() },
       { onConflict: "user_id" }
     );
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
 
   if (type === "preferences") {
     const { error } = await supabase.from("preferences").upsert(
-      { ...payload, user_id: user.id },
+      { ...pickPreferenceFields(payload), user_id: user.id },
       { onConflict: "user_id" }
     );
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

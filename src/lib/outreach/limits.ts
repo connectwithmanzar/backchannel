@@ -25,7 +25,24 @@ export function bouncePaused(sent: number, bounced: number): boolean {
   return sent >= BOUNCE_MIN_SAMPLE && bounced / sent > BOUNCE_PAUSE_RATE;
 }
 
-/** A delivery-failure notice from Google or the recipient's server, not a human reply. */
+/** The bare address in a From header: "Jo Ann <JoAnn@X.com>" becomes "joann@x.com". */
+export function fromAddress(header: string): string {
+  const m = header.match(/<([^>]+)>/);
+  return (m ? m[1] : header).trim().toLowerCase();
+}
+
+/** "Delivery Status Notification (Delay)": the message is late, not undeliverable. */
+export function isDelayNotice(subject: string): boolean {
+  return /\(delay\)|has been delayed|delivery delayed|still trying/i.test(subject);
+}
+
+/** Out-of-office and other automatic answers are not a person replying. */
+export function isAutoReply(subject: string): boolean {
+  return /^(automatic reply|auto[- ]?reply|autoreply|out of (the )?office|away from (my )?office|on vacation)/i.test(subject.trim());
+}
+
+/** A permanent delivery-failure notice from Google or the recipient's server, not a human reply. */
 export function isBounceMessage(from: string, subject: string): boolean {
+  if (isDelayNotice(subject)) return false;
   return /mailer-daemon|postmaster/i.test(from) || /delivery status notification|undeliverable|delivery has failed|mail delivery (subsystem|failed)|returned mail/i.test(subject);
 }

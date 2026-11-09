@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { aiText, hasAIKey, NO_AI_MESSAGE } from "@/lib/ai";
 import { isExcludedCompany } from "@/data/companies";
+import { isBlocked } from "@/lib/outreach/engine";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
       case "add": {
         const company = String(b.company_name ?? "").trim(), who = String(b.referrer_name ?? "").trim();
         if (!company || !who) return NextResponse.json({ error: "Company and the person's name are required." }, { status: 400 });
-        if (isExcludedCompany(company)) return NextResponse.json({ error: `${company} is excluded.` }, { status: 400 });
+        if (isExcludedCompany(company) || (await isBlocked(db, user.id, "", company, who))) return NextResponse.json({ error: `${company} is on your excluded list, so it can't be added.` }, { status: 400 });
         const { data, error } = await db.from("referrals").insert({
           user_id: user.id, company_name: company, referrer_name: who, role_title: b.role_title || null, job_id: b.job_id || null,
           referrer_relation: b.referrer_relation || null, channel: ["linkedin", "email", "whatsapp", "other"].includes(b.channel) ? b.channel : "linkedin",

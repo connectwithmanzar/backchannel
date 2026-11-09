@@ -2,6 +2,7 @@ export { SENSITIVE_LABELS } from "./labels";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiJson, hasAIKey, NO_AI_MESSAGE } from "@/lib/ai";
 import { htmlToText } from "@/lib/collector/fetchers";
+import { isBlocked } from "@/lib/outreach/engine";
 
 
 export type AppQuestion = { q: string; answer: string; sensitive: boolean; key?: string };
@@ -26,6 +27,7 @@ export async function prepareApplication(db: SupabaseClient, userId: string, job
     throw new Error("Upload your CV on My profile first. Autopilot only uses facts from your CV.");
   }
   const company = (job.companies as unknown as { name: string } | null)?.name ?? job.company_name ?? "the company";
+  if (await isBlocked(db, userId, "", company)) throw new Error(`${company} is on your excluded list, so no application will be prepared.`);
   const scorecard = [
     profile.current_role && `Current role: ${profile.current_role}`,
     profile.years_in_sales && `Years in sales: ${profile.years_in_sales}`,

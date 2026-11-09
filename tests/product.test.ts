@@ -12,7 +12,10 @@ import { parseJobUrl, buildPastedJob } from "../src/lib/jobs/paste";
 import { scoreJob, parseMinOteByMarket, type SearchProfile } from "../src/lib/score";
 import { companyQuality, signalsFromRows } from "../src/lib/companyQuality";
 import type { Job } from "../src/lib/collector/types";
-import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage } from "../src/lib/outreach/limits";
+import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddress, isDelayNotice, isAutoReply } from "../src/lib/outreach/limits";
+import { fakeSupabase } from "./helpers/fake-supabase";
+import { claimStep, markBounced, recentBounceStats, stopContact } from "../src/lib/outreach/engine";
+import { pickProfileFields, pickPreferenceFields } from "../src/lib/profile-fields";
 import { validateTemplate, renderTemplate, autoSendDecision, OPT_OUT, unknownFields } from "../src/lib/outreach/templates";
 import { compareOffers, type OfferInput } from "../src/lib/offers";
 import { isCronAuthorized } from "../src/lib/owner";
@@ -350,4 +353,62 @@ test("reply text: reads the plain part and drops the quoted original", () => {
   assert.equal(extractReplyText(payload, "snippet"), "Thanks, happy to chat Tuesday.");
   assert.equal(extractReplyText({ mimeType: "text/html" }, "Just the snippet"), "Just the snippet");
   assert.equal(extractReplyText(undefined, ""), "");
+});
+
+test("reply detection compares exact addresses, not substrings", () => {
+  assert.equal(fromAddress("Jo Ann <JoAnn@X.com>"), "joann@x.com");
+  assert.equal(fromAddress("ann@x.com"), "ann@x.com");
+  assert.notEqual(fromAddress("Jo Ann <joann@x.com>"), "ann@x.com");   // contains, but is not, your address
+  assert.notEqual(fromAddress("Bob <bob@acme.com>"), "b@acme.com");
+});
+
+test("delay notices and out-of-office replies are neither bounces nor replies", () => {
+  assert.equal(isBounceMessage("Mail Delivery Subsystem <mailer-daemon@googlemail.com>", "Delivery Status Notification (Delay)"), false);
+  assert.equal(isDelayNotice("Delivery Status Notification (Delay)"), true);
+  assert.equal(isBounceMessage("Mail Delivery Subsystem <mailer-daemon@googlemail.com>", "Delivery Status Notification (Failure)"), true);
+  for (const s of ["Automatic reply: Quick question", "Out of office: back Monday", "Autoreply: hello"]) assert.equal(isAutoReply(s), true, s);
+  assert.equal(isAutoReply("Re: Quick question"), false);
+});
+
+test("profile writes keep only allowed fields, never send-safety settings", () => {
+  const out = pickProfileFields({ name: "A", tools: ["x"], autosend_enabled: true, email_ramp_start: "2020-01-01", user_id: "other", profile_embedding: [1] });
+  assert.deepEqual(out, { name: "A", tools: ["x"] });
+  assert.deepEqual(pickPreferenceFields({ countries: ["India"], autosend_enabled: true, email_daily_limit: 500, autopilot_mode: "auto" }), { countries: ["India"] });
+});
+
+const asClient = (f: ReturnType<typeof fakeSupabase>) => f as never;
+
+test("an email can be claimed for sending by exactly one caller", async () => {
+  const db = fakeSupabase({ outreach: [{ id: "o1", status: "scheduled", sent_at: null }] });
+  assert.equal(await claimStep(asClient(db), "o1"), true);
+  assert.equal(await claimStep(asClient(db), "o1"), false);               // a second run, tick or click gets nothing
+  const [a, b] = await Promise.all([claimStep(asClient(fakeSupabase({ outreach: [{ id: "o2", status: "draft", sent_at: null }] })), "o2"), Promise.resolve(false)]);
+  assert.equal(a, true); assert.equal(b, false);
+  const sent = fakeSupabase({ outreach: [{ id: "o3", status: "sent", sent_at: "2026-11-09T10:00:00Z" }] });
+  assert.equal(await claimStep(asClient(sent), "o3"), false);             // already sent is never claimable
+});
+
+test("a bounce is counted even after the sequence is stopped", async () => {
+  const now = new Date().toISOString();
+  const db = fakeSupabase({ outreach: [
+    { id: "a", user_id: "u", contact_id: "c1", channel: "email", status: "sent", sent_at: now, error: null },
+    { id: "b", user_id: "u", contact_id: "c2", channel: "email", status: "sent", sent_at: now, error: null },
+    { id: "c", user_id: "u", contact_id: "c2", channel: "email", status: "draft", sent_at: null, error: null },
+  ] });
+  await markBounced(asClient(db), "c2");
+  assert.deepEqual(await recentBounceStats(asClient(db), "u"), { sent: 2, bounced: 1 });
+  assert.equal(db.tables.outreach.find((r) => r.id === "c")?.status, "stopped");   // unsent follow-up stopped
+  assert.equal(db.tables.outreach.find((r) => r.id === "b")?.error, "Bounced");    // marker kept
+});
+
+test("a reply is counted once, however many times it is detected", async () => {
+  const db = fakeSupabase({ outreach: [
+    { id: "s1", user_id: "u", contact_id: "c", status: "sent", sent_at: "2026-11-09T05:00:00Z" },
+    { id: "s2", user_id: "u", contact_id: "c", status: "sent", sent_at: "2026-11-11T05:00:00Z" },
+    { id: "d3", user_id: "u", contact_id: "c", status: "draft", sent_at: null },
+  ], funnel_events: [] });
+  await stopContact(asClient(db), "c", "replied");
+  await stopContact(asClient(db), "c", "replied");
+  assert.equal(db.tables.funnel_events.length, 1);
+  assert.deepEqual(db.tables.outreach.map((r) => r.status), ["replied", "replied", "stopped"]);
 });

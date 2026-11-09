@@ -29,7 +29,10 @@ export async function POST(req: NextRequest) {
       }
       case "edit_step": {
         const patch: Record<string, string> = {};
-        if (typeof b.subject === "string") patch.subject = b.subject;
+        if (typeof b.subject === "string") {
+          if (!b.subject.trim() && b.channel !== "linkedin_task") return NextResponse.json({ error: "The subject can't be empty." }, { status: 400 });
+          patch.subject = b.subject;
+        }
         if (typeof b.body === "string") patch.body = b.body.includes(OPT_OUT) || b.channel === "linkedin_task" ? b.body : `${b.body.trim()}\n\n${OPT_OUT}`;
         const { error } = await db.from("outreach").update(patch).eq("id", b.id);
         if (error) throw error;
