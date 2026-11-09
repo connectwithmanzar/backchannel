@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui";
 import { hasAIKey } from "@/lib/ai";
+import FindPeople from "./FindPeople";
+import { apolloConfigured } from "@/lib/contacts/apollo";
 import ReferralsClient, { type Ref, type JobOpt } from "./ReferralsClient";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +24,7 @@ export default async function ReferralsPage() {
       <PageHeader eyebrow="Referrals" title="Warm intros, tracked">
         A referral is the fastest way past the pile. Add someone you know at a company, let AI draft a short ask from your real numbers, send it yourself, and track it from asked to interview.
       </PageHeader>
+      <FindPeople configured={apolloConfigured()} />
       <ReferralsClient refs={(refs ?? []) as Ref[]} jobs={opts} aiReady={hasAIKey()} />
     </section>
   );

@@ -12,6 +12,7 @@ import { parseJobUrl, buildPastedJob } from "../src/lib/jobs/paste";
 import { scoreJob, parseMinOteByMarket, type SearchProfile } from "../src/lib/score";
 import { companyQuality, signalsFromRows } from "../src/lib/companyQuality";
 import type { Job } from "../src/lib/collector/types";
+import { cleanDomain, classifyTitle, parsePeople, buildSearchUrl } from "../src/lib/contacts/apollo";
 
 test("sales role filter: keeps targets, drops noise", () => {
   assert.equal(roleFamily("Senior Sales Development Representative, EMEA"), "SDR/BDR");
@@ -182,4 +183,32 @@ test("score weights still add up: strong company lifts the score", () => {
   const lo = scoreJob({ ...baseJob, companyQuality: 10 }, baseProfile).score;
   const hi = scoreJob({ ...baseJob, companyQuality: 100 }, baseProfile).score;
   assert.ok(hi > lo);
+});
+
+test("people search: domains are cleaned and titles are classified", () => {
+  assert.equal(cleanDomain("https://www.Acme.com/careers?x=1"), "acme.com");
+  assert.equal(cleanDomain("apollo.io"), "apollo.io");
+  for (const bad of ["", "localhost", "a b.com", "http://169.254.169.254:80/x y", "acme"]) assert.equal(cleanDomain(bad), null, bad);
+  assert.equal(classifyTitle("Head of Sales, EMEA"), "hiring_manager");
+  assert.equal(classifyTitle("Senior Technical Recruiter"), "recruiter");
+  assert.equal(classifyTitle("Software Engineer"), "other");
+  const url = buildSearchUrl("acme.com");
+  assert.ok(url.startsWith("https://api.apollo.io/api/v1/mixed_people/api_search?"));
+  assert.ok(url.includes("q_organization_domains_list%5B%5D=acme.com"));
+});
+
+test("people search: parses Apollo's response shape and ignores junk", () => {
+  const json = { total_entries: 3, people: [
+    { id: "p1", first_name: "Sam", last_name_obfuscated: "Pa***l", title: "Software Engineer", has_email: false, organization: { name: "Acme" } },
+    { id: "p2", first_name: "Vik", last_name_obfuscated: "Va***z", title: "VP Sales", has_email: true, organization: { name: "Acme" } },
+    { first_name: "NoId", title: "Recruiter" },
+  ] };
+  const people = parsePeople(json, "Fallback");
+  assert.equal(people.length, 2);
+  assert.equal(people[0].id, "p2");            // hiring-side people sort first
+  assert.equal(people[0].role, "hiring_manager");
+  assert.equal(people[0].hasEmail, true);
+  assert.equal(people[0].lastHint, "Va***z");
+  assert.deepEqual(parsePeople(null, "x"), []);
+  assert.deepEqual(parsePeople({ people: "nope" }, "x"), []);
 });
