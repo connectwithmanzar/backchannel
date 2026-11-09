@@ -9,6 +9,7 @@ const MARKETS: Record<string, string> = {
   us: "US",
   global: "Global / remote",
 };
+const PAGE_SIZE = 40;
 const FAMILIES = ["SDR/BDR", "GTM Engineer", "Account Executive", "Sales leadership"];
 
 export interface JobReaction {
@@ -79,6 +80,7 @@ export default function RolesFeed({
   const [sort, setSort] = useState<"fit" | "pay" | "new">("fit");
   const [open, setOpen] = useState<string | null>(null);
   const [showSkipped, setShowSkipped] = useState(false);
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const [reactions, setReactions] = useState<Record<string, JobReaction>>(initialReactions);
   const [, startTransition] = useTransition();
 
@@ -186,7 +188,7 @@ export default function RolesFeed({
           </div>
         )}
         <ul className="flex flex-col gap-2.5">
-          {rows.map((j) => {
+          {rows.slice(0, limit).map((j) => {
             const isOpen = open === j.id;
             const rxn = reactions[j.id]?.reaction ?? null;
             const aiExplanation = reactions[j.id]?.explanation;
@@ -288,6 +290,15 @@ export default function RolesFeed({
             );
           })}
         </ul>
+        {rows.length > limit && (
+          <button
+            type="button"
+            onClick={() => setLimit(limit + PAGE_SIZE)}
+            className="mt-4 w-full rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-semibold hover:border-fg/40"
+          >
+            Show {Math.min(PAGE_SIZE, rows.length - limit)} more ({rows.length - limit} left)
+          </button>
+        )}
       </div>
     </div>
   );

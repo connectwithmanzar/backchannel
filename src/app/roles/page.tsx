@@ -46,11 +46,17 @@ function toRoleFamily(title: string): RoleFamily {
 export default async function RolesPage() {
   const supabase = await createClient();
 
-  // Load user profile for scoring (silent fail → sensible defaults)
-  const { data: profileRow } = await supabase
-    .from("profiles")
-    .select("name, tools, markets, min_ote_usd")
-    .maybeSingle();
+  // Independent queries run together instead of one after another.
+  const [{ data: profileRow }, { data: rows }, { data: { user } }] = await Promise.all([
+    supabase.from("profiles").select("name, tools, markets, min_ote_usd").maybeSingle(),
+    supabase
+      .from("jobs")
+      .select("id, title, location, remote_type, market, board, url, posted_at, last_checked_at, currency, ote_min, ote_max, base_min, base_max, pay_band_status, visa_sponsorship, description, companies(name)")
+      .eq("is_active", true)
+      .order("last_checked_at", { ascending: false })
+      .limit(500),
+    supabase.auth.getUser(),
+  ]);
 
   const profile: SearchProfile = {
     name: profileRow?.name ?? "You",
@@ -61,22 +67,14 @@ export default async function RolesPage() {
     prefersRemote: false,
   };
 
-  // Load active jobs with company name
-  const { data: rows } = await supabase
-    .from("jobs")
-    .select("*, companies(name)")
-    .eq("is_active", true)
-    .order("last_checked_at", { ascending: false })
-    .limit(500);
-
   // Never surface excluded companies (e.g. Taboola), even if rows exist.
   const visibleRows = (rows ?? []).filter(
-    (row) => !isExcludedCompany((row.companies as { name: string } | null)?.name, row.url)
+    (row) => !isExcludedCompany((row.companies as unknown as { name: string } | null)?.name, row.url)
   );
 
   const jobs: Job[] = visibleRows.map((row) => ({
     id: row.id,
-    company: (row.companies as { name: string } | null)?.name ?? "Unknown",
+    company: (row.companies as unknown as { name: string } | null)?.name ?? "Unknown",
     title: row.title,
     location: row.location ?? "",
     remoteType: (row.remote_type ?? "unknown") as RemoteType,
@@ -101,7 +99,9 @@ export default async function RolesPage() {
 
   const scored = jobs
     .map((j) => scoreJob(j, profile))
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score)
+    // Scoring used the full text; the browser only needs a short preview.
+    .map((j) => ({ ...j, description: j.description.slice(0, 600) }));
 
   const lastChecked = visibleRows[0]?.last_checked_at ?? null;
   const seedCount = COMPANY_SEEDS.filter(
@@ -109,7 +109,6 @@ export default async function RolesPage() {
   ).length;
 
   // Load this user's existing job scores / reactions
-  const { data: { user } } = await supabase.auth.getUser();
   const owner = isOwner(user?.email);
   const reactions: Record<string, JobReaction> = {};
   if (user) {
