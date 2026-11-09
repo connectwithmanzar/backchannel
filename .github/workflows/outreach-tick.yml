@@ -1,0 +1,19 @@
+name: Outreach tick
+# Runs every hour so automatic emails go out in each recipient's own morning.
+# Needs a repository secret named CRON_SECRET with the same value as in Vercel.
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch: {}
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the outreach tick
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          code=$(curl -s -o /tmp/out.txt -w "%{http_code}" -H "Authorization: Bearer $CRON_SECRET" https://backchannel-eight.vercel.app/api/outreach-tick)
+          echo "status $code"
+          cat /tmp/out.txt
+          test "$code" = "200"

@@ -3,23 +3,13 @@ import { aiJson, hasAIKey, NO_AI_MESSAGE } from "@/lib/ai";
 import { accessToken, sendEmail, threadState } from "./gmail";
 import { MAX_EMAILS_PER_DAY, bouncePaused, effectiveDailyLimit } from "./limits";
 import { OPT_OUT, autoSendDecision, renderTemplate } from "./templates";
+import { inRecipientWindow, recipientTimezone } from "./timezone";
 
 export { MAX_EMAILS_PER_DAY, OPT_OUT };
 import { isExcludedCompany } from "@/data/companies";
 import { htmlToText } from "@/lib/collector/fetchers";
 
 const DAY = 24 * 3600 * 1000;
-// Emails only go out inside this window (local hours, Mon-Fri), so nothing lands at 3am.
-export const SEND_TZ = process.env.OUTREACH_TZ ?? "Asia/Kolkata";
-export const SEND_START_HOUR = Number(process.env.OUTREACH_START_HOUR ?? 9);
-export const SEND_END_HOUR = Number(process.env.OUTREACH_END_HOUR ?? 18);
-
-export function inSendWindow(now = new Date()): boolean {
-  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: SEND_TZ, hour: "numeric", hourCycle: "h23", weekday: "short" }).formatToParts(now);
-  const hour = Number(parts.find((p) => p.type === "hour")?.value);
-  const day = parts.find((p) => p.type === "weekday")?.value ?? "";
-  return !["Sat", "Sun"].includes(day) && hour >= SEND_START_HOUR && hour < SEND_END_HOUR;
-}
 
 // Day offset, channel, which generated text to use
 export const SEQUENCE: { day: number; channel: "email" | "linkedin_task"; key: "email1" | "email2" | "email3" | "li_connect" | "li_message"; label: string }[] = [
@@ -153,17 +143,22 @@ async function sentToday(svc: SupabaseClient, userId: string) {
 /** Sends one email step now (respects the daily limit, blocklist and stop-on-reply). Uses the service client. */
 export async function sendStep(svc: SupabaseClient, userId: string, outreachId: string, opts: { auto?: boolean } = {}) {
   const [{ data: step }, { data: acct }, { data: prefs }] = await Promise.all([
-    svc.from("outreach").select("id, contact_id, status, subject, body, to_email, step_index, contacts(company_name, email, name)").eq("id", outreachId).eq("user_id", userId).single(),
+    svc.from("outreach").select("id, contact_id, status, subject, body, to_email, step_index, contacts(company_name, email, name, job_id)").eq("id", outreachId).eq("user_id", userId).single(),
     svc.from("gmail_accounts").select("email, refresh_token").eq("user_id", userId).maybeSingle(),
     svc.from("preferences").select("email_daily_limit, email_ramp_start").eq("user_id", userId).maybeSingle(),
   ]);
   if (!step) throw new Error("That email no longer exists.");
   if (!acct) throw new Error("Connect your Gmail first.");
   if (!["draft", "scheduled", "failed"].includes(step.status)) throw new Error("This email was already sent or stopped.");
-  const contact = step.contacts as unknown as { company_name: string; email: string; name: string } | null;
+  const contact = step.contacts as unknown as { company_name: string; email: string; name: string; job_id: string | null } | null;
   const to = step.to_email ?? contact?.email;
   if (!to) throw new Error("This contact has no email address.");
-  if (!inSendWindow()) throw new Error(`Emails only send Mon-Fri, ${SEND_START_HOUR}:00-${SEND_END_HOUR}:00 (${SEND_TZ}). Try again then.`);
+  if (opts.auto) {
+    // Automatic sends wait for the recipient's own morning. Manual sends (you click Send) have no time restriction.
+    const { data: job } = contact?.job_id ? await svc.from("jobs").select("market, location").eq("id", contact.job_id).maybeSingle() : { data: null };
+    const tz = recipientTimezone({ market: job?.market, location: job?.location, email: to });
+    if (!inRecipientWindow(tz)) throw new Error(`Waiting for the recipient's morning (${tz}).`);
+  }
   if (await isBlocked(svc, userId, to, contact?.company_name ?? "", contact?.name ?? "")) throw new Error("Blocked by your stealth list.");
   if (opts.auto) {
     const stats = await recentBounceStats(svc, userId);

@@ -3,7 +3,7 @@ import { serviceClient } from "@/lib/supabase/service";
 import { isCronAuthorized } from "@/lib/owner";
 import { scoreForUser } from "@/lib/jobs/scoring";
 import { autoPrepare } from "@/lib/apps/auto";
-import { inSendWindow, runOutreach } from "@/lib/outreach/engine";
+import { runOutreach } from "@/lib/outreach/engine";
 import { runDigest } from "@/lib/notify";
 
 export const runtime = "nodejs";
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     results.push(r);
   }
   console.log(JSON.stringify({
-    job: "daily", users: results.length, ms: Date.now() - startedAt, inSendWindow: inSendWindow(),
+    job: "daily", users: results.length, ms: Date.now() - startedAt,
     outreach: results.map((r) => r.outreach),
   }));
   return NextResponse.json({ ok: true, results });

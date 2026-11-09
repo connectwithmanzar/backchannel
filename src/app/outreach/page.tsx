@@ -33,7 +33,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
   return (
     <section className="py-6">
       <PageHeader eyebrow="Outreach · email + LinkedIn" title="Get in front of the people who hire">
-        Add a hiring manager or recruiter and AI writes a short, personal sequence from your real numbers: three emails from your own Gmail and two LinkedIn steps you send yourself. You approve every email before it sends, Mon-Fri 9:00-18:00 IST, and the sequence stops as soon as they reply.
+        Add a hiring manager or recruiter and AI writes a short, personal sequence from your real numbers: three emails from your own Gmail and two LinkedIn steps you send yourself. You approve every email. When you click Send it goes out straight away. Automatic sends wait for the recipient&apos;s own morning (9:00 to 11:30 local, on their working days), and every sequence stops as soon as they reply.
       </PageHeader>
       <AutoSendCard state={{
         subject: tpl?.subject ?? "", body: tpl?.body ?? "", approved: !!tpl?.approved_at,

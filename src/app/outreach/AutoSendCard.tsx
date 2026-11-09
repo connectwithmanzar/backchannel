@@ -33,7 +33,7 @@ export default function AutoSendCard({ state }: { state: AutoSendState }) {
         <Pill tone={state.enabled ? "good" : "neutral"}>{state.enabled ? "On" : "Off"}</Pill>
       </div>
       <p className="text-sm text-muted">
-        Write one email yourself and approve it. For roles scoring at or above your minimum fit, the first email to a person you add then goes out from your approved text, inside your send window and daily limit.
+        Write one email yourself and approve it. For roles scoring at or above your minimum fit, the first email to a person you add then goes out from your approved text, during the recipient&apos;s own morning (9:00 to 11:30 their time) and inside your daily limit.
         Follow-ups, LinkedIn steps and applications always wait for you. Sensitive questions never auto-send. It stops on any reply or bounce, and pauses if more than 2% of recent emails bounce.
         {state.daysSending < 7 && ` The first week every email needs your approval, so auto-send starts working ${state.daysSending === 0 && !state.gmailConnected ? "once you've sent for 7 days" : `in about ${weekLeft} day${weekLeft === 1 ? "" : "s"}`} of sending.`}
       </p>
