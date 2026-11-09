@@ -102,6 +102,17 @@ export default function RolesFeed({
     });
   }
 
+  const [prep, setPrep] = useState<Record<string, string>>({});
+  const [prepBusy, setPrepBusy] = useState<string | null>(null);
+  async function loadPrep(jobId: string, refresh = false) {
+    setPrepBusy(jobId);
+    try {
+      const res = await fetch("/api/prep", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job_id: jobId, refresh }) });
+      const data = await res.json().catch(() => ({ error: `Something went wrong (error ${res.status}).` }));
+      setPrep((p) => ({ ...p, [jobId]: res.ok ? data.content : `Couldn't prepare: ${data.error ?? "try again"}` }));
+    } finally { setPrepBusy(null); }
+  }
+
   async function removePasted(jobId: string) {
     const res = await fetch(`/api/jobs/paste?id=${encodeURIComponent(jobId)}`, { method: "DELETE" });
     if (res.ok) window.location.reload();
@@ -274,6 +285,15 @@ export default function RolesFeed({
                     {j.description && (
                       <p className="line-clamp-5 whitespace-pre-line text-sm text-muted">{j.description}</p>
                     )}
+                    {prep[j.id] && (
+                      <div className="rounded-lg border border-line bg-sunk p-3">
+                        <div className="mb-1 flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wider text-muted">
+                          Interview prep
+                          <button type="button" className="font-semibold normal-case text-accent hover:underline" disabled={prepBusy === j.id} onClick={() => loadPrep(j.id, true)}>Write it again</button>
+                        </div>
+                        <p className="whitespace-pre-line text-sm">{prep[j.id]}</p>
+                      </div>
+                    )}
                     {/* Actions */}
                     <div className="flex flex-wrap gap-2">
                       <a href={j.url} target="_blank" rel="noopener noreferrer"
@@ -288,6 +308,8 @@ export default function RolesFeed({
                         onClick={() => setReaction(j.id, rxn === "applied" ? null : "applied")} />
                       <ReactionButton icon="✕" label="Skip" active={rxn === "skipped"} danger
                         onClick={() => setReaction(j.id, rxn === "skipped" ? null : "skipped")} />
+                      <ReactionButton icon="🎤" label={prepBusy === j.id ? "Preparing…" : prep[j.id] ? "Prep ready" : "Interview prep"} active={!!prep[j.id]}
+                        onClick={() => loadPrep(j.id)} />
                       {j.board === "pasted" && (
                         <ReactionButton icon="🗑" label="Remove" active={false} danger onClick={() => removePasted(j.id)} />
                       )}

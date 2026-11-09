@@ -14,6 +14,7 @@ import { companyQuality, signalsFromRows } from "../src/lib/companyQuality";
 import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage } from "../src/lib/outreach/limits";
 import { validateTemplate, renderTemplate, autoSendDecision, OPT_OUT, unknownFields } from "../src/lib/outreach/templates";
+import { compareOffers, type OfferInput } from "../src/lib/offers";
 import { cleanDomain, classifyTitle, parsePeople, buildSearchUrl, mergePeople, HIRING_TITLES, RECRUITER_TITLES } from "../src/lib/contacts/apollo";
 
 test("sales role filter: keeps targets, drops noise", () => {
@@ -270,4 +271,24 @@ test("auto-send: every safety condition must hold, otherwise it stays a draft", 
   assert.equal(autoSendDecision({ ...ok, rampStart: "2026-11-15T00:00:00Z" }).auto, false); // first week: approve everything
   assert.equal(autoSendDecision({ ...ok, recipientName: "Max An***l" }).auto, false);  // partial name from search
   assert.equal(autoSendDecision({ ...ok, recipientName: "  " }).auto, false);
+});
+
+test("offers: yearly cash converts to USD and ranks open offers", () => {
+  const base: OfferInput = { id: "", company: "", role_title: null, location: null, currency: "USD", base: null, variable: null, joining_bonus: null, equity_note: null, visa_note: null, notes: null, deadline: null, status: "considering" };
+  const rows = compareOffers([
+    { ...base, id: "a", company: "A", currency: "INR", base: 2_520_000, variable: 840_000 },       // 3.36M INR is about 40k USD
+    { ...base, id: "b", company: "B", currency: "USD", base: 60_000, variable: 20_000, joining_bonus: 5_000 },
+    { ...base, id: "c", company: "C", currency: "AED", base: 300_000, status: "declined" },         // declined offers are not ranked
+    { ...base, id: "d", company: "D" },                                                             // no pay entered
+  ]);
+  const by = (id: string) => rows.find((r) => r.id === id)!;
+  assert.equal(by("a").annualUsd, 40_000);
+  assert.equal(by("b").annualUsd, 80_000);
+  assert.equal(by("b").yearOneUsd, 85_000);
+  assert.equal(by("b").rank, 1);
+  assert.equal(by("b").isBest, true);
+  assert.equal(by("a").rank, 2);
+  assert.equal(by("c").rank, null);
+  assert.equal(by("d").annualUsd, null);
+  assert.equal(compareOffers([{ ...base, id: "x", base: 1000 }])[0].isBest, false); // a single offer is not "best"
 });

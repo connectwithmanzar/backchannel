@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/profile", label: "My profile" },
   { href: "/pay", label: "Pay benchmark" },
   { href: "/referrals", label: "Referrals" },
+  { href: "/offers", label: "Offers" },
   { href: "/side-income", label: "Side income" },
   { href: "/sources", label: "Sources" },
 ];
