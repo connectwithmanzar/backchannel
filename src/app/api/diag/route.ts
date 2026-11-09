@@ -1,34 +1,39 @@
+import https from "node:https";
 import { NextResponse } from "next/server";
-import { createClient, getSessionUser } from "@/lib/supabase/server";
-import { serviceClient } from "@/lib/supabase/service";
+import { getSessionUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 // TEMPORARY timing probe. Signed-in users only, returns timings and no data. Delete after use.
+function probe(agent: https.Agent | undefined): Promise<Record<string, number>> {
+  return new Promise((resolve) => {
+    const t0 = performance.now();
+    const t: Record<string, number> = {};
+    const url = new URL(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?select=user_id&limit=1`);
+    const req = https.get(url, { agent, headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! } }, (res) => {
+      t.firstByte = Math.round(performance.now() - t0);
+      res.resume();
+      res.on("end", () => { t.total = Math.round(performance.now() - t0); resolve(t); });
+    });
+    req.on("socket", (s) => {
+      s.on("lookup", (_e, addr) => { t.dns = Math.round(performance.now() - t0); t.addrFamily = String(addr).includes(":") ? 6 : 4; });
+      s.on("connect", () => { t.tcp = Math.round(performance.now() - t0); });
+      s.on("secureConnect", () => { t.tls = Math.round(performance.now() - t0); });
+    });
+    req.on("error", () => resolve({ error: 1 }));
+  });
+}
+
 export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const sb = await createClient();
-  const svc = serviceClient();
-  const out: Record<string, number> = {};
-  const time = async (label: string, fn: () => PromiseLike<unknown>) => {
-    const s = performance.now();
-    await fn();
-    out[label] = Math.round(performance.now() - s);
-  };
-
-  await time("svc_head_1", () => svc.from("profiles").select("user_id", { count: "exact", head: true }));
-  await time("svc_head_2", () => svc.from("profiles").select("user_id", { count: "exact", head: true }));
-  await time("user_head_1", () => sb.from("profiles").select("user_id", { count: "exact", head: true }));
-  await time("user_head_2", () => sb.from("profiles").select("user_id", { count: "exact", head: true }));
-  await time("user_scores_limit1", () => sb.from("job_scores").select("job_id").eq("user_id", user.id).limit(1));
-  await time("user_scores_all", () => sb.from("job_scores").select("job_id, score, parts, explanation, model, reaction").eq("user_id", user.id));
-  await time("raw_rest_anon", () => fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?select=user_id&limit=1`, { headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! } }));
-  await time("raw_rest_anon_2", () => fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?select=user_id&limit=1`, { headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! } }));
-  await time("user_parallel_3", () => Promise.all([
-    sb.from("profiles").select("name").maybeSingle(),
-    sb.from("job_scores").select("job_id").eq("user_id", user.id).limit(1),
-    sb.from("jobs").select("id").eq("is_active", true).not("added_by", "is", null),
-  ]));
-  return NextResponse.json(out);
+  const keep = new https.Agent({ keepAlive: true });
+  return NextResponse.json({
+    region: process.env.VERCEL_REGION ?? null,
+    noAgent_1: await probe(undefined),
+    noAgent_2: await probe(undefined),
+    keepAlive_1: await probe(keep),
+    keepAlive_2: await probe(keep),
+    keepAlive_3: await probe(keep),
+  });
 }
