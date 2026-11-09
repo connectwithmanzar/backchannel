@@ -22,7 +22,7 @@ const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-IN
 
 export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady, aiReady, notice, sentToday, settings }: {
   contacts: ContactRow[]; jobs: JobOption[]; gmailEmail: string | null; gmailReady: boolean; aiReady: boolean;
-  notice: string | null; sentToday: number; settings: { limit: number; signature: string };
+  notice: string | null; sentToday: number; settings: { limit: number; signature: string; todayLimit: number };
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -54,7 +54,7 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
           {gmailEmail ? (
             <>
               <b className="break-all">{gmailEmail}</b>
-              <span className="text-sm text-muted num">{sentToday} of {settings.limit} emails sent in the last 24h</span>
+              <span className="text-sm text-muted num">{sentToday} of {settings.todayLimit} emails sent in the last 24h{settings.todayLimit < settings.limit ? " (warming up: 5, 10, 15, then 20 a day)" : ""}</span>
               <button className={btn} disabled={!!busy} onClick={() => act("disc", "/api/gmail/disconnect", {}, "Gmail disconnected.")}>Disconnect</button>
             </>
           ) : (

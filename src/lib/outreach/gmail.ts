@@ -1,5 +1,6 @@
 // Minimal Gmail API client using OAuth (no extra libraries).
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
+import { isBounceMessage } from "./limits";
 const API = "https://gmail.googleapis.com/gmail/v1/users/me";
 export const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.readonly"];
 
@@ -81,11 +82,18 @@ export async function sendEmail(token: string, o: { from: string; to: string; su
   return { id: data.id as string, threadId: data.threadId as string };
 }
 
-/** True when anyone other than the sender has written in the thread. */
-export async function threadHasReply(token: string, threadId: string, myEmail: string) {
-  const t = await gmailGet(token, `/threads/${threadId}?format=metadata&metadataHeaders=From`);
-  return (t.messages ?? []).some((m: { payload?: { headers?: { name: string; value: string }[] } }) => {
-    const from = m.payload?.headers?.find((h) => h.name.toLowerCase() === "from")?.value ?? "";
-    return from && !from.toLowerCase().includes(myEmail.toLowerCase());
-  });
+export type ThreadState = { reply: boolean; bounce: boolean };
+
+/** Reads who has written in a thread: a human reply, or a delivery-failure notice (a bounce). */
+export async function threadState(token: string, threadId: string, myEmail: string): Promise<ThreadState> {
+  const t = await gmailGet(token, `/threads/${threadId}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`);
+  const state: ThreadState = { reply: false, bounce: false };
+  for (const m of (t.messages ?? []) as { payload?: { headers?: { name: string; value: string }[] } }[]) {
+    const header = (n: string) => m.payload?.headers?.find((h) => h.name.toLowerCase() === n)?.value ?? "";
+    const from = header("from");
+    if (!from || from.toLowerCase().includes(myEmail.toLowerCase())) continue;
+    if (isBounceMessage(from, header("subject"))) state.bounce = true;
+    else state.reply = true;
+  }
+  return state;
 }

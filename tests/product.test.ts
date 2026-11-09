@@ -12,6 +12,7 @@ import { parseJobUrl, buildPastedJob } from "../src/lib/jobs/paste";
 import { scoreJob, parseMinOteByMarket, type SearchProfile } from "../src/lib/score";
 import { companyQuality, signalsFromRows } from "../src/lib/companyQuality";
 import type { Job } from "../src/lib/collector/types";
+import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage } from "../src/lib/outreach/limits";
 import { cleanDomain, classifyTitle, parsePeople, buildSearchUrl, mergePeople, HIRING_TITLES, RECRUITER_TITLES } from "../src/lib/contacts/apollo";
 
 test("sales role filter: keeps targets, drops noise", () => {
@@ -221,4 +222,24 @@ test("people search: sales leaders come first, recruiters fill the gap without d
   const hiringUrl = buildSearchUrl("acme.com", HIRING_TITLES);
   assert.ok(hiringUrl.includes("head+of+sales") && !hiringUrl.includes("recruiter"));
   assert.ok(buildSearchUrl("acme.com", RECRUITER_TITLES).includes("recruiter"));
+});
+
+test("sending ramp: 5, 10, 15, then 20 a day, never above the cap", () => {
+  const start = "2026-11-01T00:00:00Z";
+  const day = (n: number) => Date.parse(start) + n * 864e5 + 3600_000;
+  assert.equal(rampLimit(null), 5);
+  assert.deepEqual([0, 3, 4, 7, 8, 11, 12, 30].map((n) => rampLimit(start, day(n))), [5, 5, 10, 10, 15, 15, 20, 20]);
+  assert.equal(effectiveDailyLimit(40, start, day(30)), 20);   // 20 a day ceiling
+  assert.equal(effectiveDailyLimit(8, start, day(30)), 8);     // your own lower setting wins
+  assert.equal(effectiveDailyLimit(20, start, day(1)), 5);     // still warming up
+});
+
+test("bounces: recognised from the sender or subject, and pause auto-send above 2%", () => {
+  assert.equal(isBounceMessage("Mail Delivery Subsystem <mailer-daemon@googlemail.com>", "Delivery Status Notification (Failure)"), true);
+  assert.equal(isBounceMessage("postmaster@corp.example", "Undeliverable: Hello"), true);
+  assert.equal(isBounceMessage("Priya <priya@acme.com>", "Re: Quick question"), false);
+  assert.equal(bouncePaused(9, 9), false);    // too few sends to judge
+  assert.equal(bouncePaused(100, 2), false);  // exactly 2% is fine
+  assert.equal(bouncePaused(100, 3), true);
+  assert.equal(bouncePaused(0, 0), false);
 });

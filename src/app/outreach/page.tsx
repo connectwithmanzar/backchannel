@@ -1,3 +1,4 @@
+import { effectiveDailyLimit } from "@/lib/outreach/limits";
 import { createClient } from "@/lib/supabase/server";
 import { serviceClient } from "@/lib/supabase/service";
 import { PageHeader } from "@/components/ui";
@@ -15,7 +16,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
   const [{ data: contacts }, { data: steps }, { data: prefs }, { data: gmail }, { data: jobs }] = await Promise.all([
     db.from("contacts").select("id, name, title, email, linkedin_url, company_name, notes, created_at").eq("user_id", uid).order("created_at", { ascending: false }),
     db.from("outreach").select("id, contact_id, step_index, channel, status, subject, body, scheduled_for, sent_at, error").eq("user_id", uid).order("step_index"),
-    db.from("preferences").select("email_daily_limit, email_signature").eq("user_id", uid).maybeSingle(),
+    db.from("preferences").select("email_daily_limit, email_signature, email_ramp_start").eq("user_id", uid).maybeSingle(),
     serviceClient().from("gmail_accounts").select("email").eq("user_id", uid).maybeSingle(),
     db.from("job_scores").select("job_id, score, jobs!inner(title, is_active, companies(name))").eq("user_id", uid).eq("jobs.is_active", true).order("score", { ascending: false }).limit(60),
   ]);
@@ -35,7 +36,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
       <OutreachClient
         contacts={rows} jobs={jobOptions} gmailEmail={gmail?.email ?? null} gmailReady={gmailConfigured()} aiReady={hasAIKey()}
         notice={sp.gmail ?? null} sentToday={sentToday}
-        settings={{ limit: prefs?.email_daily_limit ?? 20, signature: prefs?.email_signature ?? "" }}
+        settings={{ limit: prefs?.email_daily_limit ?? 20, signature: prefs?.email_signature ?? "", todayLimit: effectiveDailyLimit(prefs?.email_daily_limit, prefs?.email_ramp_start) }}
       />
     </section>
   );

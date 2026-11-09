@@ -1,12 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiJson, hasAIKey, NO_AI_MESSAGE } from "@/lib/ai";
-import { accessToken, sendEmail, threadHasReply } from "./gmail";
+import { accessToken, sendEmail, threadState } from "./gmail";
+import { MAX_EMAILS_PER_DAY, bouncePaused, effectiveDailyLimit } from "./limits";
+
+export { MAX_EMAILS_PER_DAY };
 import { isExcludedCompany } from "@/data/companies";
 import { htmlToText } from "@/lib/collector/fetchers";
 
 export const OPT_OUT = "If this isn't relevant, just reply \"no\" and I won't follow up.";
 const DAY = 24 * 3600 * 1000;
-export const MAX_EMAILS_PER_DAY = 20;
 // Emails only go out inside this window (local hours, Mon-Fri), so nothing lands at 3am.
 export const SEND_TZ = process.env.OUTREACH_TZ ?? "Asia/Kolkata";
 export const SEND_START_HOUR = Number(process.env.OUTREACH_START_HOUR ?? 9);
@@ -104,6 +106,19 @@ export async function startSequence(db: SupabaseClient, userId: string, input: {
   return { contact_id: contact.id as string, steps: rows.length };
 }
 
+/** Sent and bounced counts over the last 14 days, used to pause automatic sending when addresses are bad. */
+async function recentBounceStats(svc: SupabaseClient, userId: string) {
+  const since = new Date(Date.now() - 14 * DAY).toISOString();
+  const { data } = await svc.from("outreach").select("status, error").eq("user_id", userId).eq("channel", "email").gte("sent_at", since);
+  const rows = data ?? [];
+  return { sent: rows.length, bounced: rows.filter((r: { status: string; error: string | null }) => r.status === "failed" && r.error === "Bounced").length };
+}
+
+async function markBounced(svc: SupabaseClient, contactId: string) {
+  await svc.from("outreach").update({ status: "failed", error: "Bounced" }).eq("contact_id", contactId).eq("status", "sent");
+  await stopContact(svc, contactId, "stopped");
+}
+
 async function sentToday(svc: SupabaseClient, userId: string) {
   const { count } = await svc.from("outreach").select("id", { count: "exact", head: true })
     .eq("user_id", userId).eq("channel", "email").gte("sent_at", new Date(Date.now() - DAY).toISOString());
@@ -111,11 +126,11 @@ async function sentToday(svc: SupabaseClient, userId: string) {
 }
 
 /** Sends one email step now (respects the daily limit, blocklist and stop-on-reply). Uses the service client. */
-export async function sendStep(svc: SupabaseClient, userId: string, outreachId: string) {
+export async function sendStep(svc: SupabaseClient, userId: string, outreachId: string, opts: { auto?: boolean } = {}) {
   const [{ data: step }, { data: acct }, { data: prefs }] = await Promise.all([
     svc.from("outreach").select("id, contact_id, status, subject, body, to_email, step_index, contacts(company_name, email, name)").eq("id", outreachId).eq("user_id", userId).single(),
     svc.from("gmail_accounts").select("email, refresh_token").eq("user_id", userId).maybeSingle(),
-    svc.from("preferences").select("email_daily_limit").eq("user_id", userId).maybeSingle(),
+    svc.from("preferences").select("email_daily_limit, email_ramp_start").eq("user_id", userId).maybeSingle(),
   ]);
   if (!step) throw new Error("That email no longer exists.");
   if (!acct) throw new Error("Connect your Gmail first.");
@@ -125,14 +140,23 @@ export async function sendStep(svc: SupabaseClient, userId: string, outreachId: 
   if (!to) throw new Error("This contact has no email address.");
   if (!inSendWindow()) throw new Error(`Emails only send Mon-Fri, ${SEND_START_HOUR}:00-${SEND_END_HOUR}:00 (${SEND_TZ}). Try again then.`);
   if (await isBlocked(svc, userId, to, contact?.company_name ?? "", contact?.name ?? "")) throw new Error("Blocked by your stealth list.");
-  const limit = Math.min(MAX_EMAILS_PER_DAY, prefs?.email_daily_limit ?? MAX_EMAILS_PER_DAY);
-  if ((await sentToday(svc, userId)) >= limit) throw new Error(`Daily limit of ${limit} emails reached. It will go out tomorrow.`);
+  if (opts.auto) {
+    const stats = await recentBounceStats(svc, userId);
+    if (bouncePaused(stats.sent, stats.bounced)) throw new Error("Automatic sending is paused: more than 2% of recent emails bounced. Check your addresses.");
+  }
+  const limit = effectiveDailyLimit(prefs?.email_daily_limit, prefs?.email_ramp_start);
+  if ((await sentToday(svc, userId)) >= limit) throw new Error(`Daily limit of ${limit} emails reached (warm-up ramps 5, 10, 15, then 20 a day). It will go out tomorrow.`);
 
   // Reuse the thread of the earlier email so follow-ups land as replies.
   const { data: prev } = await svc.from("outreach").select("gmail_thread_id").eq("contact_id", step.contact_id).not("gmail_thread_id", "is", null).limit(1);
   const threadId = prev?.[0]?.gmail_thread_id ?? null;
   const token = await accessToken(acct.refresh_token);
-  if (threadId && (await threadHasReply(token, threadId, acct.email))) {
+  const state = threadId ? await threadState(token, threadId, acct.email) : { reply: false, bounce: false };
+  if (state.bounce) {
+    await markBounced(svc, step.contact_id);
+    throw new Error("That address bounced, so the sequence stopped.");
+  }
+  if (state.reply) {
     await stopContact(svc, step.contact_id, "replied");
     throw new Error("They already replied, so the sequence stopped.");
   }
@@ -140,6 +164,7 @@ export async function sendStep(svc: SupabaseClient, userId: string, outreachId: 
     const sent = await sendEmail(token, { from: acct.email, to, subject: step.subject ?? "", body: step.body ?? "", threadId });
     await svc.from("outreach").update({ status: "sent", sent_at: new Date().toISOString(), gmail_message_id: sent.id, gmail_thread_id: sent.threadId, error: null }).eq("id", step.id);
     await svc.from("funnel_events").insert({ user_id: userId, type: "outreach_sent", ref_id: step.id });
+    if (!prefs?.email_ramp_start) await svc.from("preferences").upsert({ user_id: userId, email_ramp_start: new Date().toISOString() }, { onConflict: "user_id" });
     // Once the first email is sent, later steps get due dates from today. They stay drafts: you approve each one.
     if (step.step_index === 0) {
       const { data: later } = await svc.from("outreach").select("id, step_index").eq("contact_id", step.contact_id).gt("step_index", 0);
@@ -171,19 +196,27 @@ export async function runOutreach(svc: SupabaseClient, userId: string, deadline:
   const token = await accessToken(acct.refresh_token);
 
   let replies = 0;
+  let bounces = 0;
   const { data: sent } = await svc.from("outreach").select("contact_id, gmail_thread_id").eq("user_id", userId).eq("status", "sent").not("gmail_thread_id", "is", null);
   const threads = [...new Map((sent ?? []).map((s: { contact_id: string; gmail_thread_id: string }) => [s.contact_id, s.gmail_thread_id])).entries()];
   for (const [contactId, threadId] of threads) {
     if (Date.now() > deadline) break;
-    try { if (await threadHasReply(token, threadId, acct.email)) { await stopContact(svc, contactId, "replied"); replies++; } } catch { /* skip */ }
+    try {
+      const state = await threadState(token, threadId, acct.email);
+      if (state.bounce) { await markBounced(svc, contactId); bounces++; }
+      else if (state.reply) { await stopContact(svc, contactId, "replied"); replies++; }
+    } catch { /* skip */ }
   }
+
+  const stats = await recentBounceStats(svc, userId);
+  if (bouncePaused(stats.sent, stats.bounced)) return { replies, bounces, sent: 0, reason: "Auto-send paused: more than 2% of recent emails bounced" };
 
   let delivered = 0;
   const { data: due } = await svc.from("outreach").select("id").eq("user_id", userId).eq("channel", "email").eq("status", "scheduled")
     .lte("scheduled_for", new Date().toISOString()).order("scheduled_for").limit(50);
   for (const d of due ?? []) {
     if (Date.now() > deadline) break;
-    try { await sendStep(svc, userId, d.id); delivered++; } catch (e) { if (/Daily limit/.test((e as Error).message)) break; }
+    try { await sendStep(svc, userId, d.id, { auto: true }); delivered++; } catch (e) { if (/Daily limit/.test((e as Error).message)) break; }
   }
-  return { replies, sent: delivered };
+  return { replies, bounces, sent: delivered };
 }
