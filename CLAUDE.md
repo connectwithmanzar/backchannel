@@ -19,7 +19,7 @@ Full product built: Today dashboard, Roles (collection from Greenhouse/Lever/Ash
 ## Commands
 - `npm install`: install dependencies
 - `npm run dev`: run the app at http://localhost:3000
-- `npm test`: unit tests (17)
+- `npm test`: unit tests (52, including the send logic against an in-memory fake database; CI runs them on every push)
 - `npx eslint src`: lint
 - `npm run build`: production build (run before saying a build step is done)
 
