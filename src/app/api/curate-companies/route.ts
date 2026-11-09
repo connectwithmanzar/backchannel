@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as serviceClient } from "@supabase/supabase-js";
 import { rateLimit, retryAfter } from "@/lib/rate-limit";
-import { createAIClient, hasAIKey, AI_MODEL } from "@/lib/ai";
+import { createAIClient, hasAIKey, AI_MODEL, NO_AI_MESSAGE, parseJsonLoose } from "@/lib/ai";
+import { discoverBoard } from "@/lib/collectors/ats";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 type CuratedCompany = {
   name: string;
@@ -109,7 +110,7 @@ export async function POST() {
   };
 
   if (!hasAIKey()) {
-    return NextResponse.json({ error: "OPENROUTER_API_KEY not configured" }, { status: 400 });
+    return NextResponse.json({ error: NO_AI_MESSAGE }, { status: 400 });
   }
 
   const client = createAIClient();
@@ -122,10 +123,7 @@ export async function POST() {
       messages: [{ role: "user", content: buildPrompt(prefsData) }],
     });
     const text = response.choices[0].message.content ?? "";
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start === -1 || end <= start) throw new Error("No JSON object in model response");
-    const parsed = JSON.parse(text.slice(start, end + 1));
+    const parsed = parseJsonLoose<{ companies?: CuratedCompany[] }>(text);
     companies = Array.isArray(parsed.companies) ? parsed.companies : [];
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -189,5 +187,17 @@ export async function POST() {
     results.push({ name: c.name, id: co.id });
   }
 
-  return NextResponse.json({ ok: true, added: results.length, companies: results });
+  // Find each new company's public job board so their open sales roles get collected too.
+  const deadline = Date.now() + 30_000;
+  const { data: noBoard } = await svc.from("companies").select("id, name, domain").in("id", results.map((r) => r.id)).is("ats_slug", null);
+  let boards = 0;
+  await Promise.all((noBoard ?? []).map(async (c: { id: string; name: string; domain: string | null }) => {
+    if (Date.now() > deadline) return;
+    const found = await discoverBoard(c.name, c.domain).catch(() => null);
+    if (!found) return;
+    const { error } = await svc.from("companies").update({ ats_type: found.ats, ats_slug: found.slug, enabled: true }).eq("id", c.id);
+    if (!error) boards++;
+  }));
+
+  return NextResponse.json({ ok: true, added: results.length, boards_found: boards, companies: results });
 }

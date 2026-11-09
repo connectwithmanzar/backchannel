@@ -1,4 +1,7 @@
-// Raw fetchers for each ATS public API — no filtering or saving here.
+// Fetchers for each ATS's public job-board API. They throw on errors so the
+// collector can report exactly which company boards are broken.
+
+export type AtsType = "greenhouse" | "lever" | "ashby" | "smartrecruiters";
 
 export interface RawJob {
   external_id: string;
@@ -7,104 +10,158 @@ export interface RawJob {
   url: string;
   description: string;
   posted_at: string | null;
-  board: string;
-  // Ashby may supply structured pay
+  board: AtsType;
+  remote?: boolean;
   currency?: string;
   base_min?: number;
   base_max?: number;
-  ote_min?: number;
-  ote_max?: number;
   pay_verified?: boolean;
 }
 
-// ── Greenhouse ─────────────────────────────────────────────────────────────
-export async function fetchGreenhouse(slug: string): Promise<RawJob[]> {
-  const url = `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs?content=true`;
-  const res = await fetch(url, { next: { revalidate: 0 } });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.jobs ?? []).map(
-    (j: { id: number; title: string; location?: { name?: string }; absolute_url: string; content?: string; updated_at?: string }) => ({
-      external_id: String(j.id),
-      title: j.title ?? "",
-      location: j.location?.name ?? "",
-      url: j.absolute_url ?? "",
-      description: j.content ?? "",
-      posted_at: j.updated_at ?? null,
-      board: "greenhouse",
-    })
-  );
+const TIMEOUT_MS = 12_000;
+
+export class BoardNotFound extends Error {}
+
+async function getJson(url: string): Promise<unknown> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: "application/json", "User-Agent": "Backchannel job collector" },
+      signal: ctrl.signal,
+      cache: "no-store",
+    });
+    if (res.status === 404) throw new BoardNotFound(`board not found (404)`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw new Error("timed out");
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
 }
 
-// ── Lever ──────────────────────────────────────────────────────────────────
-export async function fetchLever(slug: string): Promise<RawJob[]> {
-  const url = `https://api.lever.co/v0/postings/${slug}?mode=json`;
-  const res = await fetch(url, { next: { revalidate: 0 } });
-  if (!res.ok) return [];
-  const data = await res.json();
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export function parseGreenhouse(data: any): RawJob[] {
+  return (data?.jobs ?? []).map((j: any) => ({
+    external_id: String(j.id),
+    title: j.title ?? "",
+    location: j.location?.name ?? "",
+    url: j.absolute_url ?? "",
+    description: j.content ?? "",
+    posted_at: j.first_published ?? j.updated_at ?? null,
+    board: "greenhouse",
+  }));
+}
+
+export function parseLever(data: any): RawJob[] {
   if (!Array.isArray(data)) return [];
-  return data.map(
-    (p: { id: string; text: string; categories?: { location?: string }; hostedUrl?: string; descriptionBody?: string; createdAt?: number }) => ({
+  return data.map((p: any) => {
+    const lists = (p.lists ?? []).map((l: any) => `${l.text ?? ""}\n${l.content ?? ""}`).join("\n");
+    const sr = p.salaryRange;
+    const annual = !sr?.interval || /year|annual/i.test(sr.interval);
+    return {
       external_id: p.id,
       title: p.text ?? "",
-      location: p.categories?.location ?? "",
+      location: p.categories?.location ?? (p.categories?.allLocations ?? []).join(", "),
       url: p.hostedUrl ?? "",
-      description: p.descriptionBody ?? "",
+      description: [p.description ?? p.descriptionPlain ?? "", lists, p.additional ?? p.additionalPlain ?? ""].join("\n"),
       posted_at: p.createdAt ? new Date(p.createdAt).toISOString() : null,
       board: "lever",
-    })
-  );
+      remote: p.workplaceType === "remote",
+      currency: sr?.currency,
+      base_min: sr?.min && annual ? sr.min : undefined,
+      base_max: sr?.max && annual ? sr.max : undefined,
+      pay_verified: !!(sr?.min && annual),
+    };
+  });
 }
 
-// ── Ashby ──────────────────────────────────────────────────────────────────
-interface AshbyCompensation {
-  minValue?: number;
-  maxValue?: number;
-  currency?: string;
-  interval?: string;
-}
-
-export async function fetchAshby(slug: string): Promise<RawJob[]> {
-  const url = `https://api.ashbyhq.com/posting-api/job-board/${slug}?includeCompensation=true`;
-  const res = await fetch(url, { next: { revalidate: 0 } });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.jobPostings ?? []).map(
-    (j: { id: string; title: string; location?: string; jobUrl?: string; descriptionHtml?: string; publishedDate?: string; compensation?: AshbyCompensation }) => {
-      const c: AshbyCompensation = j.compensation ?? {};
-      const isAnnual = !c.interval || c.interval.toLowerCase().includes("year");
+export function parseAshby(data: any): RawJob[] {
+  const list = data?.jobs ?? data?.jobPostings ?? [];
+  return list
+    .filter((j: any) => j.isListed !== false)
+    .map((j: any) => {
+      const comps: any[] = j.compensation?.summaryComponents ?? [];
+      const salary = comps.find((c) => c.compensationType === "Salary" && (!c.interval || /YEAR/i.test(c.interval)));
+      const locs = [j.location, ...(j.secondaryLocations ?? []).map((s: any) => s.location)].filter(Boolean);
       return {
         external_id: j.id,
         title: j.title ?? "",
-        location: j.location ?? "",
-        url: j.jobUrl ?? "",
-        description: j.descriptionHtml ?? "",
-        posted_at: j.publishedDate ? new Date(j.publishedDate).toISOString() : null,
+        location: locs.join(", "),
+        url: j.jobUrl ?? j.applyUrl ?? "",
+        description: j.descriptionHtml ?? j.descriptionPlain ?? "",
+        posted_at: j.publishedAt ?? j.publishedDate ?? null,
         board: "ashby",
-        currency: c.currency ?? undefined,
-        base_min: c.minValue && isAnnual ? c.minValue : undefined,
-        base_max: c.maxValue && isAnnual ? c.maxValue : undefined,
-        pay_verified: !!(c.minValue || c.maxValue),
+        remote: j.isRemote === true,
+        currency: salary?.currencyCode,
+        base_min: salary?.minValue ?? undefined,
+        base_max: salary?.maxValue ?? undefined,
+        pay_verified: !!(salary?.minValue || salary?.maxValue),
       };
-    }
-  );
+    });
 }
 
-// ── SmartRecruiters ────────────────────────────────────────────────────────
-export async function fetchSmartRecruiters(slug: string): Promise<RawJob[]> {
-  const url = `https://api.smartrecruiters.com/v1/companies/${slug}/postings`;
-  const res = await fetch(url, { next: { revalidate: 0 } });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.content ?? []).map(
-    (j: { id: string; name: string; location?: { city?: string; country?: string; remote?: boolean }; releasedDate?: string; jobAd?: { sections?: { jobDescription?: { text?: string } } } }) => ({
-      external_id: j.id,
-      title: j.name ?? "",
-      location: [j.location?.city, j.location?.country].filter(Boolean).join(", "),
-      url: `https://careers.smartrecruiters.com/${slug}/${j.id}`,
-      description: j.jobAd?.sections?.jobDescription?.text ?? "",
-      posted_at: j.releasedDate ?? null,
-      board: "smartrecruiters",
+export function parseSmartRecruiters(data: any, slug: string): RawJob[] {
+  return (data?.content ?? []).map((j: any) => ({
+    external_id: j.id,
+    title: j.name ?? "",
+    location: [j.location?.city, j.location?.country?.toUpperCase()].filter(Boolean).join(", "),
+    url: `https://jobs.smartrecruiters.com/${slug}/${j.id}`,
+    description: "",
+    posted_at: j.releasedDate ?? null,
+    board: "smartrecruiters",
+    remote: j.location?.remote === true,
+  }));
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+export async function fetchBoard(ats: AtsType, slug: string): Promise<RawJob[]> {
+  const s = encodeURIComponent(slug);
+  switch (ats) {
+    case "greenhouse":
+      return parseGreenhouse(await getJson(`https://boards-api.greenhouse.io/v1/boards/${s}/jobs?content=true`));
+    case "lever":
+      return parseLever(await getJson(`https://api.lever.co/v0/postings/${s}?mode=json`));
+    case "ashby":
+      return parseAshby(await getJson(`https://api.ashbyhq.com/posting-api/job-board/${s}?includeCompensation=true`));
+    case "smartrecruiters":
+      return parseSmartRecruiters(await getJson(`https://api.smartrecruiters.com/v1/companies/${s}/postings?limit=100`), slug);
+  }
+}
+
+/** Slug guesses for a company name/domain, e.g. "Apollo.io" → apolloio, apollo-io, apollo. */
+export function slugCandidates(name: string, domain?: string | null): string[] {
+  const base = name.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9 .-]/g, "").trim();
+  const words = base.replace(/\./g, " ").split(/\s+/).filter(Boolean);
+  const root = (domain ?? "").toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(".")[0];
+  const c = [
+    words.join(""), words.join("-"), words[0], root,
+    words.join("") + "hq", words.join("") + "inc", words.join("") + "labs",
+  ].filter((x) => x && x.length > 1);
+  return [...new Set(c)];
+}
+
+/**
+ * Tries every ATS with every slug guess and returns the board with the most jobs.
+ * Used to repair a broken company and to add new companies by name.
+ */
+export async function discoverBoard(
+  name: string,
+  domain?: string | null
+): Promise<{ ats: AtsType; slug: string; jobs: number } | null> {
+  const atsList: AtsType[] = ["greenhouse", "ashby", "lever", "smartrecruiters"];
+  const tries = slugCandidates(name, domain).flatMap((slug) => atsList.map((ats) => ({ ats, slug })));
+  const found = await Promise.all(
+    tries.map(async ({ ats, slug }) => {
+      try {
+        const jobs = await fetchBoard(ats, slug);
+        return jobs.length ? { ats, slug, jobs: jobs.length } : null;
+      } catch {
+        return null;
+      }
     })
   );
+  return found.filter((f): f is NonNullable<typeof f> => !!f).sort((a, b) => b.jobs - a.jobs)[0] ?? null;
 }

@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 const LINKS = [
+  { href: "/today", label: "Today" },
   { href: "/roles", label: "Roles" },
   { href: "/companies", label: "Great companies" },
   { href: "/autopilot", label: "Autopilot" },
@@ -12,6 +13,7 @@ const LINKS = [
   { href: "/pay", label: "Pay benchmark" },
   { href: "/referrals", label: "Referrals" },
   { href: "/side-income", label: "Side income" },
+  { href: "/sources", label: "Sources" },
 ];
 
 export default function Nav({ email }: { email: string }) {

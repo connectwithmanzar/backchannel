@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Cron endpoints authenticate themselves with CRON_SECRET (and fail closed without it),
 // so they must not be redirected to /login. Exact paths only — nothing else is opened.
-const CRON_PATHS = new Set(["/api/collect-jobs", "/api/notify"]);
+const CRON_PATHS = new Set(["/api/collect-jobs", "/api/notify", "/api/daily"]);
 
 export async function middleware(request: NextRequest) {
   if (CRON_PATHS.has(request.nextUrl.pathname)) {
@@ -46,7 +46,7 @@ export async function middleware(request: NextRequest) {
 
   if (user && pathname === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = "/roles";
+    url.pathname = "/today";
     return NextResponse.redirect(url);
   }
 

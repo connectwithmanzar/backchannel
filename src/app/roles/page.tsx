@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { scoreJob, type SearchProfile } from "@/lib/score";
+import { toMarket, countryToMarkets } from "@/lib/jobs/market";
 import type { Job, Market, RemoteType, RoleFamily } from "@/lib/collector/types";
 import { htmlToText } from "@/lib/collector/fetchers";
 import RolesFeed, { type JobReaction } from "./RolesFeed";
@@ -12,36 +13,7 @@ import { COMPANY_SEEDS, isExcludedCompany } from "@/data/companies";
 
 export const dynamic = "force-dynamic";
 
-// Map freeform DB market strings → typed Market enum
-function toMarket(m: string): Market {
-  const l = (m ?? "").toLowerCase();
-  if (l === "india" || l === "remote-in") return "india";
-  if (l === "remote") return "remote-in";
-  if (l === "us" || l === "usa" || l === "united states") return "us";
-  if (
-    ["uk", "united kingdom", "germany", "france", "netherlands", "ireland",
-     "spain", "emea", "europe", "denmark", "sweden", "switzerland", "poland",
-     "austria", "belgium", "italy", "portugal", "uae", "israel"].some(
-      (c) => l.includes(c)
-    )
-  )
-    return "emea";
-  return "global";
-}
 
-// Map a user preference country label → Market
-function countryToMarket(country: string): Market {
-  const c = country.toLowerCase();
-  if (c === "india") return "india";
-  if (c === "united states") return "us";
-  if (
-    ["united kingdom", "germany", "netherlands", "france", "ireland", "spain",
-     "uae", "singapore"].some((x) => c.includes(x))
-  )
-    return "emea";
-  if (c === "canada" || c === "australia") return "global";
-  return "global";
-}
 
 // Classify a job title into a sales role family
 function toRoleFamily(title: string): RoleFamily {
@@ -83,7 +55,7 @@ export default async function RolesPage() {
   const profile: SearchProfile = {
     name: profileRow?.name ?? "You",
     targetFamilies: ["SDR/BDR", "GTM Engineer", "Account Executive"],
-    markets: (profileRow?.markets ?? []).map(countryToMarket),
+    markets: [...new Set<Market>((profileRow?.markets ?? []).flatMap(countryToMarkets))],
     tools: profileRow?.tools ?? [],
     minOteUsd: profileRow?.min_ote_usd ?? 0,
     prefersRemote: false,
@@ -108,7 +80,7 @@ export default async function RolesPage() {
     title: row.title,
     location: row.location ?? "",
     remoteType: (row.remote_type ?? "unknown") as RemoteType,
-    market: toMarket(row.market ?? ""),
+    market: toMarket(row.market, row.remote_type),
     sourceType: "careers",
     board: row.board ?? "",
     url: row.url ?? "",
@@ -175,6 +147,7 @@ export default async function RolesPage() {
         {owner && <RunNowButton />}
         {owner && <ScoreNowButton />}
         <TelegramButton configured={isTelegramConfigured()} />
+        <a href="/sources" className="text-sm font-semibold text-accent underline-offset-2 hover:underline">Job sources →</a>
         {lastChecked && (
           <p className="text-sm text-muted num">
             Last collected{" "}

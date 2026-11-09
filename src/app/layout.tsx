@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Nav from "@/components/Nav";
+import ChatWidget from "@/components/ChatWidget";
 import { createClient } from "@/lib/supabase/server";
 import "./globals.css";
 
@@ -27,7 +28,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       </head>
       <body className="font-sans text-[15px] leading-relaxed antialiased">
         {user && <Nav email={user.email ?? ""} />}
-        <main className="mx-auto max-w-6xl px-4 pb-16">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 pb-24">{children}</main>
+        {user && <ChatWidget />}
       </body>
     </html>
   );

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as pdfParseModule from "pdf-parse";
 import { createClient } from "@/lib/supabase/server";
 import { rateLimit, retryAfter } from "@/lib/rate-limit";
-import { createAIClient, hasAIKey, AI_MODEL } from "@/lib/ai";
+import { createAIClient, hasAIKey, AI_MODEL, NO_AI_MESSAGE, parseJsonLoose } from "@/lib/ai";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const pdfParse: (buf: Buffer) => Promise<{ text: string }> = (pdfParseModule as any).default ?? pdfParseModule;
 
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
   if (!hasAIKey()) {
     return NextResponse.json(
-      { error: "OPENROUTER_API_KEY not configured." },
+      { error: NO_AI_MESSAGE },
       { status: 503 }
     );
   }
@@ -78,8 +78,7 @@ export async function POST(request: NextRequest) {
     });
 
     const raw = (response.choices[0].message.content ?? "").trim();
-    const json = raw.startsWith("{") ? raw : raw.replace(/^```json\s*/i, "").replace(/```$/, "");
-    const extracted = JSON.parse(json);
+    const extracted = parseJsonLoose<Record<string, unknown>>(raw);
 
     return NextResponse.json({ extracted, cvText });
   } catch (err) {

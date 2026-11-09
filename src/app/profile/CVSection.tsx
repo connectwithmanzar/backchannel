@@ -26,6 +26,7 @@ export default function CVSection({
   const [errorMsg, setErrorMsg] = useState("");
   const [fileName, setFileName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [cvText, setCvText] = useState("");
 
   async function handleFile(file: File) {
     setFileName(file.name);
@@ -35,8 +36,15 @@ export default function CVSection({
     const form = new FormData();
     form.append("cv", file);
 
-    const res = await fetch("/api/extract-cv", { method: "POST", body: form });
-    const data = await res.json();
+    let res: Response;
+    try {
+      res = await fetch("/api/extract-cv", { method: "POST", body: form });
+    } catch {
+      setState("error");
+      setErrorMsg("Couldn't reach the server. Check your connection and try again.");
+      return;
+    }
+    const data = await res.json().catch(() => ({ error: `Upload failed (error ${res.status}). Try a smaller PDF or a .txt file.` }));
 
     if (!res.ok || data.error) {
       setState("error");
@@ -44,7 +52,8 @@ export default function CVSection({
       return;
     }
 
-    setExtracted(data.extracted);
+    setExtracted({ ...data.extracted, tools: data.extracted?.tools ?? [], achievements: data.extracted?.achievements ?? [] });
+    setCvText(data.cvText ?? "");
     setState("done");
   }
 
@@ -60,6 +69,7 @@ export default function CVSection({
       segment: extracted.segment ?? undefined,
       motion: extracted.motion ?? undefined,
       tools: extracted.tools,
+      cv_text: cvText || undefined,
     };
 
     await fetch("/api/profile", {
@@ -69,7 +79,7 @@ export default function CVSection({
     });
 
     setSaving(false);
-    onExtracted(profileUpdates, "");
+    onExtracted(profileUpdates, cvText);
     onTabSwitch();
   }
 

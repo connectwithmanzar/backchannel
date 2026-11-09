@@ -31,7 +31,7 @@ export function toUsd(amount?: number, currency?: string) {
  */
 export function scoreJob(job: Job, p: SearchProfile): ScoredJob {
   const role = p.targetFamilies.includes(job.roleFamily) ? 100 : job.roleFamily === "Sales leadership" ? 40 : 20;
-  const mkt = p.markets.includes(job.market) ? (p.prefersRemote && job.remoteType === "remote" ? 100 : 85) : 25;
+  const mkt = !p.markets.length ? 70 : p.markets.includes(job.market) ? (p.prefersRemote && job.remoteType === "remote" ? 100 : 85) : 25;
   const text = `${job.title} ${job.description}`.toLowerCase();
   const matchedTools = p.tools.filter((t) => text.includes(t.toLowerCase()));
   const tools = matchedTools.length ? Math.min(100, 50 + matchedTools.length * 20) : 40;

@@ -1,116 +1,103 @@
 import { createHash } from "crypto";
 import type { RawJob } from "@/lib/collectors/ats";
+import { htmlToText } from "@/lib/collector/fetchers";
 
-// ── Sales-role keyword filter ───────────────────────────────────────────────
-const SALES_KEYWORDS = [
-  "sdr", "bdr", "sales development", "business development",
-  "account executive", " ae ", "gtm engineer", "gtm ",
-  "inside sales", "partnerships manager", "growth engineer",
-  "account manager", "revenue development",
-  "outbound sales", "demand generation",
-  "sales engineer",
+// ── Which titles count as the sales roles we target ─────────────────────────
+export type Family = "SDR/BDR" | "GTM Engineer" | "Account Executive" | "Sales leadership";
+
+const INCLUDE: [RegExp, Family][] = [
+  [/\b(head of|director|vp|vice president|manager|lead),? (of )?(sales development|business development|sdr|bdr|outbound|inside sales)\b/i, "Sales leadership"],
+  [/\b(sdr|bdr|sales development|business development rep(resentative)?|lead development|market development rep(resentative)?|inside sales|outbound (sales )?rep(resentative)?|revenue development|account development rep(resentative)?|adr)\b/i, "SDR/BDR"],
+  [/\b(gtm|go[- ]to[- ]market) (engineer|engineering|systems|operations|automation)\b|\brevops engineer\b|\bgrowth engineer\b|\bsales (systems|automation) engineer\b/i, "GTM Engineer"],
+  [/\b(account executive|\bae\b|new business (sales|manager|executive)|sales executive|business development (manager|executive)|founding (sales|ae))\b/i, "Account Executive"],
 ];
+const EXCLUDE =
+  /\b(intern(ship)?|software engineer|data engineer|recruit(er|ing)|talent acquisition|legal|counsel|accountant|accounting|payroll|solutions? engineer|sales engineer|support engineer|customer support|customer success|technical account manager|partner(ship)? marketing|product marketing)\b/i;
 
-export function isSalesRole(title: string): boolean {
-  const lower = ` ${title.toLowerCase()} `;
-  return SALES_KEYWORDS.some((kw) => lower.includes(kw));
+export function roleFamily(title: string): Family | null {
+  if (EXCLUDE.test(title) && !/gtm engineer|growth engineer/i.test(title)) return null;
+  for (const [re, fam] of INCLUDE) if (re.test(title)) return fam;
+  return null;
 }
 
-// ── Remote-type detector ───────────────────────────────────────────────────
-export function detectRemoteType(
-  location: string
-): "remote" | "hybrid" | "onsite" | "unknown" {
+export function isSalesRole(title: string): boolean {
+  return roleFamily(title) !== null;
+}
+
+// ── Remote type ─────────────────────────────────────────────────────────────
+export function detectRemoteType(location: string, remoteFlag?: boolean, description = ""): "remote" | "hybrid" | "onsite" | "unknown" {
   const l = location.toLowerCase();
-  if (l.includes("remote") && !l.includes("hybrid")) return "remote";
-  if (l.includes("hybrid")) return "hybrid";
-  if (location.trim().length > 0) return "onsite";
+  if (l.includes("hybrid") || /\bhybrid\b/i.test(description.slice(0, 2000))) return "hybrid";
+  if (remoteFlag || l.includes("remote")) return "remote";
+  if (location.trim()) return "onsite";
   return "unknown";
 }
 
-// ── Market mapper ──────────────────────────────────────────────────────────
+// ── Market (country label) ──────────────────────────────────────────────────
 const MARKET_MAP: [RegExp, string][] = [
-  [/remote/i, "Remote"],
-  [/india|mumbai|bangalore|bengaluru|delhi|hyderabad|pune|chennai|kolkata/i, "India"],
-  [/uk|united kingdom|england|london|manchester|edinburgh/i, "UK"],
-  [/germany|deutschland|berlin|munich|hamburg|frankfurt/i, "Germany"],
-  [/netherlands|nederland|amsterdam|rotterdam|eindhoven/i, "Netherlands"],
-  [/france|paris|lyon|bordeaux/i, "France"],
-  [/ireland|dublin|cork/i, "Ireland"],
-  [/singapore/i, "Singapore"],
-  [/uae|dubai|abu dhabi/i, "UAE"],
-  [/canada|toronto|vancouver|montreal/i, "Canada"],
-  [/australia|sydney|melbourne|brisbane/i, "Australia"],
-  [/us|usa|united states|new york|san francisco|austin|chicago|boston|seattle|remote.*us/i, "US"],
+  [/\b(india|mumbai|bangalore|bengaluru|delhi|new delhi|gurgaon|gurugram|noida|hyderabad|pune|chennai|kolkata|ahmedabad)\b/i, "India"],
+  [/\b(uk|u\.k\.|united kingdom|england|scotland|london|manchester|edinburgh|bristol|leeds|cambridge, uk)\b/i, "UK"],
+  [/\b(ireland|dublin|cork)\b/i, "Ireland"],
+  [/\b(germany|deutschland|berlin|munich|münchen|hamburg|frankfurt|cologne|köln|dach)\b/i, "Germany"],
+  [/\b(netherlands|nederland|amsterdam|rotterdam|utrecht|eindhoven|benelux)\b/i, "Netherlands"],
+  [/\b(france|paris|lyon|bordeaux)\b/i, "France"],
+  [/\b(spain|madrid|barcelona)\b/i, "Spain"],
+  [/\b(sweden|stockholm|denmark|copenhagen|norway|oslo|finland|helsinki|nordics)\b/i, "Nordics"],
+  [/\b(poland|warsaw|krakow|czech|prague|romania|bucharest|portugal|lisbon|italy|milan|switzerland|zurich|austria|vienna|belgium|brussels|estonia|tallinn)\b/i, "Europe"],
+  [/\b(emea|europe)\b/i, "Europe"],
+  [/\b(uae|dubai|abu dhabi|saudi|riyadh|qatar|doha)\b/i, "UAE"],
+  [/\b(israel|tel aviv)\b/i, "Israel"],
+  [/\b(singapore)\b/i, "Singapore"],
+  [/\b(australia|sydney|melbourne|brisbane|new zealand|auckland)\b/i, "Australia"],
+  [/\b(canada|toronto|vancouver|montreal)\b/i, "Canada"],
+  [/\b(us|u\.s\.|usa|united states|new york|nyc|san francisco|bay area|austin|chicago|boston|seattle|denver|atlanta|los angeles|miami|dallas|north america|amer)\b/i, "US"],
+  [/,\s?(A[LKZR]|C[AOT]|D[EC]|FL|GA|HI|I[DLNA]|K[SY]|LA|M[EDAINSOT]|N[EVHJMYCD]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[TA]|W[AVIY])\b/, "US"],
+  [/\b(apac|asia)\b/i, "APAC"],
 ];
 
 export function detectMarket(location: string): string {
-  for (const [re, market] of MARKET_MAP) {
-    if (re.test(location)) return market;
-  }
+  for (const [re, market] of MARKET_MAP) if (re.test(location)) return market;
+  if (/remote|anywhere|global|worldwide/i.test(location)) return "Remote";
   return location.trim() ? "Other" : "Unknown";
 }
 
-// ── Visa sponsorship hint ──────────────────────────────────────────────────
+// ── Visa ────────────────────────────────────────────────────────────────────
 export function detectVisa(description: string): "yes" | "no" | "unknown" {
-  const d = description.toLowerCase();
-  if (/visa sponsorship (is )?available|we (do |will )?sponsor/i.test(d)) return "yes";
-  if (/no visa|not able to sponsor|unable to sponsor|must (already )?have (the )?right to work/i.test(d)) return "no";
+  if (/(no|not|unable to|cannot|can't|won't|will not) (provide |offer )?(visa |work permit )?sponsor/i.test(description) ||
+      /must (already )?(have|hold) (the )?(right|authori[sz]ation|eligibility) to work/i.test(description)) return "no";
+  if (/(visa|relocation) (sponsorship|support) (is )?(available|provided|offered)|we (can |will |do )?sponsor|sponsorship available/i.test(description)) return "yes";
   return "unknown";
 }
 
-// ── Pay parser (regex fallback when ATS doesn't provide structured pay) ─────
-const CURRENCY_SYMBOLS: Record<string, string> = { "$": "USD", "£": "GBP", "€": "EUR", "₹": "INR" };
+// ── Pay ─────────────────────────────────────────────────────────────────────
+const CUR: Record<string, string> = { "$": "USD", "£": "GBP", "€": "EUR", "₹": "INR", USD: "USD", GBP: "GBP", EUR: "EUR", INR: "INR", CAD: "CAD", AUD: "AUD", AED: "AED", SGD: "SGD" };
 
-export function parsePay(description: string): {
-  currency?: string;
-  base_min?: number;
-  base_max?: number;
-  ote_min?: number;
-  ote_max?: number;
-} {
-  // Look for a pattern like $80,000 - $100,000 or £50k - £70k
-  const rangeRe = /([$£€₹])([\d,]+)k?\s*[-–—]\s*[$£€₹]?([\d,]+)k?/g;
-  const oTERe = /ote[:\s]+[$£€₹]?([\d,]+)k?\s*[-–—]\s*[$£€₹]?([\d,]+)k?/i;
-  const matches = [...description.matchAll(rangeRe)];
-  if (!matches.length) return {};
-
-  const symbol = matches[0][1];
-  const currency = CURRENCY_SYMBOLS[symbol] ?? "USD";
-  const toNum = (s: string, unit: string) => {
-    const n = Number(s.replace(/,/g, ""));
-    return unit === "k" ? n * 1000 : n > 500 ? n : n * 1000;
-  };
-
-  const oTEMatch = oTERe.exec(description);
-  if (oTEMatch) {
-    return {
-      currency,
-      ote_min: Number(oTEMatch[1].replace(/,/g, "")) > 500 ? Number(oTEMatch[1].replace(/,/g, "")) : Number(oTEMatch[1].replace(/,/g, "")) * 1000,
-      ote_max: Number(oTEMatch[2].replace(/,/g, "")) > 500 ? Number(oTEMatch[2].replace(/,/g, "")) : Number(oTEMatch[2].replace(/,/g, "")) * 1000,
-    };
-  }
-
-  const unit = matches[0][0].toLowerCase().includes("k") ? "k" : "";
-  return {
-    currency,
-    base_min: toNum(matches[0][2], unit),
-    base_max: toNum(matches[0][3], unit),
-  };
+function toNum(s: string, unit?: string): number {
+  const n = parseFloat(s.replace(/,/g, ""));
+  const u = (unit ?? "").toLowerCase();
+  if (u === "k") return n * 1e3;
+  if (u === "m") return n * 1e6;
+  if (u.startsWith("l")) return n * 1e5;
+  return n;
 }
 
-// ── Dedupe hash ────────────────────────────────────────────────────────────
-export function dedupeHash(
-  companyName: string,
-  title: string,
-  location: string
-): string {
-  const str = [companyName, title, location]
-    .map((s) => s.toLowerCase().replace(/\s+/g, " ").trim())
-    .join("|");
+export function parsePay(text: string): { currency?: string; min?: number; max?: number; isOte: boolean } {
+  const re = /(USD|GBP|EUR|INR|CAD|AUD|AED|SGD|[$£€₹])\s?([\d][\d,.]*)\s?(k|m|l|lpa|lakhs?)?\s*(?:-|–|—|to)\s*(?:USD|GBP|EUR|INR|CAD|AUD|AED|SGD|[$£€₹])?\s?([\d][\d,.]*)\s?(k|m|l|lpa|lakhs?)?/i;
+  const m = text.match(re);
+  if (!m) return { isOte: false };
+  const u2 = m[5] ?? m[3];
+  const min = toNum(m[2], m[3] ?? u2);
+  const max = toNum(m[4], u2);
+  if (!(min >= 1000 && max >= min && max < 10_000_000_00)) return { isOte: false };
+  const around = text.slice(Math.max(0, (m.index ?? 0) - 120), (m.index ?? 0) + m[0].length + 60);
+  return { currency: CUR[m[1].toUpperCase()] ?? CUR[m[1]], min, max, isOte: /\bOTE\b|on[- ]target/i.test(around) };
+}
+
+export function dedupeHash(companyName: string, title: string, location: string): string {
+  const str = [companyName, title, location].map((s) => s.toLowerCase().replace(/\s+/g, " ").trim()).join("|");
   return createHash("sha256").update(str).digest("hex");
 }
 
-// ── Normalise a RawJob into DB-ready shape ─────────────────────────────────
 export interface NormalisedJob {
   title: string;
   location: string;
@@ -121,59 +108,53 @@ export interface NormalisedJob {
   url: string;
   posted_at: string | null;
   description: string;
-  currency?: string;
-  base_min?: number;
-  base_max?: number;
-  ote_min?: number;
-  ote_max?: number;
+  currency: string | null;
+  base_min: number | null;
+  base_max: number | null;
+  ote_min: number | null;
+  ote_max: number | null;
   pay_band_status: "verified" | "estimated" | "unknown";
   visa_sponsorship: "yes" | "no" | "unknown";
   dedupe_hash: string;
 }
 
 export function normalise(raw: RawJob, companyName: string): NormalisedJob {
-  const remoteType = detectRemoteType(raw.location);
-  const market = detectMarket(raw.location);
-  const visa = detectVisa(raw.description);
+  const text = htmlToText(raw.description);
+  let currency = raw.currency ?? null;
+  let base_min = raw.base_min ?? null;
+  let base_max = raw.base_max ?? null;
+  let ote_min: number | null = null;
+  let ote_max: number | null = null;
+  let status: NormalisedJob["pay_band_status"] = "unknown";
 
-  let currency = raw.currency;
-  let base_min = raw.base_min;
-  let base_max = raw.base_max;
-  let ote_min = raw.ote_min;
-  let ote_max = raw.ote_max;
-  let payStatus: "verified" | "estimated" | "unknown" = "unknown";
-
-  if (raw.pay_verified && (base_min || ote_min)) {
-    payStatus = "verified";
+  if (raw.pay_verified && (base_min || base_max)) {
+    status = "verified";
   } else {
-    const parsed = parsePay(raw.description);
-    if (parsed.base_min || parsed.ote_min) {
-      currency = currency ?? parsed.currency;
-      base_min = base_min ?? parsed.base_min;
-      base_max = base_max ?? parsed.base_max;
-      ote_min = ote_min ?? parsed.ote_min;
-      ote_max = ote_max ?? parsed.ote_max;
-      payStatus = "estimated";
+    const p = parsePay(text);
+    if (p.min) {
+      currency = p.currency ?? null;
+      if (p.isOte) { ote_min = p.min; ote_max = p.max ?? null; } else { base_min = p.min; base_max = p.max ?? null; }
+      status = "verified"; // published by the employer in the job post
     }
   }
 
   return {
-    title: raw.title,
-    location: raw.location,
-    remote_type: remoteType,
-    market,
+    title: raw.title.trim(),
+    location: raw.location || "Not stated",
+    remote_type: detectRemoteType(raw.location, raw.remote, text),
+    market: detectMarket(raw.location),
     source_type: "careers",
     board: raw.board,
     url: raw.url,
     posted_at: raw.posted_at,
-    description: raw.description.slice(0, 20000), // cap description length
+    description: text.slice(0, 20000),
     currency,
     base_min,
     base_max,
     ote_min,
     ote_max,
-    pay_band_status: payStatus,
-    visa_sponsorship: visa,
+    pay_band_status: status,
+    visa_sponsorship: detectVisa(text),
     dedupe_hash: dedupeHash(companyName, raw.title, raw.location),
   };
 }

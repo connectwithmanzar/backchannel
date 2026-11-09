@@ -9,16 +9,18 @@ A personal job-search engine for SDR/BDR, GTM Engineer and AE roles. Test phase:
 Full spec: `docs/backchannel-build-brief.md` (stack, hard rules, data model, screens, and the 10 build prompts in section 9).
 Design reference: `docs/backchannel-prototype.html`. Match its screens, colours and copy.
 
-## Status
-- Build 1 done: Next.js app shell with design tokens (light and dark), Supabase schema in `supabase/migrations/0001_init.sql`, job collector for Greenhouse/Lever/Ashby/SmartRecruiters (`src/lib/collector`, `scripts/collect.ts`, seed list in `data/seed-companies.json`), Roles page with heuristic fit scoring (`src/lib/score.ts`, profile in `data/profile.json`), 8 passing tests (`npm test`).
-- The 24 seed company slugs have not been checked against the live boards yet. First real `npm run collect` will show any errors in `data/collect-report.json`; fix wrong slugs.
-- Next: Build 2 (Supabase project + magic-link login + run migration), then builds 3–10 from the brief.
+## Status (9 Nov 2026)
+Full product built: Today dashboard, Roles (collection from Greenhouse/Lever/Ashby/SmartRecruiters with auto-repair of broken boards), Sources page (add any company by name), Great companies (AI curation + board discovery), Autopilot (AI-tailored CV, cover note, form answers; sensitive questions stop and ask; user submits), Outreach (Gmail OAuth, AI 3-email + 2-LinkedIn-step sequences, approve first email, daily follow-ups, stop on reply, blocklist), Referrals tracker with AI asks, Pay benchmark from published pay, Side income, "Ask Backchannel" AI chat, daily cron (/api/daily: score → autopilot → outreach → Telegram).
+- Go-live steps for the owner: `docs/GO-LIVE.md` (run migration 0006, env vars, Google redirect URI, push).
+- Key code: `src/lib/jobs/ingest.ts`, `src/lib/collectors/ats.ts`, `src/lib/jobs/scoring.ts`, `src/lib/apps/`, `src/lib/outreach/`, `src/lib/ai.ts` (OPENROUTER_API_KEY or ANTHROPIC_API_KEY).
+- Vercel Hobby allows 2 daily crons: /api/collect-jobs (06:00 IST) and /api/daily (07:15 IST).
+- Next.js 16: `next lint` is gone; lint with `npx eslint src`.
 
 ## Commands
 - `npm install`: install dependencies
-- `npm run collect`: pull today's sales roles into `data/jobs.json`
 - `npm run dev`: run the app at http://localhost:3000
-- `npm test`: collector tests
+- `npm test`: unit tests (17)
+- `npx eslint src`: lint
 - `npm run build`: production build (run before saying a build step is done)
 
 ## Hard rules (from the brief)
