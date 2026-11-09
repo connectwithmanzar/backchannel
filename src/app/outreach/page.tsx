@@ -30,7 +30,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
   return (
     <section className="py-6">
       <PageHeader eyebrow="Outreach · email + LinkedIn" title="Get in front of the people who hire">
-        Add a hiring manager or recruiter and AI writes a short, personal sequence from your real numbers: three emails from your own Gmail and two LinkedIn steps you send yourself. You approve the first email; follow-ups go out each morning and stop as soon as they reply.
+        Add a hiring manager or recruiter and AI writes a short, personal sequence from your real numbers: three emails from your own Gmail and two LinkedIn steps you send yourself. You approve every email before it sends, Mon-Fri 9:00-18:00 IST, and the sequence stops as soon as they reply.
       </PageHeader>
       <OutreachClient
         contacts={rows} jobs={jobOptions} gmailEmail={gmail?.email ?? null} gmailReady={gmailConfigured()} aiReady={hasAIKey()}
