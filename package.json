@@ -17,9 +17,9 @@
     "@types/pdf-parse": "^1.1.5",
     "next": "^16.4.5",
     "openai": "^7.53.0",
-    "pdf-parse": "^2.4.5",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "unpdf": "^2.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

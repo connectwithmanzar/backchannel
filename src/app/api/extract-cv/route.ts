@@ -3,19 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { rateLimit, retryAfter } from "@/lib/rate-limit";
 import { createAIClient, hasAIKey, AI_MODEL, NO_AI_MESSAGE, parseJsonLoose } from "@/lib/ai";
 
-// pdf-parse is loaded only for PDFs: importing it at the top crashes the whole route on Vercel.
+// unpdf is built for serverless; pdf-parse needs browser APIs (DOMMatrix) that Vercel doesn't have.
 async function pdfToText(buffer: Buffer): Promise<string> {
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: new Uint8Array(buffer) });
-  try {
-    const result = await parser.getText();
-    return result.text;
-  } finally {
-    await parser.destroy();
-  }
+  const { extractText, getDocumentProxy } = await import("unpdf");
+  const pdf = await getDocumentProxy(new Uint8Array(buffer));
+  const { text } = await extractText(pdf, { mergePages: true });
+  return text;
 }
-
-export const runtime = "nodejs";
 
 const SYSTEM = `You are a CV parser for a sales job-search tool. Extract facts ONLY from the CV text — never invent or guess. Return a JSON object with these exact keys:
 - current_role: string | null  (most recent job title)
