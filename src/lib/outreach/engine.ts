@@ -2,12 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiJson, hasAIKey, NO_AI_MESSAGE } from "@/lib/ai";
 import { accessToken, sendEmail, threadState } from "./gmail";
 import { MAX_EMAILS_PER_DAY, bouncePaused, effectiveDailyLimit } from "./limits";
+import { OPT_OUT, autoSendDecision, renderTemplate } from "./templates";
 
-export { MAX_EMAILS_PER_DAY };
+export { MAX_EMAILS_PER_DAY, OPT_OUT };
 import { isExcludedCompany } from "@/data/companies";
 import { htmlToText } from "@/lib/collector/fetchers";
 
-export const OPT_OUT = "If this isn't relevant, just reply \"no\" and I won't follow up.";
 const DAY = 24 * 3600 * 1000;
 // Emails only go out inside this window (local hours, Mon-Fri), so nothing lands at 3am.
 export const SEND_TZ = process.env.OUTREACH_TZ ?? "Asia/Kolkata";
@@ -77,6 +77,29 @@ Return JSON: {"subject": "short, specific subject (max 7 words)", "email1": "int
   return { ...g, email1: finish(g.email1), email2: finish(g.email2), email3: finish(g.email3) };
 }
 
+/** The owner's approved template filled in for this contact, but only when auto-send is allowed. Otherwise null. */
+async function autoSendPlan(db: SupabaseClient, userId: string, input: { name: string; email?: string; company_name: string; job_id?: string | null }) {
+  if (!input.email) return null;
+  const [{ data: prefs }, { data: tpl }, { data: prof }, scoreRes, jobRes] = await Promise.all([
+    db.from("preferences").select("autosend_enabled, autosend_min_fit, email_ramp_start, email_signature").eq("user_id", userId).maybeSingle(),
+    db.from("outreach_templates").select("subject, body, approved_at").eq("user_id", userId).eq("name", "Default").maybeSingle(),
+    db.from("profiles").select("name").eq("user_id", userId).maybeSingle(),
+    input.job_id ? db.from("job_scores").select("score").eq("user_id", userId).eq("job_id", input.job_id).maybeSingle() : Promise.resolve({ data: null }),
+    input.job_id ? db.from("jobs").select("title").eq("id", input.job_id).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  const decision = autoSendDecision({
+    enabled: prefs?.autosend_enabled === true, templateApproved: !!tpl?.approved_at,
+    fit: (scoreRes.data as { score: number | null } | null)?.score ?? null, minFit: prefs?.autosend_min_fit ?? 75,
+    rampStart: prefs?.email_ramp_start ?? null, recipientName: input.name,
+  });
+  const sender = (prof?.name ?? "").trim();
+  if (!decision.auto || !tpl || !sender) return null;
+  return renderTemplate(tpl, {
+    first_name: input.name.trim().split(/\s+/)[0], company: input.company_name,
+    role_title: (jobRes.data as { title: string } | null)?.title ?? "a sales role", sender_name: sender,
+  }, prefs?.email_signature);
+}
+
 /** Creates the contact and its 5-step sequence. The first email starts as a draft for you to approve. */
 export async function startSequence(db: SupabaseClient, userId: string, input: { name: string; title?: string; email?: string; linkedin_url?: string; company_name: string; job_id?: string | null; notes?: string }) {
   if (input.email && (await isBlocked(db, userId, input.email, input.company_name, input.name))) {
@@ -90,15 +113,17 @@ export async function startSequence(db: SupabaseClient, userId: string, input: {
   }).select("id").single();
   if (error) throw new Error(`Saving the contact failed: ${error.message}`);
 
+  const auto = await autoSendPlan(db, userId, input);
   const start = Date.now();
   const rows = SEQUENCE
     .filter((s) => (s.channel === "email" ? !!input.email : true))
     .map((s) => ({
       user_id: userId, contact_id: contact.id, step_index: SEQUENCE.indexOf(s), channel: s.channel,
-      // Every email starts as a draft and stays one until you approve it.
-      status: s.channel === "email" ? "draft" : "task_open",
-      subject: s.channel === "email" ? (s.key === "email1" ? g.subject : `Re: ${g.subject}`) : s.label,
-      body: g[s.key], to_email: s.channel === "email" ? input.email : null,
+      // Every email starts as a draft and stays one until you approve it. The only exception is the
+      // first email when auto-send is on and allowed: it goes out from your approved template, not AI text.
+      status: s.channel === "email" ? (auto && s.key === "email1" ? "scheduled" : "draft") : "task_open",
+      subject: auto && s.key === "email1" ? auto.subject : s.channel === "email" ? (s.key === "email1" ? g.subject : `Re: ${g.subject}`) : s.label,
+      body: auto && s.key === "email1" ? auto.body : g[s.key], to_email: s.channel === "email" ? input.email : null,
       scheduled_for: new Date(start + s.day * DAY).toISOString(),
     }));
   const { error: e2 } = await db.from("outreach").insert(rows);

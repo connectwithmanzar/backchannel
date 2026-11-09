@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { serviceClient } from "@/lib/supabase/service";
 import { generateSequence, OPT_OUT, sendStep, startSequence, stopContact } from "@/lib/outreach/engine";
 import { rateLimit, retryAfter } from "@/lib/rate-limit";
+import { validateTemplate } from "@/lib/outreach/templates";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -71,6 +72,41 @@ export async function POST(req: NextRequest) {
         if (Number.isFinite(b.email_daily_limit)) patch.email_daily_limit = Math.max(1, Math.min(20, Number(b.email_daily_limit)));
         if (typeof b.email_signature === "string") patch.email_signature = b.email_signature.slice(0, 500);
         const { error } = await db.from("preferences").upsert(patch, { onConflict: "user_id" });
+        if (error) throw error;
+        return NextResponse.json({ ok: true });
+      }
+      case "save_template": {
+        const subject = String(b.subject ?? "").trim(), body = String(b.body ?? "").trim();
+        const problem = validateTemplate(subject, body);
+        if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+        // Any edit removes the approval: only the exact text you approved can auto-send.
+        const { error } = await db.from("outreach_templates").upsert(
+          { user_id: user.id, name: "Default", subject, body, approved_at: null, updated_at: new Date().toISOString() },
+          { onConflict: "user_id,name" });
+        if (error) throw error;
+        return NextResponse.json({ ok: true });
+      }
+      case "approve_template": {
+        const { data: t } = await db.from("outreach_templates").select("subject, body").eq("user_id", user.id).eq("name", "Default").maybeSingle();
+        if (!t) return NextResponse.json({ error: "Save a template first." }, { status: 400 });
+        const problem = validateTemplate(t.subject, t.body);
+        if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+        const { error } = await db.from("outreach_templates").update({ approved_at: new Date().toISOString() }).eq("user_id", user.id).eq("name", "Default");
+        if (error) throw error;
+        return NextResponse.json({ ok: true });
+      }
+      case "autosend_settings": {
+        const enabled = b.enabled === true;
+        const minFit = Math.max(60, Math.min(95, Math.round(Number(b.min_fit) || 75)));
+        if (enabled) {
+          const [{ data: t }, { data: g }] = await Promise.all([
+            db.from("outreach_templates").select("approved_at").eq("user_id", user.id).eq("name", "Default").maybeSingle(),
+            serviceClient().from("gmail_accounts").select("email").eq("user_id", user.id).maybeSingle(),
+          ]);
+          if (!t?.approved_at) return NextResponse.json({ error: "Approve a template first." }, { status: 400 });
+          if (!g) return NextResponse.json({ error: "Connect your Gmail first." }, { status: 400 });
+        }
+        const { error } = await db.from("preferences").upsert({ user_id: user.id, autosend_enabled: enabled, autosend_min_fit: minFit }, { onConflict: "user_id" });
         if (error) throw error;
         return NextResponse.json({ ok: true });
       }

@@ -13,6 +13,7 @@ import { scoreJob, parseMinOteByMarket, type SearchProfile } from "../src/lib/sc
 import { companyQuality, signalsFromRows } from "../src/lib/companyQuality";
 import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage } from "../src/lib/outreach/limits";
+import { validateTemplate, renderTemplate, autoSendDecision, OPT_OUT, unknownFields } from "../src/lib/outreach/templates";
 import { cleanDomain, classifyTitle, parsePeople, buildSearchUrl, mergePeople, HIRING_TITLES, RECRUITER_TITLES } from "../src/lib/contacts/apollo";
 
 test("sales role filter: keeps targets, drops noise", () => {
@@ -242,4 +243,31 @@ test("bounces: recognised from the sender or subject, and pause auto-send above 
   assert.equal(bouncePaused(100, 2), false);  // exactly 2% is fine
   assert.equal(bouncePaused(100, 3), true);
   assert.equal(bouncePaused(0, 0), false);
+});
+
+test("templates: only fixed merge fields, opt-out and signature always added", () => {
+  assert.equal(validateTemplate("Hi {first_name}", "I saw {company} is hiring a {role_title}. {sender_name}"), null);
+  assert.match(validateTemplate("Hi", "Your salary is {salary}") ?? "", /\{salary\}/);
+  assert.ok(validateTemplate("", "x"));
+  assert.ok(validateTemplate("s", "x".repeat(1501)));
+  assert.deepEqual(unknownFields("{first_name} {x} {x} {y}"), ["x", "y"]);
+  const out = renderTemplate({ subject: "About {role_title}", body: "Hi {first_name}, {company} looks great. {sender_name}" },
+    { first_name: "Priya", company: "Acme", role_title: "SDR", sender_name: "Manzar" }, "Manzar, SDR");
+  assert.equal(out.subject, "About SDR");
+  assert.ok(out.body.startsWith("Hi Priya, Acme looks great. Manzar"));
+  assert.ok(out.body.includes("Manzar, SDR") && out.body.endsWith(OPT_OUT));
+});
+
+test("auto-send: every safety condition must hold, otherwise it stays a draft", () => {
+  const now = Date.parse("2026-11-20T10:00:00Z");
+  const ok = { enabled: true, templateApproved: true, fit: 82, minFit: 75, rampStart: "2026-11-01T00:00:00Z", recipientName: "Priya Rao", now };
+  assert.deepEqual(autoSendDecision(ok), { auto: true, reason: "ok" });
+  assert.equal(autoSendDecision({ ...ok, enabled: false }).auto, false);               // off by default
+  assert.equal(autoSendDecision({ ...ok, templateApproved: false }).auto, false);      // template not approved
+  assert.equal(autoSendDecision({ ...ok, fit: 74 }).auto, false);                      // below your minimum fit
+  assert.equal(autoSendDecision({ ...ok, fit: null }).auto, false);                    // no job, no fit
+  assert.equal(autoSendDecision({ ...ok, rampStart: null }).auto, false);              // never sent anything yet
+  assert.equal(autoSendDecision({ ...ok, rampStart: "2026-11-15T00:00:00Z" }).auto, false); // first week: approve everything
+  assert.equal(autoSendDecision({ ...ok, recipientName: "Max An***l" }).auto, false);  // partial name from search
+  assert.equal(autoSendDecision({ ...ok, recipientName: "  " }).auto, false);
 });
