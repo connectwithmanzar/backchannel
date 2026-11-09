@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAIClient, hasAIKey, AI_MODEL, NO_AI_MESSAGE, untrusted, DATA_NOTICE } from "@/lib/ai";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimitShared } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "Please sign in." }, { status: 401 });
   if (!hasAIKey()) return NextResponse.json({ error: NO_AI_MESSAGE }, { status: 503 });
-  if (!rateLimit(`chat:${user.id}`, 60, 3600_000)) return NextResponse.json({ error: "You've sent a lot of messages. Try again in a bit." }, { status: 429 });
+  if (!(await rateLimitShared(`chat:${user.id}`, 60, 3600_000))) return NextResponse.json({ error: "You've sent a lot of messages. Try again in a bit." }, { status: 429 });
 
   const body = await req.json().catch(() => ({}));
   const history = (Array.isArray(body.messages) ? body.messages : []).slice(-12)

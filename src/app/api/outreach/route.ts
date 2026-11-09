@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { serviceClient } from "@/lib/supabase/service";
 import { checkReplies, generateSequence, OPT_OUT, sendStep, startSequence, stopContact } from "@/lib/outreach/engine";
 import { accessToken, threadReplies } from "@/lib/outreach/gmail";
-import { rateLimit, retryAfter } from "@/lib/rate-limit";
+import { rateLimitShared, retryAfter } from "@/lib/rate-limit";
 import { validateTemplate } from "@/lib/outreach/templates";
 
 export const runtime = "nodejs";
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   try {
     switch (b.action) {
       case "add_contact": {
-        if (!rateLimit(`seq:${user.id}`, 30, 3600_000)) return NextResponse.json({ error: `Slow down a little. Try again in ${retryAfter(`seq:${user.id}`)}s.` }, { status: 429 });
+        if (!(await rateLimitShared(`seq:${user.id}`, 30, 3600_000))) return NextResponse.json({ error: `Slow down a little. Try again in ${retryAfter(`seq:${user.id}`)}s.` }, { status: 429 });
         const name = String(b.name ?? "").trim(), company = String(b.company_name ?? "").trim();
         const email = String(b.email ?? "").trim();
         if (!name || !company) return NextResponse.json({ error: "Name and company are required." }, { status: 400 });
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
       case "check_replies": {
-        if (!rateLimit(`chk:${user.id}`, 12, 10 * 60_000)) return NextResponse.json({ ok: true, replies: 0, bounces: 0, skipped: true });
+        if (!(await rateLimitShared(`chk:${user.id}`, 12, 10 * 60_000))) return NextResponse.json({ ok: true, replies: 0, bounces: 0, skipped: true });
         return NextResponse.json({ ok: true, ...(await checkReplies(serviceClient(), user.id, Date.now() + 20_000)) });
       }
       case "view_reply": {

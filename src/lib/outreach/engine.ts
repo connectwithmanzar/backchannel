@@ -3,7 +3,7 @@ import { aiJson, hasAIKey, NO_AI_MESSAGE, untrusted, DATA_NOTICE } from "@/lib/a
 import { accessToken, sendEmail, threadState } from "./gmail";
 import { MAX_EMAILS_PER_DAY, bouncePaused, effectiveDailyLimit } from "./limits";
 import { OPT_OUT, autoSendDecision, renderTemplate } from "./templates";
-import { inRecipientWindow, recipientTimezone } from "./timezone";
+import { inRecipientWindow, knownRecipientTimezone } from "./timezone";
 
 export { MAX_EMAILS_PER_DAY, OPT_OUT };
 import { isExcludedCompany } from "@/data/companies";
@@ -193,7 +193,11 @@ export async function sendStep(svc: SupabaseClient, userId: string, outreachId: 
     }
     // Automatic sends wait for the recipient's own morning. Manual sends (you click Send) have no time restriction.
     const { data: job } = contact?.job_id ? await svc.from("jobs").select("market, location").eq("id", contact.job_id).maybeSingle() : { data: null };
-    const tz = recipientTimezone({ market: job?.market, location: job?.location, email: to });
+    const tz = knownRecipientTimezone({ market: job?.market, location: job?.location, email: to });
+    if (!tz) {
+      await releaseStep(svc, step.id, "draft", "Needs your approval: I can't tell the recipient's timezone.");
+      throw new Error("Not sent automatically: I can't tell the recipient's timezone. Send it yourself when it suits them.");
+    }
     if (!inRecipientWindow(tz)) throw new Error(`Waiting for the recipient's morning (${tz}).`);
   }
   if (await isBlocked(svc, userId, to, contact?.company_name ?? "", contact?.name ?? "")) throw new Error("Blocked by your stealth list.");

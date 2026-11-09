@@ -32,14 +32,25 @@ const LOCATION_TZ: [RegExp, string][] = [
   [/new york|boston|atlanta|miami|washington|united states|\bus\b|usa/i, "America/New_York"],
 ];
 
-/** Best guess of the recipient's timezone from their email domain, the job's market and its location text. */
-export function recipientTimezone(h: RecipientHints): string {
+/**
+ * The recipient's timezone when we can tell with confidence: their email country, a specific market, or a city in the
+ * job location. Returns null when we would be guessing (for example a US job with no city), so automatic sending can
+ * skip it instead of emailing someone at 6am.
+ */
+export function knownRecipientTimezone(h: RecipientHints): string | null {
   const tld = (h.email ?? "").split("@")[1]?.toLowerCase().split(".").pop() ?? "";
   if (TLD_TZ[tld]) return TLD_TZ[tld];
   const market = MARKET_TZ[(h.market ?? "").trim().toLowerCase()];
-  if (market && !/^(europe|emea|us|canada)$/i.test(h.market ?? "")) return market;
+  const broad = /^(europe|emea|us|canada)$/i.test(h.market ?? "");
+  if (market && !broad) return market;
   for (const [re, tz] of LOCATION_TZ) if (re.test(h.location ?? "")) return tz;
-  return market ?? FALLBACK_TZ;
+  // Western Europe spans one or two hours, which still falls inside business hours. The US spans three, which does not.
+  return market && /^(europe|emea)$/i.test(h.market ?? "") ? market : null;
+}
+
+/** Best guess of the recipient's timezone, falling back to yours. Used for display; sending uses the confident version. */
+export function recipientTimezone(h: RecipientHints): string {
+  return knownRecipientTimezone(h) ?? MARKET_TZ[(h.market ?? "").trim().toLowerCase()] ?? FALLBACK_TZ;
 }
 
 const FRI_SAT_WEEKEND = new Set(["Asia/Riyadh", "Asia/Qatar", "Asia/Kuwait", "Asia/Bahrain", "Asia/Muscat", "Asia/Jerusalem"]);

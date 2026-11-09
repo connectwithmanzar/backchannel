@@ -6,13 +6,14 @@ import { toMarket, countryToMarkets } from "../src/lib/jobs/market";
 import { matchSensitive } from "../src/lib/apps/prepare";
 import { parseJsonLoose } from "../src/lib/ai";
 import { buildMime } from "../src/lib/outreach/gmail";
-import { recipientTimezone, inRecipientWindow } from "../src/lib/outreach/timezone";
+import { recipientTimezone, knownRecipientTimezone, inRecipientWindow } from "../src/lib/outreach/timezone";
 import { trackOf, weeklyFunnel } from "../src/lib/funnel";
 import { parseJobUrl, buildPastedJob } from "../src/lib/jobs/paste";
 import { scoreJob, parseMinOteByMarket, familiesFromTitles, mentions, buildSearchProfile, toUsd, type SearchProfile } from "../src/lib/score";
 import { companyQuality, signalsFromRows } from "../src/lib/companyQuality";
 import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddress, isDelayNotice, isAutoReply } from "../src/lib/outreach/limits";
+import { rateLimitShared } from "../src/lib/rate-limit";
 import { fakeSupabase } from "./helpers/fake-supabase";
 import { claimStep, markBounced, recentBounceStats, stopContact } from "../src/lib/outreach/engine";
 import { encryptSecret, decryptSecret, isEncrypted } from "../src/lib/crypto";
@@ -488,4 +489,25 @@ test("stored secrets: encrypted when a key is set, readable back, and tamper-pro
 test("failed steps are picked out of a job result", () => {
   assert.deepEqual(failedSteps({ user: "u", scoring: { scored: 5 }, outreach: { error: "boom" }, telegram: { error: "x" } }).sort(), ["outreach", "telegram"]);
   assert.deepEqual(failedSteps({ user: "u", scoring: { scored: 5 } }), []);
+});
+
+test("automatic sending only trusts a timezone it can actually tell", () => {
+  assert.equal(knownRecipientTimezone({ email: "a@acme.com", market: "US" }), null);                         // US with no city: a guess
+  assert.equal(knownRecipientTimezone({ email: "a@acme.com", market: "US", location: "Austin, TX" }), "America/Chicago");
+  assert.equal(knownRecipientTimezone({ email: "a@acme.com" }), null);                                       // nothing to go on
+  assert.equal(knownRecipientTimezone({ email: "a@acme.ae" }), "Asia/Dubai");
+  assert.equal(knownRecipientTimezone({ email: "a@acme.com", market: "Europe" }), "Europe/Berlin");
+  assert.equal(knownRecipientTimezone({ email: "a@acme.com", market: "India" }), "Asia/Kolkata");
+  assert.equal(recipientTimezone({ email: "a@acme.com" }), "Asia/Kolkata");                                  // display still falls back
+});
+
+test("the shared rate limit counts per window and falls back when the database counter is missing", async () => {
+  let n = 0;
+  const bump = async () => ++n;
+  assert.equal(await rateLimitShared("k1", 2, 60_000, bump), true);
+  assert.equal(await rateLimitShared("k1", 2, 60_000, bump), true);
+  assert.equal(await rateLimitShared("k1", 2, 60_000, bump), false);              // third call in the window is refused
+  const missing = async () => null;                                                // table or function not created yet
+  assert.equal(await rateLimitShared("k2", 1, 60_000, missing), true);
+  assert.equal(await rateLimitShared("k2", 1, 60_000, missing), false);          // the per-instance fallback still limits
 });

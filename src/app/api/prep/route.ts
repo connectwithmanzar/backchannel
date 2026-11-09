@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { aiText, hasAIKey, NO_AI_MESSAGE, untrusted, DATA_NOTICE } from "@/lib/ai";
 import { htmlToText } from "@/lib/collector/fetchers";
-import { rateLimit, retryAfter } from "@/lib/rate-limit";
+import { rateLimitShared, retryAfter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     if (saved) return NextResponse.json({ ok: true, content: saved.content, saved: true });
   }
   if (!hasAIKey()) return NextResponse.json({ error: NO_AI_MESSAGE }, { status: 503 });
-  if (!rateLimit(`prep:${user.id}`, 20, 3600_000)) return NextResponse.json({ error: `Too many in a row. Try again in ${retryAfter(`prep:${user.id}`)}s.` }, { status: 429 });
+  if (!(await rateLimitShared(`prep:${user.id}`, 20, 3600_000))) return NextResponse.json({ error: `Too many in a row. Try again in ${retryAfter(`prep:${user.id}`)}s.` }, { status: 429 });
 
   const [{ data: job }, { data: p }] = await Promise.all([
     db.from("jobs").select("title, location, description, company_name, companies(name)").eq("id", jobId).maybeSingle(),

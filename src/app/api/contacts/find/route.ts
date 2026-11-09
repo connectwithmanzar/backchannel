@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { serviceClient } from "@/lib/supabase/service";
-import { rateLimit, retryAfter } from "@/lib/rate-limit";
+import { rateLimitShared, retryAfter } from "@/lib/rate-limit";
 import { isExcludedCompany } from "@/data/companies";
 import { isBlocked } from "@/lib/outreach/engine";
 import { ApolloError, apolloConfigured, cleanDomain, revealPerson, searchPeople } from "@/lib/contacts/apollo";
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "Please sign in." }, { status: 401 });
   if (!apolloConfigured()) return NextResponse.json({ error: "People search isn't set up yet. Add APOLLO_API_KEY in Vercel, then redeploy." }, { status: 503 });
-  if (!rateLimit(`find:${user.id}`, 60, 3600_000)) {
+  if (!(await rateLimitShared(`find:${user.id}`, 60, 3600_000))) {
     return NextResponse.json({ error: `Slow down a little. Try again in ${retryAfter(`find:${user.id}`)}s.` }, { status: 429 });
   }
 

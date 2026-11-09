@@ -3,7 +3,7 @@ import { scoreJob, buildSearchProfile, type SearchProfile } from "@/lib/score";
 import { companyQuality, signalsFromRows } from "@/lib/companyQuality";
 import { toMarket } from "@/lib/jobs/market";
 import type { Job, RemoteType, RoleFamily } from "@/lib/collector/types";
-import { createAIClient, hasAIKey, AI_MODEL, untrusted, DATA_NOTICE } from "@/lib/ai";
+import { createAIClient, hasAIKey, AI_MODEL, AI_MODEL_FAST, untrusted, DATA_NOTICE } from "@/lib/ai";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ Write 2 short, direct sentences. First sentence: main reason for the score. Seco
 
   try {
     const response = await client.chat.completions.create({
-      model: AI_MODEL,
+      model: AI_MODEL_FAST,
       max_tokens: 120,
       messages: [{ role: "user", content: prompt }],
     });

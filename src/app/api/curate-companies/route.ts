@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as serviceClient } from "@supabase/supabase-js";
-import { rateLimit, retryAfter } from "@/lib/rate-limit";
+import { rateLimitShared, retryAfter } from "@/lib/rate-limit";
 import { promises as dns } from "node:dns";
 import { isExcludedCompany } from "@/data/companies";
 import { cleanDomain } from "@/lib/contacts/apollo";
@@ -80,7 +80,7 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // 3 curation runs per hour per user — guards against runaway AI spend
-  if (!rateLimit(`curate:${user.id}`, 3, 60 * 60 * 1000)) {
+  if (!(await rateLimitShared(`curate:${user.id}`, 3, 60 * 60 * 1000))) {
     return NextResponse.json(
       { error: "Rate limit exceeded. Try again in " + retryAfter(`curate:${user.id}`) + "s." },
       { status: 429 }

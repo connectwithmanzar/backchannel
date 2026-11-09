@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { prepareApplication, type AppQuestion } from "@/lib/apps/prepare";
-import { rateLimit, retryAfter } from "@/lib/rate-limit";
+import { rateLimitShared, retryAfter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   try {
     switch (b.action) {
       case "prepare": {
-        if (!rateLimit(`prep:${user.id}`, 30, 60 * 60 * 1000)) {
+        if (!(await rateLimitShared(`prep:${user.id}`, 30, 60 * 60 * 1000))) {
           return NextResponse.json({ error: `Too many in a row. Try again in ${retryAfter(`prep:${user.id}`)}s.` }, { status: 429 });
         }
         const r = await prepareApplication(db, user.id, String(b.job_id));

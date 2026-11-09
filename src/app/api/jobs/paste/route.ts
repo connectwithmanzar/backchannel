@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { serviceClient } from "@/lib/supabase/service";
 import { aiJson, hasAIKey, NO_AI_MESSAGE, untrusted, DATA_NOTICE } from "@/lib/ai";
-import { rateLimit, retryAfter } from "@/lib/rate-limit";
+import { rateLimitShared, retryAfter } from "@/lib/rate-limit";
 import { isExcludedCompany } from "@/data/companies";
 import { isBlocked } from "@/lib/outreach/engine";
 import { scoreForUser } from "@/lib/jobs/scoring";
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "Please sign in." }, { status: 401 });
-  if (!rateLimit(`paste:${user.id}`, 40, 3600_000)) {
+  if (!(await rateLimitShared(`paste:${user.id}`, 40, 3600_000))) {
     return NextResponse.json({ error: `Too many in a row. Try again in ${retryAfter(`paste:${user.id}`)}s.` }, { status: 429 });
   }
 
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   if (!title || !company) {
     if (!hasAIKey()) return NextResponse.json({ error: `${NO_AI_MESSAGE} Or fill in the title and company yourself.` }, { status: 503 });
     try {
-      const x = await aiJson<Extracted>(SYSTEM, `JOB POST:\n${untrusted("job_post", text.slice(0, 8000))}`, { maxTokens: 300 });
+      const x = await aiJson<Extracted>(SYSTEM, `JOB POST:\n${untrusted("job_post", text.slice(0, 8000))}`, { maxTokens: 300, fast: true });
       title = title || (x.title ?? "").trim();
       company = company || (x.company ?? "").trim();
       location = location || (x.location ?? "").trim();

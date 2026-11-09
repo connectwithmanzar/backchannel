@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { rateLimit, retryAfter } from "@/lib/rate-limit";
+import { rateLimitShared, retryAfter } from "@/lib/rate-limit";
 import { createAIClient, hasAIKey, AI_MODEL, NO_AI_MESSAGE, parseJsonLoose } from "@/lib/ai";
 
 // unpdf is built for serverless; pdf-parse needs browser APIs (DOMMatrix) that Vercel doesn't have.
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // 10 CV extractions per hour per user
-  if (!rateLimit(`extract-cv:${user.id}`, 10, 60 * 60 * 1000)) {
+  if (!(await rateLimitShared(`extract-cv:${user.id}`, 10, 60 * 60 * 1000))) {
     return NextResponse.json(
       { error: "Rate limit exceeded. Try again in " + retryAfter(`extract-cv:${user.id}`) + "s." },
       { status: 429 }
