@@ -2,6 +2,7 @@ import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { getSharedJobs, JOB_COLUMNS } from "@/lib/jobs/shared-cache";
 import { scoreJob, buildSearchProfile } from "@/lib/score";
 import { toRoleFamily } from "@/lib/jobs/scoring";
+import { applyFeedback } from "@/lib/feedback";
 import { companyQuality, signalsFromRows } from "@/lib/companyQuality";
 import { toMarket } from "@/lib/jobs/market";
 import type { Job, RemoteType } from "@/lib/collector/types";
@@ -48,6 +49,7 @@ export default async function RolesPage() {
   const jobs: Job[] = visibleRows.map((row) => ({
     id: row.id,
     company: (row.companies as unknown as { name: string } | null)?.name ?? row.company_name ?? "Unknown",
+    companyDomain: (row.companies as unknown as { domain: string | null } | null)?.domain ?? undefined,
     title: row.title,
     location: row.location ?? "",
     remoteType: (row.remote_type ?? "unknown") as RemoteType,
@@ -72,11 +74,7 @@ export default async function RolesPage() {
     companyQuality: companyQuality(signals.get(row.company_id ?? "")),
   }));
 
-  const scored = jobs
-    .map((j) => scoreJob(j, profile))
-    .sort((a, b) => b.score - a.score)
-    // Scoring used the full text; the browser only needs a short preview.
-    .map((j) => ({ ...j, description: j.description.slice(0, 600) }));
+  const scoredBase = jobs.map((j) => scoreJob(j, profile));
 
   const lastChecked = visibleRows[0]?.last_checked_at ?? null;
   const seedCount = COMPANY_SEEDS.filter(
@@ -95,6 +93,12 @@ export default async function RolesPage() {
       model: row.model ?? undefined,
     };
   }
+
+  // What you skip or save at a company nudges its other roles, and the explanation says so.
+  const scored = applyFeedback(scoredBase, reactions)
+    .sort((a, b) => b.score - a.score)
+    // Scoring used the full text; the browser only needs a short preview.
+    .map((j) => ({ ...j, description: j.description.slice(0, 600) }));
 
   return (
     <section className="py-6">

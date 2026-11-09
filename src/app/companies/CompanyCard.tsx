@@ -44,6 +44,11 @@ export default function CompanyCard({ company }: { company: CompanyData }) {
         <WatchButton companyId={company.id} initialWatching={company.watching} />
       </div>
 
+      <a href={`/referrals?company=${encodeURIComponent(company.name)}&domain=${encodeURIComponent(company.domain ?? "")}`}
+        className="self-start rounded-lg border border-line px-3 py-1.5 text-xs font-semibold hover:border-fg/40">
+        Find who to ask for a referral →
+      </a>
+
       {/* Why great */}
       {company.why_great && (
         <p className="text-sm leading-relaxed">{company.why_great}</p>

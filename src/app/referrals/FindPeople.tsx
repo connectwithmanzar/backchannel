@@ -8,10 +8,10 @@ interface Revealed { name: string; title: string; linkedinUrl: string | null }
 
 const ROLE_LABEL: Record<Person["role"], string> = { hiring_manager: "Hiring side", recruiter: "Recruiter", other: "Other" };
 
-export default function FindPeople({ configured }: { configured: boolean }) {
+export default function FindPeople({ configured, initialCompany = "", initialDomain = "" }: { configured: boolean; initialCompany?: string; initialDomain?: string }) {
   const router = useRouter();
-  const [company, setCompany] = useState("");
-  const [domain, setDomain] = useState("");
+  const [company, setCompany] = useState(initialCompany);
+  const [domain, setDomain] = useState(initialDomain);
   const [people, setPeople] = useState<Person[] | null>(null);
   const [fromCache, setFromCache] = useState(false);
   const [revealed, setRevealed] = useState<Record<string, Revealed>>({});

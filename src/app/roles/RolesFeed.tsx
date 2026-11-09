@@ -311,6 +311,10 @@ export default function RolesFeed({
                         onClick={() => setReaction(j.id, rxn === "applied" ? null : "applied")} />
                       <ReactionButton icon="✕" label="Skip" active={rxn === "skipped"} danger
                         onClick={() => setReaction(j.id, rxn === "skipped" ? null : "skipped")} />
+                      <a href={`/referrals?company=${encodeURIComponent(j.company)}&domain=${encodeURIComponent(j.companyDomain ?? "")}&job=${encodeURIComponent(j.id)}`}
+                        className="flex items-center gap-1 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:border-fg/30">
+                        🤝 Ask for a referral
+                      </a>
                       <ReactionButton icon="🎤" label={prepBusy === j.id ? "Preparing…" : prep[j.id] ? "Prep ready" : "Interview prep"} active={!!prep[j.id]}
                         onClick={() => loadPrep(j.id)} />
                       {j.board === "pasted" && (

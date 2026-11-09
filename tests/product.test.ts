@@ -13,6 +13,7 @@ import { scoreJob, parseMinOteByMarket, familiesFromTitles, mentions, buildSearc
 import { companyQuality, signalsFromRows } from "../src/lib/companyQuality";
 import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddress, isDelayNotice, isAutoReply } from "../src/lib/outreach/limits";
+import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
 import { fakeSupabase } from "./helpers/fake-supabase";
 import { claimStep, markBounced, recentBounceStats, stopContact } from "../src/lib/outreach/engine";
@@ -510,4 +511,20 @@ test("the shared rate limit counts per window and falls back when the database c
   const missing = async () => null;                                                // table or function not created yet
   assert.equal(await rateLimitShared("k2", 1, 60_000, missing), true);
   assert.equal(await rateLimitShared("k2", 1, 60_000, missing), false);          // the per-instance fallback still limits
+});
+
+test("skipping and saving at a company nudges its other roles, with a reason", () => {
+  const job = (id: string, company: string, score = 70) => ({ id, company, score, explanation: "Base." });
+  const jobs = [job("a", "Acme"), job("b", "Acme"), job("c", "Acme"), job("d", "Acme"), job("e", "Beta"), job("f", "Beta"), job("g", "Beta")];
+  const out = applyFeedback(jobs, { a: { reaction: "skipped" }, b: { reaction: "skipped" }, e: { reaction: "bookmarked" } });
+  const by = (id: string) => out.find((j) => j.id === id)!;
+  assert.equal(by("c").score, 60);                                   // two skips at Acme, no saves: -10
+  assert.match(by("c").explanation, /Lowered by 10 because you skipped 2 other roles at Acme/);
+  assert.equal(by("f").score, 75);                                   // one save at Beta: +5
+  assert.match(by("f").explanation, /Raised by 5/);
+  assert.equal(by("a").score, 70);                                   // roles you reacted to are untouched
+  assert.equal(applyFeedback([job("x", "Solo")], {})[0].score, 70);  // no history, no change
+  const many = Array.from({ length: 8 }, (_, i) => job(`s${i}`, "Gamma", 12));
+  const skipped = Object.fromEntries(many.slice(0, 6).map((j) => [j.id, { reaction: "skipped" }]));
+  assert.equal(applyFeedback(many, skipped).find((j) => j.id === "s7")!.score, 0);   // never below 0, and the drop is capped at 15
 });

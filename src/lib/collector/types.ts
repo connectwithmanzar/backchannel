@@ -44,6 +44,7 @@ export interface Job {
   visaSponsorship: "yes" | "no" | "unknown";
   roleFamily: RoleFamily;
   description: string;
+  companyDomain?: string;
   companyQuality?: number; // 0-100, see lib/companyQuality.ts
   payKind?: "ote" | "base"; // which kind of pay payMin and payMax are
 }
