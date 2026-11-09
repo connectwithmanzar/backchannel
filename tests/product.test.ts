@@ -15,6 +15,7 @@ import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage } from "../src/lib/outreach/limits";
 import { validateTemplate, renderTemplate, autoSendDecision, OPT_OUT, unknownFields } from "../src/lib/outreach/templates";
 import { compareOffers, type OfferInput } from "../src/lib/offers";
+import { pickProvider, adaptGroqBody } from "../src/lib/ai";
 import { cleanDomain, classifyTitle, parsePeople, buildSearchUrl, mergePeople, HIRING_TITLES, RECRUITER_TITLES } from "../src/lib/contacts/apollo";
 
 test("sales role filter: keeps targets, drops noise", () => {
@@ -291,4 +292,25 @@ test("offers: yearly cash converts to USD and ranks open offers", () => {
   assert.equal(by("c").rank, null);
   assert.equal(by("d").annualUsd, null);
   assert.equal(compareOffers([{ ...base, id: "x", base: 1000 }])[0].isBest, false); // a single offer is not "best"
+});
+
+test("AI provider: Groq first, then OpenRouter, then Anthropic, never a free Gemini", () => {
+  assert.equal(pickProvider({}).name, "none");
+  assert.equal(pickProvider({ GROQ_API_KEY: "gsk_abcdefghijk", OPENROUTER_API_KEY: "sk-or-abcdefghij" }).name, "groq");
+  assert.equal(pickProvider({ OPENROUTER_API_KEY: "sk-or-abcdefghij", ANTHROPIC_API_KEY: "sk-ant-abcdefghij" }).name, "openrouter");
+  assert.equal(pickProvider({ ANTHROPIC_API_KEY: "sk-ant-abcdefghij" }).name, "anthropic");
+  assert.equal(pickProvider({ GROQ_API_KEY: "short" }).name, "none");
+  const g = pickProvider({ GROQ_API_KEY: "gsk_abcdefghijk" });
+  assert.equal(g.baseURL, "https://api.groq.com/openai/v1");
+  assert.equal(g.model, "openai/gpt-oss-120b");
+  assert.equal(pickProvider({ GROQ_API_KEY: "gsk_abcdefghijk", GROQ_MODEL: "other/model" }).model, "other/model");
+});
+
+test("Groq requests: low reasoning and headroom so short answers are not cut off", () => {
+  const out = adaptGroqBody({ model: "openai/gpt-oss-120b", max_tokens: 120, messages: [] });
+  assert.equal(out.reasoning_effort, "low");
+  assert.equal(out.max_completion_tokens, 920);
+  assert.equal("max_tokens" in out, false);
+  const other = adaptGroqBody({ model: "llama-3.3-70b-versatile", messages: [] });
+  assert.equal("reasoning_effort" in other, false);
 });
