@@ -15,12 +15,12 @@ const PRIMARY: NavLink[] = [
 
 const GROUPS: Group[] = [
   { id: "pipeline", label: "Pipeline", links: [
-    { href: "/autopilot", label: "Autopilot" }, { href: "/outreach", label: "Outreach" },
+    { href: "/autopilot", label: "Applications" }, { href: "/outreach", label: "Outreach" },
     { href: "/referrals", label: "Referrals" }, { href: "/offers", label: "Offers" },
   ] },
   { id: "more", label: "More", links: [
     { href: "/profile", label: "My profile" }, { href: "/pay", label: "Pay benchmark" },
-    { href: "/side-income", label: "Side income" }, { href: "/sources", label: "Sources" },
+    { href: "/sources", label: "Company sources" },
   ] },
 ];
 

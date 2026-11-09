@@ -4,14 +4,14 @@ export function PageHeader({ eyebrow, title, children }: { eyebrow: string; titl
   return (
     <header className="mb-6">
       <div className="text-xs font-semibold uppercase tracking-wider text-muted">{eyebrow}</div>
-      <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">{title}</h1>
+      <h1 className="mt-1 text-2xl font-extrabold sm:text-3xl">{title}</h1>
       {children && <div className="mt-2 max-w-[66ch] text-muted">{children}</div>}
     </header>
   );
 }
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`min-w-0 rounded-card border border-line bg-surface p-4 sm:p-5 ${className}`}>{children}</div>;
+  return <div className={`min-w-0 rounded-card border border-line bg-surface p-4 shadow-[0_1px_2px_rgba(18,26,36,0.05)] sm:p-5 ${className}`}>{children}</div>;
 }
 
 export function Empty({ children }: { children: ReactNode }) {

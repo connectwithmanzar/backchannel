@@ -33,19 +33,25 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
   return (
     <section className="py-6">
       <PageHeader eyebrow="Outreach · email + LinkedIn" title="Get in front of the people who hire">
-        Add a hiring manager or recruiter and AI writes a short, personal sequence from your real numbers: three emails from your own Gmail and two LinkedIn steps you send yourself. You approve every email. When you click Send it goes out straight away. Automatic sends wait for the recipient&apos;s own morning (9:00 to 11:30 local, on their working days), and every sequence stops as soon as they reply.
+        Add a hiring manager or recruiter. Backchannel writes three emails and two LinkedIn messages from your real numbers. You approve every email and send the LinkedIn steps yourself. Everything stops when they reply.
       </PageHeader>
-      <AutoSendCard state={{
-        subject: tpl?.subject ?? "", body: tpl?.body ?? "", approved: !!tpl?.approved_at,
-        enabled: prefs?.autosend_enabled === true, minFit: prefs?.autosend_min_fit ?? 75,
-        daysSending: prefs?.email_ramp_start ? Math.floor((Date.now() - Date.parse(prefs.email_ramp_start)) / 864e5) : 0,
-        gmailConnected: !!gmail,
-      }} />
       <OutreachClient
         contacts={rows} jobs={jobOptions} gmailEmail={gmail?.email ?? null} gmailReady={gmailConfigured()} aiReady={hasAIKey()}
         notice={sp.gmail ?? null} sentToday={sentToday}
         settings={{ limit: prefs?.email_daily_limit ?? 20, signature: prefs?.email_signature ?? "", todayLimit: effectiveDailyLimit(prefs?.email_daily_limit, prefs?.email_ramp_start) }}
       />
+      <details className="mt-5">
+        <summary className="cursor-pointer rounded-card border border-line bg-surface px-4 py-3 text-lg font-bold">Auto-send ({prefs?.autosend_enabled === true ? "on" : "off"}) and how sending works</summary>
+        <div className="mt-3">
+          <p className="mb-3 text-sm text-muted">Emails you send go out at once. Automatic sends wait for the recipient&apos;s own morning (9:00 to 11:30, their working days) and stay inside your daily limit. Sending pauses if more than 2% of recent emails bounce.</p>
+          <AutoSendCard state={{
+        subject: tpl?.subject ?? "", body: tpl?.body ?? "", approved: !!tpl?.approved_at,
+        enabled: prefs?.autosend_enabled === true, minFit: prefs?.autosend_min_fit ?? 75,
+        daysSending: prefs?.email_ramp_start ? Math.floor((Date.now() - Date.parse(prefs.email_ramp_start)) / 864e5) : 0,
+        gmailConnected: !!gmail,
+      }} />
+        </div>
+      </details>
     </section>
   );
 }

@@ -20,6 +20,10 @@ export interface JobReaction {
   model?: string;
 }
 
+function fitTone(score: number) {
+  return score >= 80 ? "bg-good-soft text-good" : score >= 60 ? "bg-signal-soft text-signal" : "bg-sunk text-muted";
+}
+
 function money(n?: number, cur?: string) {
   if (!n || !cur) return "";
   if (cur === "INR") return `₹${(n / 1e5).toFixed(1).replace(/\.0$/, "")} L`;
@@ -68,11 +72,13 @@ function ReactionButton({
 export default function RolesFeed({
   jobs,
   reactions: initialReactions = {},
+  defaultMarkets = [],
 }: {
   jobs: ScoredJob[];
   reactions?: Record<string, JobReaction>;
+  defaultMarkets?: string[];
 }) {
-  const [markets, setMarkets] = useState<Set<string>>(new Set());
+  const [markets, setMarkets] = useState<Set<string>>(new Set(defaultMarkets));
   const [families, setFamilies] = useState<Set<string>>(new Set());
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [payOnly, setPayOnly] = useState(false);
@@ -214,7 +220,7 @@ export default function RolesFeed({
               <li
                 key={j.id}
                 className={`rounded-card border bg-surface transition-opacity ${
-                  isOpen ? "border-accent" : "border-line"
+                  isOpen ? "border-accent" : "border-line hover:border-fg/30"
                 } ${isSkipped ? "opacity-50" : ""}`}
               >
                 <button
@@ -225,12 +231,15 @@ export default function RolesFeed({
                 >
                   <div className="min-w-0">
                     <h3 className="text-[17px] font-bold">{j.title}</h3>
-                    <div className="text-sm text-muted">{j.company} · {j.location}</div>
+                    <div className="line-clamp-1 text-sm text-muted">{j.company} · {j.location}</div>
                   </div>
-                  <div className="sm:text-right">
-                    <b className="font-display text-xl num">
+                  <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-1">
+                    <span className={`rounded-lg px-2.5 py-1 font-display text-xl font-extrabold num ${fitTone(j.score)}`} title="How well this role fits your profile">
+                      <span className="sr-only">Fit </span>{j.score}%
+                    </span>
+                    <span className={j.payMax ? "text-sm font-semibold num" : "text-xs text-muted"}>
                       {j.payMax ? `${money(j.payMin, j.currency)}–${money(j.payMax, j.currency)}` : "Pay not published"}
-                    </b>
+                    </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 sm:col-span-2">
                     <span className="rounded-md bg-signal-soft px-2 py-0.5 text-xs font-semibold capitalize text-signal">
@@ -251,12 +260,6 @@ export default function RolesFeed({
                     {rxn === "applied" && (
                       <span className="rounded-md bg-good-soft px-2 py-0.5 text-xs font-semibold text-good">Applied</span>
                     )}
-                    <span className="ml-1 inline-flex items-center gap-1.5 text-[13px] font-semibold num">
-                      Fit {j.score}%
-                      <i className="relative block h-1.5 w-11 overflow-hidden rounded bg-sunk">
-                        <span className="absolute inset-y-0 left-0 bg-accent" style={{ width: `${j.score}%` }} />
-                      </i>
-                    </span>
                   </div>
                 </button>
 

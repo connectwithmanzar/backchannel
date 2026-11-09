@@ -67,7 +67,7 @@ export function hasAIKey(): boolean {
   return provider.name !== "none";
 }
 
-export const NO_AI_MESSAGE = "AI isn't set up yet. Add GROQ_API_KEY or GEMINI_API_KEY (both free), OPENROUTER_API_KEY or ANTHROPIC_API_KEY in Vercel → Settings → Environment Variables, then redeploy.";
+export const NO_AI_MESSAGE = "AI writing is switched off right now. This is a setup issue on our side, not something you did. Try again later.";
 
 /** One-shot text completion. */
 export async function aiText(system: string, user: string, opts: { maxTokens?: number; smart?: boolean } = {}): Promise<string> {

@@ -67,8 +67,8 @@ export default function ScorecardSection({
       {/* Name + current role */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">Name</label>
-          <input
+          <label htmlFor="sc-name" className="mb-1 block text-sm font-medium">Name</label>
+          <input id="sc-name"
             className="w-full rounded-lg border border-line bg-sunk px-3 py-2 text-sm outline-none focus:border-accent"
             value={p.name ?? ""}
             onChange={(e) => onChange({ name: e.target.value })}
@@ -76,8 +76,8 @@ export default function ScorecardSection({
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">Current role</label>
-          <input
+          <label htmlFor="sc-role" className="mb-1 block text-sm font-medium">Current role</label>
+          <input id="sc-role"
             className="w-full rounded-lg border border-line bg-sunk px-3 py-2 text-sm outline-none focus:border-accent"
             value={p.current_role ?? ""}
             onChange={(e) => onChange({ current_role: e.target.value })}
@@ -89,8 +89,8 @@ export default function ScorecardSection({
       {/* Numbers */}
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">Years in sales</label>
-          <input
+          <label htmlFor="sc-years" className="mb-1 block text-sm font-medium">Years in sales</label>
+          <input id="sc-years"
             type="number"
             min={0}
             step={0.5}
@@ -101,8 +101,8 @@ export default function ScorecardSection({
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">Quota attainment %</label>
-          <input
+          <label htmlFor="sc-quota" className="mb-1 block text-sm font-medium">Quota attainment %</label>
+          <input id="sc-quota"
             type="number"
             min={0}
             className="w-full rounded-lg border border-line bg-sunk px-3 py-2 text-sm outline-none focus:border-accent"
@@ -112,8 +112,8 @@ export default function ScorecardSection({
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">Meetings/month</label>
-          <input
+          <label htmlFor="sc-meetings" className="mb-1 block text-sm font-medium">Meetings/month</label>
+          <input id="sc-meetings"
             type="number"
             min={0}
             className="w-full rounded-lg border border-line bg-sunk px-3 py-2 text-sm outline-none focus:border-accent"
@@ -127,8 +127,8 @@ export default function ScorecardSection({
       {/* Segment + Motion */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="mb-2 block text-sm font-medium">Segment</label>
-          <div className="flex gap-2">
+          <p id="grp-segment" className="mb-2 block text-sm font-medium">Segment</p>
+          <div role="group" aria-labelledby="grp-segment" className="flex gap-2">
             {SEGMENTS.map((s) => (
               <button
                 key={s}
@@ -146,8 +146,8 @@ export default function ScorecardSection({
           </div>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium">Motion</label>
-          <div className="flex gap-2">
+          <p id="grp-motion" className="mb-2 block text-sm font-medium">Motion</p>
+          <div role="group" aria-labelledby="grp-motion" className="flex gap-2">
             {MOTIONS.map((m) => (
               <button
                 key={m}
@@ -168,8 +168,8 @@ export default function ScorecardSection({
 
       {/* Tools */}
       <div>
-        <label className="mb-2 block text-sm font-medium">Tools you use</label>
-        <div className="mb-2 flex flex-wrap gap-2">
+        <p id="grp-tools" className="mb-2 block text-sm font-medium">Tools you use</p>
+        <div role="group" aria-labelledby="grp-tools" className="mb-2 flex flex-wrap gap-2">
           {(p.tools ?? []).map((t) => (
             <span
               key={t}
@@ -206,8 +206,8 @@ export default function ScorecardSection({
 
       {/* Target titles */}
       <div>
-        <label className="mb-2 block text-sm font-medium">Target roles</label>
-        <div className="flex flex-wrap gap-2">
+        <p id="grp-roles" className="mb-2 block text-sm font-medium">Target roles</p>
+        <div role="group" aria-labelledby="grp-roles" className="flex flex-wrap gap-2">
           {TITLES.map((t) => (
             <button
               key={t}
@@ -227,8 +227,8 @@ export default function ScorecardSection({
 
       {/* Markets */}
       <div>
-        <label className="mb-2 block text-sm font-medium">Target markets</label>
-        <div className="flex flex-wrap gap-2">
+        <p id="grp-markets" className="mb-2 block text-sm font-medium">Target markets</p>
+        <div role="group" aria-labelledby="grp-markets" className="flex flex-wrap gap-2">
           {MARKETS.map((m) => (
             <button
               key={m}

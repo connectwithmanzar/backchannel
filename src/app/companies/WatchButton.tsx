@@ -26,10 +26,11 @@ export default function WatchButton({
       type="button"
       onClick={toggle}
       title={watching ? "Stop watching" : "Watch this company"}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+      aria-pressed={watching}
+      className={`inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-semibold transition-colors ${
         watching
-          ? "bg-accent text-accent-ink hover:bg-accent/80"
-          : "border border-line bg-surface text-muted hover:border-fg/40 hover:text-fg"
+          ? "border-accent bg-accent-soft text-accent hover:bg-accent-soft/70"
+          : "border-line bg-surface text-muted hover:border-fg/40 hover:text-fg"
       }`}
     >
       {watching ? "★ Watching" : "☆ Watch"}

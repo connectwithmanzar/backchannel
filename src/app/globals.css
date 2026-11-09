@@ -23,3 +23,6 @@ h1, h2, h3 { font-family: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans
 /* Height of the phone bottom tab bar, so floating buttons sit above it. */
 :root { --tabbar-h: 0px; }
 @media (max-width: 767px) { :root { --tabbar-h: 52px; } }
+
+/* Keyboard focus is always visible, even on elements that remove the default outline. */
+:focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 2px; }

@@ -120,25 +120,6 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
         </Card>
       )}
 
-      <Card>
-        <h2 className="mb-3 text-xl font-bold">Add someone to reach out to</h2>
-        <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => {
-          e.preventDefault();
-          act("add", "/api/outreach", { action: "add_contact", ...form }, `Sequence written for ${form.name}. Review the first email below.`, () => setForm({ name: "", title: "", company_name: "", email: "", linkedin_url: "", job_id: "", notes: "" }));
-        }}>
-          {([["name", "Name *"], ["title", "Their title, e.g. Head of SDR"], ["company_name", "Company *"], ["email", "Work email"], ["linkedin_url", "LinkedIn profile link"]] as const).map(([k, p]) => (
-            <input key={k} id={`f-${k}`} aria-label={p} placeholder={p} className={input} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
-          ))}
-          <select id="f-job" aria-label="Related role" className={input} value={form.job_id}
-            onChange={(e) => { const j = jobs.find((x) => x.id === e.target.value); setForm({ ...form, job_id: e.target.value, company_name: form.company_name || j?.company || "" }); }}>
-            <option value="">Related role (optional)</option>
-            {jobs.map((j) => <option key={j.id} value={j.id}>{j.label}</option>)}
-          </select>
-          <textarea id="f-notes" aria-label="Notes" rows={2} className={input + " sm:col-span-2"} placeholder="Anything personal to mention (e.g. you both spoke at an event). Only facts." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          <div className="sm:col-span-2"><button className={btnPrimary} disabled={!!busy || !aiReady}>{busy === "add" ? "Writing sequence… (about 20s)" : "Add and write sequence"}</button></div>
-        </form>
-      </Card>
-
       {gmailEmail && contacts.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
           <button className={btn} disabled={checking} onClick={() => checkNow(false)}>{checking ? "Checking your inbox…" : "Check replies now"}</button>
@@ -176,7 +157,7 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
                       <button className={btn} disabled={!!busy} onClick={() => act(c.id + "re", "/api/outreach", { action: "regenerate", contact_id: c.id }, "Rewritten.")}>{busy === c.id + "re" ? "Rewriting…" : "Rewrite unsent steps with AI"}</button>
                       <button className={btn} disabled={!!busy} onClick={() => act(c.id + "rp", "/api/outreach", { action: "mark_replied", contact_id: c.id }, "Marked as replied. Sequence stopped.")}>They replied</button>
                       <button className={btn} disabled={!!busy} onClick={() => act(c.id + "st", "/api/outreach", { action: "stop", contact_id: c.id }, "Sequence stopped.")}>Stop sequence</button>
-                      <button className={btn} disabled={!!busy} onClick={() => act(c.id + "del", "/api/outreach", { action: "delete_contact", contact_id: c.id }, "Contact deleted.")}>Delete</button>
+                      <button className={btn} disabled={!!busy} onClick={() => { if (!window.confirm(`Delete ${c.name} and all their drafts? This can't be undone.`)) return; void act(c.id + "del", "/api/outreach", { action: "delete_contact", contact_id: c.id }, "Contact deleted."); }}>Delete</button>
                     </div>
                   </div>
                 )}
@@ -185,6 +166,28 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
           })}
         </ul>
       ) : <Empty>No one yet. Add a hiring manager, sales leader or recruiter at a company you like.</Empty>}
+      <details open={contacts.length === 0}>
+        <summary className="cursor-pointer rounded-card border border-line bg-surface px-4 py-3 text-lg font-bold">Add someone to reach out to</summary>
+        <div className="mt-3">
+      <Card>
+        <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => {
+          e.preventDefault();
+          act("add", "/api/outreach", { action: "add_contact", ...form }, `Sequence written for ${form.name}. Review the first email below.`, () => setForm({ name: "", title: "", company_name: "", email: "", linkedin_url: "", job_id: "", notes: "" }));
+        }}>
+          {([["name", "Name *"], ["title", "Their title, e.g. Head of SDR"], ["company_name", "Company *"], ["email", "Work email"], ["linkedin_url", "LinkedIn profile link"]] as const).map(([k, p]) => (
+            <input key={k} id={`f-${k}`} aria-label={p} placeholder={p} className={input} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
+          ))}
+          <select id="f-job" aria-label="Related role" className={input} value={form.job_id}
+            onChange={(e) => { const j = jobs.find((x) => x.id === e.target.value); setForm({ ...form, job_id: e.target.value, company_name: form.company_name || j?.company || "" }); }}>
+            <option value="">Related role (optional)</option>
+            {jobs.map((j) => <option key={j.id} value={j.id}>{j.label}</option>)}
+          </select>
+          <textarea id="f-notes" aria-label="Notes" rows={2} className={input + " sm:col-span-2"} placeholder="Anything personal to mention (e.g. you both spoke at an event). Only facts." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          <div className="sm:col-span-2"><button className={btnPrimary} disabled={!!busy || !aiReady}>{busy === "add" ? "Writing sequence… (about 20s)" : "Add and write sequence"}</button></div>
+        </form>
+      </Card>
+        </div>
+      </details>
     </div>
   );
 }
@@ -208,7 +211,7 @@ function StepEditor({ s, busy, gmail, act }: { s: Step; busy: string | null; gma
           <button className={btn} disabled={!!busy} onClick={() => act(s.id + "e", "/api/outreach", { action: "edit_step", id: s.id, subject, body, channel: s.channel }, "Saved.")}>Save edits</button>
           {s.channel === "email" && (s.status === "draft" || s.status === "failed" || s.status === "scheduled") && (
             <button className={btnPrimary} disabled={!!busy || !gmail} title={gmail ? "" : "Connect Gmail first"}
-              onClick={() => act(s.id + "s", "/api/outreach", { action: "send_now", id: s.id }, s.step_index === 0 ? "Sent. Follow-ups are due on their dates for you to approve, and stop if they reply." : "Sent.")}>
+              onClick={() => { if (!window.confirm("Send this email now? It can't be unsent.")) return; void act(s.id + "s", "/api/outreach", { action: "send_now", id: s.id }, s.step_index === 0 ? "Sent. Follow-ups are due on their dates for you to approve, and stop if they reply." : "Sent."); }}>
               {busy === s.id + "s" ? "Sending…" : s.step_index === 0 ? "Approve and send" : "Send now"}
             </button>
           )}

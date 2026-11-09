@@ -5,6 +5,7 @@ import { companyQuality, signalsFromRows } from "@/lib/companyQuality";
 import { toMarket, countryToMarkets } from "@/lib/jobs/market";
 import type { Job, Market, RemoteType, RoleFamily } from "@/lib/collector/types";
 import { htmlToText } from "@/lib/collector/fetchers";
+import { shortDateTime } from "@/lib/format";
 import RolesFeed, { type JobReaction } from "./RolesFeed";
 import RunNowButton from "./RunNowButton";
 import PasteJob from "./PasteJob";
@@ -138,26 +139,26 @@ export default async function RolesPage() {
         Matching public roles
       </h1>
       <p className="mt-2 max-w-[62ch] text-muted">
-        It finds matching public roles and drafts a truthful CV plus a referral
-        ask you send, and you apply yourself. Roles come from public company
-        careers pages ({seedCount} companies) and are ranked against your profile.
+        Backchannel collects public sales roles from {seedCount} company careers pages and ranks them against your
+        profile. For the ones you want, it drafts a tailored CV and a referral message. You review and send.
       </p>
-
-      <div className="mt-4 flex flex-wrap items-center gap-4">
-        {owner && <RunNowButton />}
-        {owner && <ScoreNowButton />}
-        <TelegramButton configured={isTelegramConfigured()} />
-        <a href="/sources" className="text-sm font-semibold text-accent underline-offset-2 hover:underline">Job sources →</a>
-        {lastChecked && (
-          <p className="text-sm text-muted num">
-            Last collected{" "}
-            {new Date(lastChecked).toLocaleString("en-IN", {
-              timeZone: "Asia/Kolkata",
-            })}{" "}
-            IST
-          </p>
-        )}
-      </div>
+      {lastChecked && (
+        <p className="mt-2 text-sm text-muted num">Roles last collected {shortDateTime(lastChecked)}.</p>
+      )}
+      {profile.markets.length > 0 && (
+        <p className="mt-1 text-sm text-muted">Showing your markets first. Tap a market below to change it.</p>
+      )}
+      {owner && (
+        <details className="mt-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm">
+          <summary className="cursor-pointer font-semibold">Admin tools</summary>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <RunNowButton />
+            <ScoreNowButton />
+            <TelegramButton configured={isTelegramConfigured()} />
+            <a href="/sources" className="font-semibold text-accent underline-offset-2 hover:underline">Company sources →</a>
+          </div>
+        </details>
+      )}
 
       <PasteJob />
 
@@ -175,7 +176,7 @@ export default async function RolesPage() {
         </div>
       )}
 
-      <RolesFeed jobs={scored} reactions={reactions} />
+      <RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets} />
     </section>
   );
 }

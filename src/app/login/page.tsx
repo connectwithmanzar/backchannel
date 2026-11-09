@@ -113,6 +113,11 @@ export default function LoginPage() {
             )}
           </div>
         )}
+        <ul className="mt-6 flex flex-col gap-1.5 border-t border-line pt-4 text-xs text-muted">
+          <li>Nothing is sent without your approval.</li>
+          <li>20 emails a day at most, and it stops when someone replies.</li>
+          <li>No LinkedIn passwords, ever. Gmail is used only to send and to see replies.</li>
+        </ul>
       </div>
     </div>
   );

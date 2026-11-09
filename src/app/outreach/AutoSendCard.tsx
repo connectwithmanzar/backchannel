@@ -29,7 +29,7 @@ export default function AutoSendCard({ state }: { state: AutoSendState }) {
   return (
     <Card className="mb-5 flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xl font-bold">Auto-send (off unless you switch it on)</h2>
+        <h2 className="text-xl font-bold">Auto-send</h2>
         <Pill tone={state.enabled ? "good" : "neutral"}>{state.enabled ? "On" : "Off"}</Pill>
       </div>
       <p className="text-sm text-muted">

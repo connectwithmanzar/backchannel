@@ -29,7 +29,7 @@ export default async function AutopilotPage() {
 
   return (
     <section className="py-6">
-      <PageHeader eyebrow="Autopilot" title="Applications, prepared for you">
+      <PageHeader eyebrow="Applications" title="Applications, prepared for you">
         For your best matches, Autopilot writes a tailored CV and cover note using only facts from your CV, and drafts answers to the form questions. It stops and asks you about visa, salary and notice period. You review, open the company&apos;s page and submit. Nothing is ever sent without you.
       </PageHeader>
       <AutopilotClient
