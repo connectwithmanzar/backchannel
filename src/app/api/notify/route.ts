@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as serviceClient } from "@supabase/supabase-js";
 import { runDigest } from "@/lib/notify";
-import { isCronAuthorized } from "@/lib/owner";
+import { isCronAuthorized, isOwner } from "@/lib/owner";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -13,6 +13,7 @@ export async function POST() {
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  if (!isOwner(user.email)) return NextResponse.json({ ok: false, sent: 0, error: "The Telegram digest is set up for the owner only." }, { status: 403 });
   const result = await runDigest(user.id);
   return NextResponse.json(result, { status: result.ok ? 200 : (result.error?.includes("not configured") ? 400 : 500) });
 }

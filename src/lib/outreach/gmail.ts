@@ -1,5 +1,6 @@
 // Minimal Gmail API client using OAuth (no extra libraries).
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
+import { decryptSecret } from "@/lib/crypto";
 import { fromAddress, isAutoReply, isBounceMessage, isDelayNotice } from "./limits";
 const API = "https://gmail.googleapis.com/gmail/v1/users/me";
 export const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.readonly"];
@@ -41,7 +42,7 @@ export async function exchangeCode(code: string, redirectUri: string) {
 }
 
 export async function accessToken(refreshToken: string) {
-  return (await tokenRequest({ refresh_token: refreshToken, grant_type: "refresh_token" })).access_token;
+  return (await tokenRequest({ refresh_token: decryptSecret(refreshToken), grant_type: "refresh_token" })).access_token;
 }
 
 async function gmailGet(token: string, path: string) {

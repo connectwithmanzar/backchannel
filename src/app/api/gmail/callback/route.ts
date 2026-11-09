@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { serviceClient } from "@/lib/supabase/service";
+import { encryptSecret } from "@/lib/crypto";
 import { exchangeCode } from "@/lib/outreach/gmail";
 
 export async function GET(req: NextRequest) {
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
   if (!code || !state || state !== req.cookies.get("gmail_oauth_state")?.value) return back("failed");
   try {
     const { refreshToken, email } = await exchangeCode(code, `${req.nextUrl.origin}/api/gmail/callback`);
-    const { error } = await serviceClient().from("gmail_accounts").upsert({ user_id: user.id, email, refresh_token: refreshToken, connected_at: new Date().toISOString() });
+    const { error } = await serviceClient().from("gmail_accounts").upsert({ user_id: user.id, email, refresh_token: encryptSecret(refreshToken), connected_at: new Date().toISOString() });
     if (error) return back("failed");
     return back("connected");
   } catch {

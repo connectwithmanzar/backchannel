@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabase/service";
-import { isCronAuthorized } from "@/lib/owner";
+import { isCronAuthorized, isOwner } from "@/lib/owner";
+import { alertOps, failedSteps, pingHeartbeat } from "@/lib/ops";
 import { scoreForUser } from "@/lib/jobs/scoring";
 import { autoPrepare } from "@/lib/apps/auto";
 import { runOutreach } from "@/lib/outreach/engine";
@@ -29,12 +30,16 @@ export async function GET(req: NextRequest) {
     await step("scoring", () => scoreForUser(svc, u.id, { deadline: Math.min(userEnd, Date.now() + 40_000), ai: true }));
     await step("autopilot", () => autoPrepare(svc, u.id, Math.min(userEnd, Date.now() + 90_000)));
     await step("outreach", () => runOutreach(svc, u.id, Math.min(userEnd, Date.now() + 60_000)));
-    await step("telegram", () => runDigest(u.id));
+    // The digest goes to one Telegram chat, so only the owner's roles are sent there.
+    if (isOwner(u.email)) await step("telegram", () => runDigest(u.id));
     results.push(r);
   }
   console.log(JSON.stringify({
     job: "daily", users: results.length, ms: Date.now() - startedAt,
     outreach: results.map((r) => r.outreach),
   }));
+  const failed = results.flatMap((r) => failedSteps(r).map((s) => `${s}: ${String((r[s] as { error?: string }).error).slice(0, 120)}`));
+  if (failed.length) await alertOps(`Daily job had ${failed.length} failed step(s):\n${failed.slice(0, 5).join("\n")}`);
+  else await pingHeartbeat(process.env.HEARTBEAT_DAILY_URL);
   return NextResponse.json({ ok: true, results });
 }

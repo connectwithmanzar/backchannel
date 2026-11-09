@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabase/service";
 import { isCronAuthorized } from "@/lib/owner";
 import { runOutreach } from "@/lib/outreach/engine";
+import { alertOps, pingHeartbeat } from "@/lib/ops";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -20,6 +21,9 @@ export async function GET(req: NextRequest) {
     try { results.push({ user: a.user_id, ...(await runOutreach(svc, a.user_id, end)) }); }
     catch (e) { results.push({ user: a.user_id, error: (e as Error).message }); }
   }
+  const errors = results.filter((r) => "error" in r);
+  if (errors.length) await alertOps(`Outreach check failed for ${errors.length} account(s): ${String(errors[0].error).slice(0, 160)}`);
+  else await pingHeartbeat(process.env.HEARTBEAT_OUTREACH_URL);
   console.log(JSON.stringify({ job: "outreach-tick", users: results.length, results }));
   return NextResponse.json({ ok: true, results });
 }

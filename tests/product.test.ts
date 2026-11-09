@@ -15,6 +15,8 @@ import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddress, isDelayNotice, isAutoReply } from "../src/lib/outreach/limits";
 import { fakeSupabase } from "./helpers/fake-supabase";
 import { claimStep, markBounced, recentBounceStats, stopContact } from "../src/lib/outreach/engine";
+import { encryptSecret, decryptSecret, isEncrypted } from "../src/lib/crypto";
+import { failedSteps } from "../src/lib/ops";
 import { unsupportedNumbers } from "../src/lib/apps/faithfulness";
 import { pickProfileFields, pickPreferenceFields } from "../src/lib/profile-fields";
 import { validateTemplate, renderTemplate, autoSendDecision, OPT_OUT, unknownFields } from "../src/lib/outreach/templates";
@@ -467,4 +469,23 @@ test("base-only pay is not compared with an OTE minimum; Singapore dollars conve
   assert.equal(base, 50);    // unknown, not "below minimum"
   assert.equal(ote, 10);     // OTE below the minimum is a real miss
   assert.equal(toUsd(100000, "SGD"), 74000);
+});
+
+test("stored secrets: encrypted when a key is set, readable back, and tamper-proof", () => {
+  const env = { TOKEN_ENC_KEY: "a".repeat(64) };
+  const stored = encryptSecret("1//refresh-token-value", env);
+  assert.ok(isEncrypted(stored));
+  assert.ok(!stored.includes("refresh-token-value"));
+  assert.equal(decryptSecret(stored, env), "1//refresh-token-value");
+  assert.notEqual(encryptSecret("same", env), encryptSecret("same", env));         // fresh random value each time
+  assert.equal(encryptSecret("plain", {}), "plain");                                // no key: unchanged
+  assert.equal(decryptSecret("legacy-plaintext", env), "legacy-plaintext");         // stored before encryption was on
+  assert.throws(() => decryptSecret(stored, {}), /TOKEN_ENC_KEY/);
+  assert.throws(() => decryptSecret(stored.slice(0, -4) + "AAAA", env));            // altered data is refused
+  assert.equal(encryptSecret("x", { TOKEN_ENC_KEY: "short" }), "x");                // invalid key is ignored
+});
+
+test("failed steps are picked out of a job result", () => {
+  assert.deepEqual(failedSteps({ user: "u", scoring: { scored: 5 }, outreach: { error: "boom" }, telegram: { error: "x" } }).sort(), ["outreach", "telegram"]);
+  assert.deepEqual(failedSteps({ user: "u", scoring: { scored: 5 } }), []);
 });
