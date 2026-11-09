@@ -47,20 +47,16 @@ function toRoleFamily(title: string): RoleFamily {
 }
 
 export default async function RolesPage() {
-  const t0 = Date.now();
-  const marks: Record<string, number> = {};
-  const mark = <T,>(label: string, p: PromiseLike<T>) => Promise.resolve(p).then((v) => { marks[label] = Date.now() - t0; return v; });
   const [supabase, user] = await Promise.all([createClient(), getSessionUser()]);
-  marks.client = Date.now() - t0;
 
   // Independent queries run together instead of one after another.
   const [{ data: profileRow }, sharedJobs, { data: ownJobs }, { data: scoreRows }] = await Promise.all([
-    mark("profile", supabase.from("profiles").select("name, tools, markets, min_ote_usd, min_ote_by_market").maybeSingle()),
+    supabase.from("profiles").select("name, tools, markets, min_ote_usd, min_ote_by_market").maybeSingle(),
     // Shared jobs come from a 5-minute cache; the jobs you pasted yourself are read fresh (row-level security shows only yours).
-    mark("shared", getSharedJobs()),
-    mark("own", supabase.from("jobs").select(JOB_COLUMNS).eq("is_active", true).not("added_by", "is", null)),
+    getSharedJobs(),
+    supabase.from("jobs").select(JOB_COLUMNS).eq("is_active", true).not("added_by", "is", null),
     user
-      ? mark("scores", supabase.from("job_scores").select("job_id, score, parts, explanation, model, reaction").eq("user_id", user.id))
+      ? supabase.from("job_scores").select("job_id, score, parts, explanation, model, reaction").eq("user_id", user.id)
       : Promise.resolve({ data: null }),
   ]);
   const rows = [...sharedJobs, ...(ownJobs ?? [])]
@@ -115,7 +111,6 @@ export default async function RolesPage() {
     // Scoring used the full text; the browser only needs a short preview.
     .map((j) => ({ ...j, description: j.description.slice(0, 600) }));
 
-  marks.scored = Date.now() - t0;
   const lastChecked = visibleRows[0]?.last_checked_at ?? null;
   const seedCount = COMPANY_SEEDS.filter(
     (s) => s.enabled && !isExcludedCompany(s.name, s.domain, s.ats_slug)
@@ -134,7 +129,6 @@ export default async function RolesPage() {
     };
   }
 
-  console.log(JSON.stringify({ page: "roles-timing", totalMs: Date.now() - t0, marks, rows: (rows ?? []).length, descKB: Math.round((rows ?? []).reduce((n, r) => n + (r.description?.length ?? 0), 0) / 1024) }));
   return (
     <section className="py-6">
       <div className="text-xs font-semibold uppercase tracking-wider text-muted">
