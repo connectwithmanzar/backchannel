@@ -6,6 +6,7 @@ import { roleCounts, type CompanyRow, type CompanyStatus } from "@/lib/company-l
 import CompanyJobsFinder from "../roles/CompanyJobsFinder";
 import ImportCompanies from "../sources/ImportCompanies";
 import DiscoverButton from "../sources/DiscoverButton";
+import ImportStatus from "../sources/ImportStatus";
 import CompaniesList from "./CompaniesList";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +52,12 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Pr
     // Companies with open roles first, then by how many.
     .sort((a, b) => b.roles - a.roles || a.name.localeCompare(b.name));
   const owner = isOwner(user?.email);
+  // How far the board search has got. The board_checked_at column arrives with migration 0015.
+  let status = { total: rows.length, withBoard: rows.filter((r) => r.hasBoard).length, unchecked: 0, migrated: false };
+  if (owner) {
+    const q = await db.from("companies").select("id", { count: "exact", head: true }).eq("enabled", true).is("ats_slug", null).is("board_checked_at", null);
+    status = q.error ? { ...status, unchecked: rows.filter((r) => !r.hasBoard && !r.lastCheckedAt).length } : { ...status, unchecked: q.count ?? 0, migrated: true };
+  }
 
   return (
     <section className="py-6">
@@ -66,6 +73,7 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Pr
         <aside className="flex min-w-[280px] flex-[1_1_320px] flex-col gap-4" aria-label="Add companies">
           {owner ? (
             <>
+              <ImportStatus {...status} />
               <ImportCompanies />
               <DiscoverButton />
             </>

@@ -5,6 +5,7 @@ import { btn, btnPrimary, Card } from "@/components/ui";
 import { chunk, MAX_CLAY_ROWS, parseCompanyList, type ImportRow } from "@/lib/company-import";
 import { countryCounts, parseClayCsv, selectClay, type ClayCompany } from "@/lib/clay-import";
 import { suggestedAsText } from "@/data/suggested-companies";
+import { FIND_BOARDS_EVENT } from "./ImportStatus";
 
 type Outcome = { name: string; status: "added" | "no_feed" | "already_there" | "excluded"; ats?: string; roles?: number };
 
@@ -16,6 +17,7 @@ export default function ImportCompanies() {
   const [outcomes, setOutcomes] = useState<Outcome[] | null>(null);
   const [roles, setRoles] = useState(0);
   const [error, setError] = useState("");
+  const [saved, setSaved] = useState("");
   const [clay, setClay] = useState<ClayCompany[] | null>(null);
   const [countries, setCountries] = useState<string[]>([]);
   const [hiring, setHiring] = useState<"yes" | "yes_unclear">("yes");
@@ -39,6 +41,7 @@ export default function ImportCompanies() {
     const rows: ImportRow[] = clay ? picked.map((c) => ({ name: c.name, domain: c.domain, extra: c.extra })) : parseCompanyList(text).rows;
     if (!rows.length) { setError(clay ? "No companies match these filters." : "Add at least one company, one per line, like: Acme, acme.com"); return; }
     setBusy(true); setError(""); setOutcomes(null); setRoles(0);
+    if (clay) { await saveList(rows); return; }
     const all: Outcome[] = [];
     let total = 0;
     const batches = chunk(rows);
@@ -52,6 +55,23 @@ export default function ImportCompanies() {
     }
     setBusy(false); setProgress("");
     router.refresh();
+  }
+
+  // A whole list is saved in seconds and stays saved. Finding each company's job board then continues in the status box and can be resumed.
+  async function saveList(rows: ImportRow[]) {
+    let added = 0, already = 0, excluded = 0;
+    const parts = chunk(rows, 200);
+    for (let i = 0; i < parts.length; i++) {
+      setProgress(`Saving companies ${i * 200 + 1} to ${Math.min((i + 1) * 200, rows.length)} of ${rows.length}…`);
+      const res = await fetch("/api/sources/save-list", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ companies: parts[i] }) });
+      const data = await res.json().catch(() => ({ error: `Something went wrong (error ${res.status}).` }));
+      if (!res.ok) { setError(data.error ?? "Import failed."); setBusy(false); setProgress(""); router.refresh(); return; }
+      added += data.added; already += data.already; excluded += data.excluded;
+    }
+    setBusy(false); setProgress("");
+    setSaved(`Saved ${added} new companies (${already} were already there${excluded ? `, ${excluded} skipped as excluded` : ""}). Now finding their job boards; follow it in Import status above. You can leave this page.`);
+    router.refresh();
+    window.dispatchEvent(new Event(FIND_BOARDS_EVENT));
   }
 
   const count = (s: Outcome["status"]) => outcomes?.filter((o) => o.status === s).length ?? 0;
@@ -91,6 +111,7 @@ export default function ImportCompanies() {
         </label>
         <button type="button" className={btn} disabled={busy} onClick={() => setText(suggestedAsText())}>Fill with a starter list</button>
       </div>
+      {saved && <p role="status" className="text-sm font-semibold text-good">{saved}</p>}
       {progress && <p role="status" className="text-sm text-muted">{progress}</p>}
       {error && <p role="alert" className="text-sm text-warn">{error}</p>}
       {outcomes && (
