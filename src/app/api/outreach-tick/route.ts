@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabase/service";
 import { isCronAuthorized } from "@/lib/owner";
 import { runOutreach } from "@/lib/outreach/engine";
+import { isWarmAuthorized } from "@/lib/warm";
 import { alertOps, pingHeartbeat } from "@/lib/ops";
 
 export const runtime = "nodejs";
@@ -11,7 +12,8 @@ export const maxDuration = 120;
 // daily jobs, but each automatic email waits for the recipient's own morning, which falls at a different hour for
 // India, the Gulf, Europe and the US. Each tick sends whatever is due and inside its window, within the daily limit.
 export async function GET(req: NextRequest) {
-  if (!isCronAuthorized(req.headers.get("authorization"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const keyOk = isWarmAuthorized(req.nextUrl.searchParams.get("key"));
+  if (!keyOk && !isCronAuthorized(req.headers.get("authorization"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const svc = serviceClient();
   const end = Date.now() + 100_000;
   const { data: accounts } = await svc.from("gmail_accounts").select("user_id");

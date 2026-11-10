@@ -1,12 +1,17 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isWarmAuthorized } from "@/lib/warm";
 
 // Cron endpoints authenticate themselves with CRON_SECRET (and fail closed without it),
 // so they must not be redirected to /login. Exact paths only — nothing else is opened.
-const CRON_PATHS = new Set(["/api/collect-jobs", "/api/notify", "/api/daily", "/api/outreach-tick"]);
+const CRON_PATHS = new Set(["/api/collect-jobs", "/api/notify", "/api/daily", "/api/outreach-tick", "/api/warm"]);
 
 export async function middleware(request: NextRequest) {
   if (CRON_PATHS.has(request.nextUrl.pathname)) {
+    return NextResponse.next({ request });
+  }
+  // The warm-up visits pages without signing in. It must carry the secret key, and it only ever reads what a signed-out visitor could.
+  if (request.method === "GET" && isWarmAuthorized(request.headers.get("x-warm-key"))) {
     return NextResponse.next({ request });
   }
 

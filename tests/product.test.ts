@@ -13,6 +13,7 @@ import { scoreJob, parseMinOteByMarket, familiesFromTitles, mentions, buildSearc
 import { companyQuality, signalsFromRows } from "../src/lib/companyQuality";
 import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddress, isDelayNotice, isAutoReply } from "../src/lib/outreach/limits";
+import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
 import { fakeSupabase } from "./helpers/fake-supabase";
@@ -527,4 +528,14 @@ test("skipping and saving at a company nudges its other roles, with a reason", (
   const many = Array.from({ length: 8 }, (_, i) => job(`s${i}`, "Gamma", 12));
   const skipped = Object.fromEntries(many.slice(0, 6).map((j) => [j.id, { reaction: "skipped" }]));
   assert.equal(applyFeedback(many, skipped).find((j) => j.id === "s7")!.score, 0);   // never below 0, and the drop is capped at 15
+});
+
+test("warm-up key: exact match only, and closed when no key is set", () => {
+  const key = "k".repeat(24);
+  assert.equal(isWarmAuthorized(key, key), true);
+  assert.equal(isWarmAuthorized(` ${key}\n`, `${key} `), true);       // stray whitespace tolerated
+  assert.equal(isWarmAuthorized("wrong".repeat(6), key), false);
+  assert.equal(isWarmAuthorized(null, key), false);
+  assert.equal(isWarmAuthorized(key, undefined), false);                // no key configured
+  assert.equal(isWarmAuthorized("short", "short"), false);              // keys under 16 characters are refused
 });
