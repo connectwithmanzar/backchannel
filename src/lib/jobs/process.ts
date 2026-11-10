@@ -3,16 +3,20 @@ import type { RawJob } from "@/lib/collectors/ats";
 import { htmlToText } from "@/lib/collector/fetchers";
 
 // ── Which titles count as the sales roles we target ─────────────────────────
-export type Family = "SDR/BDR" | "GTM Engineer" | "Account Executive" | "Sales leadership";
+export type Family = "SDR/BDR" | "GTM Engineer" | "Account Executive" | "Sales leadership" | "Account management" | "Partnerships" | "Sales ops & CS";
 
 const INCLUDE: [RegExp, Family][] = [
   [/\b(head of|director|vp|vice president|manager|lead),? (of )?(sales development|business development|sdr|bdr|outbound|inside sales)\b/i, "Sales leadership"],
   [/\b(sdr|bdr|sales development|business development rep(resentative)?|lead development|market development rep(resentative)?|inside sales|outbound (sales )?rep(resentative)?|revenue development|account development rep(resentative)?|adr)\b/i, "SDR/BDR"],
   [/\b(gtm|go[- ]to[- ]market) (engineer|engineering|systems|operations|automation)\b|\brevops engineer\b|\bgrowth engineer\b|\bsales (systems|automation) engineer\b/i, "GTM Engineer"],
   [/\b(account executive|\bae\b|new business (sales|manager|executive)|sales executive|business development (manager|executive)|founding (sales|ae))\b/i, "Account Executive"],
+  [/\b(partner(ship)?s? (manager|executive|lead|director|development)|channel (sales|manager|partner)|alliances? (manager|lead|director))\b/i, "Partnerships"],
+  [/\b(account manager|key account|client partner|strategic account|major account|relationship manager)\b/i, "Account management"],
+  [/\b(sales manager|sales team lead|sales lead|regional sales (manager|director)|area sales manager|country manager|team lead.{0,12}(sales|sdr|bdr))\b/i, "Sales leadership"],
+  [/\b(sales operations|revenue operations|revops|sales enablement|sales analyst|customer success (manager|executive|associate|specialist|lead)|client success|onboarding (manager|specialist))\b/i, "Sales ops & CS"],
 ];
 const EXCLUDE =
-  /\b(intern(ship)?|software engineer|data engineer|recruit(er|ing)|talent acquisition|legal|counsel|accountant|accounting|payroll|solutions? engineer|sales engineer|support engineer|customer support|customer success|technical account manager|partner(ship)? marketing|product marketing)\b/i;
+  /\b(intern(ship)?|software engineer|data engineer|recruit(er|ing)|talent acquisition|legal|counsel|accountant|accounting|payroll|solutions? engineer|sales engineer|support engineer|customer support|customer success engineer|technical account manager|partner(ship)? marketing|product marketing)\b/i;
 
 export function roleFamily(title: string): Family | null {
   if (EXCLUDE.test(title) && !/gtm engineer|growth engineer/i.test(title)) return null;

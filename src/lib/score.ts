@@ -24,6 +24,8 @@ export function parseMinOteByMarket(v: unknown): Partial<Record<Market, number>>
   return out;
 }
 
+// Roles next to what you target (account management, partnerships, sales ops and customer success) rank above unrelated sales roles.
+const ADJACENT = new Set<RoleFamily>(["Account management", "Partnerships", "Sales ops & CS"]);
 const DEFAULT_FAMILIES: RoleFamily[] = ["SDR/BDR", "GTM Engineer", "Account Executive"];
 
 /** The role types the user ticked on their profile ("Senior SDR", "Account Executive (SMB)"...). Empty means all three. */
@@ -34,6 +36,9 @@ export function familiesFromTitles(titles: string[] | null | undefined): RoleFam
     if (/account executive|\bae\b/i.test(t)) out.add("Account Executive");
     if (/\bgtm\b|go.to.market/i.test(t)) out.add("GTM Engineer");
     if (/\b(manager|head|director|vp)\b/i.test(t)) out.add("Sales leadership");
+    if (/account manager|key account|client partner/i.test(t)) out.add("Account management");
+    if (/partner|channel|alliance/i.test(t)) out.add("Partnerships");
+    if (/operations|revops|enablement|customer success/i.test(t)) out.add("Sales ops & CS");
   }
   return out.size ? [...out] : DEFAULT_FAMILIES;
 }
@@ -84,7 +89,7 @@ export function toUsd(amount?: number, currency?: string) {
  * embeddings + an AI re-rank that writes a fuller explanation.
  */
 export function scoreJob(job: Job, p: SearchProfile): ScoredJob {
-  const role = p.targetFamilies.includes(job.roleFamily) ? 100 : job.roleFamily === "Sales leadership" ? 40 : 20;
+  const role = p.targetFamilies.includes(job.roleFamily) ? 100 : job.roleFamily === "Sales leadership" ? 40 : ADJACENT.has(job.roleFamily) ? 50 : 20;
   const mkt = !p.markets.length ? 70 : p.markets.includes(job.market) ? (p.prefersRemote && job.remoteType === "remote" ? 100 : 85) : 25;
   const text = `${job.title} ${job.description}`;
   const matchedTools = p.tools.filter((t) => mentions(text, t));

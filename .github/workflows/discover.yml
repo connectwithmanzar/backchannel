@@ -1,0 +1,19 @@
+name: Find more companies
+# Runs once a day: searches job pages for sales roles in your target places and adds the new company boards it finds.
+# Needs the same repository secret as the outreach tick: CRON_SECRET, with the same value as in Vercel.
+on:
+  schedule:
+    - cron: "40 2 * * *"
+  workflow_dispatch: {}
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the discovery run
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          code=$(curl -s -m 290 -o /tmp/out.txt -w "%{http_code}" -H "Authorization: Bearer $CRON_SECRET" https://backchannel-eight.vercel.app/api/discover)
+          echo "status $code"
+          cat /tmp/out.txt
+          test "$code" = "200"

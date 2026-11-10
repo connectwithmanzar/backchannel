@@ -12,7 +12,7 @@ const MARKETS: Record<string, string> = {
   global: "Global / remote",
 };
 const PAGE_SIZE = 40;
-const FAMILIES = ["SDR/BDR", "GTM Engineer", "Account Executive", "Sales leadership"];
+const FAMILIES = ["SDR/BDR", "GTM Engineer", "Account Executive", "Sales leadership", "Account management", "Partnerships", "Sales ops & CS"];
 
 export interface JobReaction {
   job_id: string;

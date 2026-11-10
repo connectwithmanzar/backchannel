@@ -13,7 +13,10 @@ export function toRoleFamily(title: string): RoleFamily {
   if (/\b(sdr|bdr|sales development|business development rep|inside sales|market development|lead development)\b/.test(t)) return "SDR/BDR";
   if (/\b(account executive|\bae\b|new business sales|sales executive)\b/.test(t)) return "Account Executive";
   if (/\b(gtm|go.to.market) (engineer|systems|operations)\b|\brevops engineer\b|\bgrowth engineer\b/i.test(t)) return "GTM Engineer";
-  if (/\b(vp|vice president|head of|director).{0,20}(sales|revenue|growth)\b/i.test(t)) return "Sales leadership";
+  if (/\b(vp|vice president|head of|director).{0,20}(sales|revenue|growth)\b|\b(sales manager|sales team lead|sales lead|country manager)\b/i.test(t)) return "Sales leadership";
+  if (/\b(account manager|key account|client partner|strategic account|major account|relationship manager)\b/.test(t)) return "Account management";
+  if (/\b(partner(ship)?s? (manager|executive|lead|director|development)|channel (sales|manager|partner)|alliances? (manager|lead|director))\b/.test(t)) return "Partnerships";
+  if (/\b(sales operations|revenue operations|revops|sales enablement|sales analyst|customer success|client success|onboarding (manager|specialist))\b/.test(t)) return "Sales ops & CS";
   return "Other sales";
 }
 

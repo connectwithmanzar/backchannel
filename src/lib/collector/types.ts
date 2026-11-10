@@ -49,4 +49,4 @@ export interface Job {
   payKind?: "ote" | "base"; // which kind of pay payMin and payMax are
 }
 
-export type RoleFamily = "SDR/BDR" | "GTM Engineer" | "Account Executive" | "Sales leadership" | "Other sales";
+export type RoleFamily = "SDR/BDR" | "GTM Engineer" | "Account Executive" | "Sales leadership" | "Account management" | "Partnerships" | "Sales ops & CS" | "Other sales";

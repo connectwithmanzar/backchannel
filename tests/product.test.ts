@@ -16,11 +16,13 @@ import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddr
 import { formatInr, formatPay, formatUsdThreshold, convert } from "../src/lib/currency";
 import { seniorityOf, matchesQuery, matchesLocation, postedWithin, countryOf, openToIndia, sourceLabel } from "../src/lib/role-filters";
 import { parseLocations, searchCacheKey } from "../src/lib/contacts/apollo";
-import { buildJobQuery, buildCompanyQuery, parseResults, cleanSnippet } from "../src/lib/websearch";
+import { buildJobQuery, buildCompanyQuery, parseResults, cleanSnippet, parseAtsUrl, prettifySlug, JOB_HOSTS } from "../src/lib/websearch";
 import { parseCompanyList, chunk } from "../src/lib/company-import";
 import { buildQueue, todoCount } from "../src/lib/outreach/queue";
 import { parseRemotive, parseArbeitnow, parseAdzuna } from "../src/lib/collectors/aggregators";
 import { buildPipeline } from "../src/lib/pipeline";
+import { roleFamily as ingestFamily } from "../src/lib/jobs/process";
+import { newBoards, todaysQueries } from "../src/lib/jobs/discover";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -43,7 +45,7 @@ test("sales role filter: keeps targets, drops noise", () => {
   assert.equal(roleFamily("GTM Engineer"), "GTM Engineer");
   assert.equal(roleFamily("Account Executive, Mid-Market"), "Account Executive");
   assert.equal(roleFamily("Manager, Sales Development"), "Sales leadership");
-  for (const t of ["Sales Engineer", "Customer Success Manager", "Technical Recruiter", "Senior Software Engineer", "Product Marketing Manager"]) assert.equal(roleFamily(t), null, t);
+  for (const t of ["Sales Engineer", "Customer Success Engineer", "Technical Recruiter", "Senior Software Engineer", "Product Marketing Manager"]) assert.equal(roleFamily(t), null, t);
 });
 
 test("market keeps the country even for remote roles", () => {
@@ -719,4 +721,40 @@ test("pipeline counts people once, ignores skipped applications and flags leaks"
   assert.match(empty.hints[0], /Nothing tracked yet/);
   const leak = buildPipeline({ saved: 0, apps: [], steps: Array.from({ length: 25 }, (_, i) => ({ contact_id: `x${i}`, channel: "email", status: "sent" })), referralInterviews: 0 });
   assert.ok(leak.hints.some((h) => /Under 3%/.test(h)));
+});
+
+test("the wider role list keeps adjacent sales roles and still drops engineering and support", () => {
+  assert.equal(ingestFamily("Senior SDR"), "SDR/BDR");
+  assert.equal(ingestFamily("Inside Sales Representative"), "SDR/BDR");
+  assert.equal(ingestFamily("Sales Manager, EMEA"), "Sales leadership");
+  assert.equal(ingestFamily("Key Account Manager"), "Account management");
+  assert.equal(ingestFamily("Partnerships Manager"), "Partnerships");
+  assert.equal(ingestFamily("Channel Sales Manager"), "Partnerships");
+  assert.equal(ingestFamily("Revenue Operations Analyst"), "Sales ops & CS");
+  assert.equal(ingestFamily("Customer Success Manager"), "Sales ops & CS");
+  assert.equal(ingestFamily("Technical Account Manager"), null);
+  assert.equal(ingestFamily("Customer Success Engineer"), null);
+  assert.equal(ingestFamily("Sales Engineer"), null);
+  assert.equal(ingestFamily("Software Engineer"), null);
+  assert.equal(ingestFamily("Sales Intern"), null);
+});
+
+test("job-page links reveal company boards, and discovery adds only new ones", () => {
+  assert.deepEqual(parseAtsUrl("https://boards.greenhouse.io/acme/jobs/123"), { ats: "greenhouse", slug: "acme" });
+  assert.deepEqual(parseAtsUrl("https://job-boards.greenhouse.io/globex-inc/jobs/9"), { ats: "greenhouse", slug: "globex-inc" });
+  assert.deepEqual(parseAtsUrl("https://jobs.lever.co/initech/abc-123"), { ats: "lever", slug: "initech" });
+  assert.deepEqual(parseAtsUrl("https://jobs.ashbyhq.com/umbrella/uuid"), { ats: "ashby", slug: "umbrella" });
+  assert.deepEqual(parseAtsUrl("https://jobs.smartrecruiters.com/Hooli/743-sdr"), { ats: "smartrecruiters", slug: "Hooli" });
+  assert.equal(parseAtsUrl("https://medium.com/some-blog-post"), null);
+  assert.equal(parseAtsUrl("http://boards.greenhouse.io/acme/jobs/1"), null);        // https only
+  assert.equal(prettifySlug("acme-corp_labs"), "Acme Corp Labs");
+  const found = newBoards([
+    "https://boards.greenhouse.io/acme/jobs/1", "https://boards.greenhouse.io/acme/jobs/2", "https://jobs.lever.co/new-co/x", "https://example.com/x",
+  ], new Set(["greenhouse/acme"]));
+  assert.deepEqual(found, [{ ats: "lever", slug: "new-co" }]);
+  assert.ok(JOB_HOSTS.includes("jobs.lever.co") && !JOB_HOSTS.includes("medium.com"));
+  assert.ok(!/\bapply\b|opening/.test(buildJobQuery({ role: "SDR", location: "Dubai" })));
+  const q1 = todaysQueries(25, 0), q2 = todaysQueries(25, 864e5);
+  assert.equal(q1.length, 25);
+  assert.notDeepEqual(q1, q2);                                                       // the slice moves each day
 });

@@ -12,7 +12,7 @@ const FLOOR_MARKETS: [string, string][] = [
   ["global", "Global or other"],
 ];
 const MARKETS = ["India (onsite)", "India (hybrid)", "Remote India→US", "Remote India→EU", "UK", "Germany", "Netherlands", "France", "Ireland", "Singapore", "UAE"];
-const TITLES = ["Senior SDR", "Founding BDR", "SDR", "BDR", "Account Executive (SMB)", "Account Executive (Mid-market)", "GTM Engineer", "Sales Manager"];
+const TITLES = ["Senior SDR", "Founding BDR", "SDR", "BDR", "Account Executive (SMB)", "Account Executive (Mid-market)", "GTM Engineer", "Sales Manager", "Account Manager", "Partnerships Manager", "Sales Operations", "Customer Success Manager"];
 
 export default function ScorecardSection({
   profile,

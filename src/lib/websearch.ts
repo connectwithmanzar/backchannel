@@ -7,6 +7,34 @@ export const BLOCKED_HOSTS = ["linkedin.com"];
 const NOISE_HOSTS = ["tavily.com", "facebook.com", "instagram.com", "twitter.com", "x.com", "youtube.com", "tiktok.com", "pinterest.com"];
 const JOB_HINT = /\b(jobs?|careers?|vacanc\w*|hiring|apply|openings?|positions?|roles?)\b/i;
 
+// Hosts that carry real job postings. A job search limited to these returns postings, not blog posts or listicles.
+export const JOB_HOSTS = [
+  "boards.greenhouse.io", "job-boards.greenhouse.io", "jobs.lever.co", "jobs.ashbyhq.com", "apply.workable.com", "jobs.smartrecruiters.com",
+  "careers.smartrecruiters.com", "myworkdayjobs.com", "jobs.jobvite.com", "recruitee.com", "teamtailor.com", "breezy.hr", "bamboohr.com",
+  "personio.de", "personio.com", "join.com", "pinpointhq.com", "jobs.workable.com", "builtin.com", "himalayas.app", "remoteok.com", "weworkremotely.com",
+  "welcometothejungle.com", "otta.com", "wellfound.com", "instahyre.com", "cutshort.io", "foundit.in", "naukrigulf.com", "bayt.com", "gulftalent.com",
+];
+
+// The ATS hosts whose job pages carry the company's board name, so one result reveals a whole company's board.
+const ATS_URL: { ats: "greenhouse" | "lever" | "ashby" | "smartrecruiters"; re: RegExp }[] = [
+  { ats: "greenhouse", re: /^https:\/\/(?:boards|job-boards)\.greenhouse\.io\/(?:embed\/job_app\?for=)?([a-z0-9][a-z0-9_-]*)/i },
+  { ats: "lever", re: /^https:\/\/jobs\.lever\.co\/([a-z0-9][a-z0-9_.-]*)/i },
+  { ats: "ashby", re: /^https:\/\/jobs\.ashbyhq\.com\/([a-z0-9][a-z0-9_.%-]*)/i },
+  { ats: "smartrecruiters", re: /^https:\/\/(?:jobs|careers)\.smartrecruiters\.com\/([a-z0-9][a-z0-9_-]*)/i },
+];
+
+/** The ATS and company board name inside a job-page link, or null for any other site. */
+export function parseAtsUrl(url: string): { ats: "greenhouse" | "lever" | "ashby" | "smartrecruiters"; slug: string } | null {
+  for (const { ats, re } of ATS_URL) {
+    const m = url.match(re);
+    if (m && !["embed", "jobs", "job", "careers"].includes(m[1].toLowerCase())) return { ats, slug: decodeURIComponent(m[1]) };
+  }
+  return null;
+}
+
+/** "acme-corp" becomes "Acme Corp". */
+export const prettifySlug = (slug: string) => slug.replace(/[-_.]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase()).slice(0, 80);
+
 export interface WebResult { title: string; url: string; host: string; snippet: string }
 
 export interface JobSearchInput { role?: string; company?: string; location?: string; level?: string; tools?: string; workType?: string; visa?: boolean }
@@ -19,10 +47,11 @@ export function webSearchConfigured(): boolean {
 const clean = (s: string | undefined) => (s ?? "").replace(/[^\p{L}\p{N}\s.,&+#/-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 80);
 const join = (...parts: (string | undefined | false)[]) => parts.map((p) => (p ? clean(p) : "")).filter(Boolean).join(" ");
 
+/** For searches limited to job hosts a plain query works best; extra words like "apply" only pull noise. */
 export function buildJobQuery(i: JobSearchInput): string {
   const q = join(i.role || "sales development representative", i.level, i.company && `at ${i.company}`, i.location && `in ${i.location}`,
     i.workType && i.workType !== "any" && i.workType, i.tools, i.visa && "visa sponsorship");
-  return `${q} job opening apply`;
+  return q;
 }
 
 export function buildCompanyQuery(i: CompanySearchInput): string {
@@ -60,10 +89,11 @@ export class WebSearchError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
-export async function searchWeb(query: string, opts: { days?: number; max?: number; kind?: "jobs" | "companies" } = {}): Promise<WebResult[]> {
+export async function searchWeb(query: string, opts: { days?: number; max?: number; kind?: "jobs" | "companies"; includeDomains?: string[] } = {}): Promise<WebResult[]> {
   const body: Record<string, unknown> = {
     query, max_results: opts.max ?? 10, search_depth: "basic", exclude_domains: BLOCKED_HOSTS,
     ...(opts.days ? { time_range: opts.days <= 7 ? "week" : "month" } : {}),
+    ...(opts.includeDomains?.length ? { include_domains: opts.includeDomains } : {}),
   };
   const res = await fetch(ENDPOINT, {
     method: "POST", signal: AbortSignal.timeout(15_000),
