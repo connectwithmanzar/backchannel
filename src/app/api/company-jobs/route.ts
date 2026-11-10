@@ -89,6 +89,10 @@ export async function POST(req: NextRequest) {
 
   // 5. Real listings from a licensed Google-for-Jobs feed, when its key is set.
   if (jsearchConfigured()) {
+    // The free plan has a hard limit of 200 requests a month. Stop at 150 so there is always room left.
+    if (!(await rateLimitShared(`jsearch:${user.id}`, 150, 30 * 864e5))) {
+      return NextResponse.json({ ok: true, status: "none", name, domain, workday, careersUrl: domain ? `https://${domain}/careers` : null, note: "You've used this month's job-listing searches." });
+    }
     try {
       const cards = await searchJSearch(`sales jobs at ${name}${place ? ` in ${place}` : ""}`);
       const { shown, hidden } = listingsForCompany(cards, name);

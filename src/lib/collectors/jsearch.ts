@@ -1,5 +1,5 @@
 // JSearch (on RapidAPI) is a licensed feed of Google-for-Jobs listings: real postings from many boards and company
-// career sites, with the posting's source named. It needs a free or paid RapidAPI key in JSEARCH_API_KEY.
+// career sites, with the posting's source named. The free plan allows 200 requests a month and each page is one request. It needs a free or paid RapidAPI key in JSEARCH_API_KEY.
 // We keep the title, employer, place, date, a short description and the link to apply, and send you there to apply.
 import { isSalesRole } from "@/lib/jobs/process";
 
@@ -38,7 +38,7 @@ export function listingsForCompany(cards: ListingCard[], company: string): { sho
 }
 
 export async function searchJSearch(query: string, opts: { pages?: number; datePosted?: "all" | "month" | "week" } = {}): Promise<ListingCard[]> {
-  const url = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(query)}&page=1&num_pages=${opts.pages ?? 2}&date_posted=${opts.datePosted ?? "month"}`;
+  const url = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(query)}&page=1&num_pages=${opts.pages ?? 1}&date_posted=${opts.datePosted ?? "month"}`;
   const res = await fetch(url, {
     headers: { "x-rapidapi-key": process.env.JSEARCH_API_KEY ?? "", "x-rapidapi-host": "jsearch.p.rapidapi.com" },
     signal: AbortSignal.timeout(20_000), cache: "no-store",
