@@ -19,13 +19,19 @@ function render(result) {
   const fit = result.score >= 75 ? "Strong fit" : result.score >= 60 ? "Good fit" : result.score >= 45 ? "Possible" : "Weak fit";
   const color = result.score >= 60 ? "var(--accent)" : result.score >= 45 ? "var(--warn)" : "var(--muted)";
   const parts = result.parts.map((p) => `<span>${esc(p.label)}</span><div class="bar"><i style="width:${Math.max(2, p.value)}%"></i></div><b>${Math.round(p.value)}</b>`).join("");
-  const india = result.openToIndia ? "" : `<div class="note">This role does not look open to candidates in India. Check the posting before you apply.</div>`;
+  const v = (result.india && result.india.verdict) || (result.openToIndia ? "yes" : "unclear");
+  const why = result.india && result.india.reason ? ` ${esc(result.india.reason)}` : "";
+  const india = v === "yes" ? `<div class="good"><b>Open to India.</b>${why}</div>`
+    : v === "no" ? `<div class="note"><b>Probably not open to India.</b>${why} Check the posting before you apply.</div>`
+    : `<div class="note"><b>Could not tell if this is open to India.</b>${why} Check the posting.</div>`;
+  const bullets = (title, items) => items && items.length ? `<div><b>${title}</b><ul>${items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
+  const reading = result.byAi ? `${bullets("Why it fits", result.fits)}${bullets("What is missing", result.gaps)}` : `<p class="muted">${esc(result.explanation)}</p>`;
   view.innerHTML = `
     <div class="card"><div class="ring" style="background:conic-gradient(${color} 0 ${result.score}%, var(--line) 0)"><span>${result.score}</span></div>
       <div><b>${fit}</b><div class="muted">${esc(job.company || "Company not found")}${job.location ? " · " + esc(job.location) : ""}</div></div></div>
     <div class="parts">${parts}</div>
     ${india}
-    <p class="muted">${esc(result.explanation)}</p>
+    ${reading}
     <div class="btns" id="btns">
       ${saved ? `<p class="ok">${result.saved ? "Already in Backchannel ✓" : "Saved to Backchannel ✓"}</p><button class="primary" id="open">Open it in Backchannel</button><button id="tailor">Tailor my CV to this role</button>`
               : `<button class="primary" id="save">Save to Backchannel</button>`}

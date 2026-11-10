@@ -40,7 +40,13 @@ function pageExtractor(doc, win) {
         const heading = pane.querySelector("h1, h2");
         const companyLink = pane.querySelector("a[href*='/company/']");
         const primary = pane.querySelector("[class*='primary-description']");
-        const location = clean((textOf(primary) || "").split("·")[0]);
+        let location = clean((textOf(primary) || "").split("·")[0]);
+        if (!location) {
+          // No named element: LinkedIn prints "Place · posted 2 days ago · applicants" a few lines under the title.
+          const lines = textOf(pane).split("\n").map(clean).filter(Boolean).slice(0, 14);
+          const hit = lines.find((l) => l.includes("·") && /ago|applicant|reposted|promoted|people clicked/i.test(l) && !/^\d/.test(l));
+          location = hit ? clean(hit.split("·")[0]) : "";
+        }
         return {
           source: "linkedin", url: id ? "https://www.linkedin.com/jobs/view/" + id + "/" : href, title: clean(heading && heading.innerText).slice(0, 200),
           company: clean(companyLink && companyLink.innerText).slice(0, 200), location: location.slice(0, 200), remote: /remote/i.test(location),

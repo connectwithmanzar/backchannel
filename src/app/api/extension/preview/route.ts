@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { rateLimitShared, retryAfter } from "@/lib/rate-limit";
 import { isExcludedCompany } from "@/data/companies";
 import { previewScore } from "@/lib/jobs/preview";
+import { aiReadPosting } from "@/lib/jobs/ai-read";
 import { canonicalUrl } from "@/lib/jobs/url";
 import { dedupeHash } from "@/lib/jobs/process";
 
@@ -21,11 +22,12 @@ export async function POST(req: NextRequest) {
   if (input.text.length < 80) return NextResponse.json({ error: "This page has too little text to score." }, { status: 400 });
   if (!input.title) return NextResponse.json({ error: "I couldn't find a job title on this page. Add it under Fix the details." }, { status: 422 });
   if (isExcludedCompany(input.company, input.url)) return NextResponse.json({ error: `${input.company || "That company"} is on your stealth or excluded list, so it won't be scored.` }, { status: 400 });
-  const { data: profile } = await db.from("profiles").select("name, tools, markets, target_titles, min_ote_usd, min_ote_by_market").eq("user_id", user.id).maybeSingle();
+  const { data: profile } = await db.from("profiles").select("name, tools, markets, target_titles, min_ote_usd, min_ote_by_market, cv_text").eq("user_id", user.id).maybeSingle();
   // Already in Backchannel? Same link, or the same title, company and place that this user saved before.
   const url = canonicalUrl(input.url);
   const mine = dedupeHash(`${user.id}:${input.company}`, input.title, input.location || "Not stated");
   const { data: found } = await db.from("jobs").select("id").or(`url.eq.${JSON.stringify(url)},dedupe_hash.eq."${mine}"`).eq("is_active", true).limit(1).maybeSingle();
   const { data: reaction } = found ? await db.from("job_scores").select("reaction").eq("user_id", user.id).eq("job_id", found.id).maybeSingle() : { data: null };
-  return NextResponse.json({ ok: true, ...previewScore(input, profile), saved: found ? { job_id: found.id, reaction: reaction?.reaction ?? null } : null });
+  const read = await aiReadPosting(input, profile);
+  return NextResponse.json({ ok: true, ...previewScore(input, profile), openToIndia: read.india.verdict === "yes", india: read.india, fits: read.fits, gaps: read.gaps, byAi: read.byAi, saved: found ? { job_id: found.id, reaction: reaction?.reaction ?? null } : null });
 }
