@@ -20,6 +20,7 @@ const GROUPS: Group[] = [
     { href: "/autopilot", label: "Applications" }, { href: "/referrals", label: "Referrals" },
     { href: "/offers", label: "Offers" }, { href: "/profile", label: "My profile" },
     { href: "/pay", label: "Pay benchmark" }, { href: "/sources", label: "Company sources" },
+    { href: "/extension", label: "Chrome extension" },
   ] },
 ];
 

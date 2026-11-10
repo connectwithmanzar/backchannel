@@ -32,6 +32,8 @@ import { looksLikePosting } from "../src/lib/jobs/company-finder";
 import { roleCounts, filterCompanies, filterCounts, needsAttention, type CompanyRow } from "../src/lib/company-list";
 import { wordCount, subjectOptions, messageChecks, isAngle } from "../src/lib/outreach/message-checks";
 import { buildBoard, stageOf, type BoardContact } from "../src/lib/board";
+import { createRequire } from "node:module";
+import { previewScore } from "../src/lib/jobs/preview";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -919,4 +921,54 @@ test("the outreach board places people by stage and puts today's follow-ups firs
   assert.equal(stageOf(declined), null);
   assert.deepEqual(board.followUps.map((x) => x.id), ["due"]);
   assert.deepEqual(board.needsAnswer.map((x) => x.id), ["replied"]);
+});
+
+const { pageExtractor } = createRequire(import.meta.url)("../extension/extract.js") as { pageExtractor: (doc: unknown, win: unknown) => { source: string; title: string; company: string; location: string; remote: boolean; text: string; url: string } };
+const fakeDoc = (ld: unknown[], extra: { h1?: string; title?: string; og?: Record<string, string>; body?: string } = {}) => ({
+  title: extra.title ?? "",
+  querySelectorAll: () => ld.map((o) => ({ textContent: typeof o === "string" ? o : JSON.stringify(o) })),
+  querySelector: (sel: string) => {
+    if (sel === "h1") return extra.h1 ? { innerText: extra.h1 } : null;
+    const m = sel.match(/property="([^"]+)"/);
+    if (m && extra.og?.[m[1]]) return { getAttribute: () => extra.og![m[1]] };
+    if (sel === "main") return null;
+    return null;
+  },
+  body: { innerText: extra.body ?? "" },
+});
+const fakeWin = (sel = "") => ({ location: { href: "https://jobs.example.com/j/1" }, getSelection: () => sel });
+
+test("the extension reads structured job data, and falls back to what is on the page", () => {
+  const posting = { "@context": "https://schema.org", "@type": "JobPosting", title: "Senior SDR", hiringOrganization: { "@type": "Organization", name: "Freshworks" },
+    jobLocation: { address: { addressLocality: "Chennai", addressRegion: "Tamil Nadu", addressCountry: "IN" } }, description: "<p>Outbound role using <b>Salesforce</b> &amp; Outreach.</p><ul><li>3+ years</li></ul>" };
+  const a = pageExtractor(fakeDoc([{ "@graph": [{ "@type": "WebSite" }, posting] }]), fakeWin());
+  assert.equal(a.source, "structured");
+  assert.equal(a.title, "Senior SDR");
+  assert.equal(a.company, "Freshworks");
+  assert.equal(a.location, "Chennai, Tamil Nadu, IN");
+  assert.match(a.text, /Outbound role using Salesforce & Outreach/);
+  const remote = pageExtractor(fakeDoc([{ "@type": "JobPosting", title: "BDR", hiringOrganization: "Acme", jobLocationType: "TELECOMMUTE", description: "x" }]), fakeWin());
+  assert.equal(remote.remote, true);
+  assert.equal(remote.location, "Remote");
+  assert.equal(remote.company, "Acme");
+  const bad = pageExtractor(fakeDoc(["{ not json"], { h1: "Account Executive", og: { "og:site_name": "Initech" }, body: "We are hiring. ".repeat(40) }), fakeWin());
+  assert.equal(bad.source, "page");                                             // broken structured data is ignored, not fatal
+  assert.equal(bad.title, "Account Executive");
+  assert.equal(bad.company, "Initech");
+  const picked = pageExtractor(fakeDoc([], { h1: "T", body: "page text" }), fakeWin("Selected description. ".repeat(20)));
+  assert.equal(picked.source, "selection");                                     // what you highlighted wins over the whole page
+  assert.ok(pageExtractor(fakeDoc([], { body: "z".repeat(50000) }), fakeWin()).text.length <= 12000);
+});
+
+test("previewing a page scores it like a collected role and saves nothing", () => {
+  const text = "Outbound SDR role. You will use Salesforce and Outreach to book meetings. 3+ years of experience. Remote across APAC. Pay: INR 1800000 - 2400000.";
+  const profile = { name: "Manzar", tools: ["Salesforce", "Outreach"], markets: ["India"], target_titles: ["Senior SDR"], min_ote_usd: 0 };
+  const good = previewScore({ url: "https://jobs.example.com/1", title: "Senior SDR", company: "Freshworks", location: "Remote, APAC", remote: true, text }, profile);
+  const weak = previewScore({ url: "https://jobs.example.com/2", title: "Senior SDR", company: "Freshworks", location: "Austin, Texas", text: "Outbound sales. No tools named." }, profile);
+  assert.ok(good.score > weak.score, `${good.score} should beat ${weak.score}`);
+  assert.equal(good.roleFamily, "SDR/BDR");
+  assert.equal(good.openToIndia, true);
+  assert.equal(weak.openToIndia, false);
+  assert.equal(good.parts.length, 5);
+  assert.match(good.explanation, /Salesforce, Outreach|Salesforce/);
 });
