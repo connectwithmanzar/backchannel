@@ -23,6 +23,7 @@ import { parseRemotive, parseArbeitnow, parseAdzuna } from "../src/lib/collector
 import { buildPipeline } from "../src/lib/pipeline";
 import { roleFamily as ingestFamily } from "../src/lib/jobs/process";
 import { newBoards, todaysQueries } from "../src/lib/jobs/discover";
+import { isSafeHost, findBoardsInHtml, pickHomepage, careerPageCandidates } from "../src/lib/jobs/company-finder";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -757,4 +758,20 @@ test("job-page links reveal company boards, and discovery adds only new ones", (
   const q1 = todaysQueries(25, 0), q2 = todaysQueries(25, 864e5);
   assert.equal(q1.length, 25);
   assert.notDeepEqual(q1, q2);                                                       // the slice moves each day
+});
+
+test("the company finder only fetches public websites and reads job systems out of careers pages", () => {
+  assert.equal(isSafeHost("freshworks.com"), true);
+  for (const bad of ["127.0.0.1", "10.0.0.5", "localhost", "intranet.corp", "a.internal", "169.254.169.254", "foo", "x.local", "evil.test"]) assert.equal(isSafeHost(bad), false, bad);
+  assert.ok(careerPageCandidates("acme.com").every((u) => u.startsWith("https://")));
+  const html = `<a href="https://boards.greenhouse.io/acme/jobs/1">x</a><iframe src="https://jobs.lever.co/acme-labs/?a=1&amp;b=2"></iframe>
+    <a href="https://acme.wd5.myworkdayjobs.com/en-US/External?q=1">w</a><a href="https://example.com/blog">b</a><a href="https://boards.greenhouse.io/acme/jobs/2">dup</a>`;
+  const f = findBoardsInHtml(html);
+  assert.deepEqual(f.boards, [{ ats: "greenhouse", slug: "acme" }, { ats: "lever", slug: "acme-labs" }]);
+  assert.equal(f.workday, "https://acme.wd5.myworkdayjobs.com/en-US/External");
+  assert.deepEqual(findBoardsInHtml("<p>nothing</p>"), { boards: [], workday: null });
+  const r = (host: string) => ({ title: host, url: `https://${host}/`, host, snippet: "" });
+  assert.equal(pickHomepage("Freshworks", [r("linkedin.com"), r("en.wikipedia.org"), r("freshworks.com")]), "freshworks.com");
+  assert.equal(pickHomepage("Freshworks", [r("glassdoor.com"), r("randomblog.io")]), null);
+  assert.equal(pickHomepage("AB", [r("ab.com")]), null);                       // too short to match safely
 });
