@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { btn, btnPrimary, Card, input } from "@/components/ui";
 
@@ -13,9 +13,9 @@ type Outcome =
   | { status: "results"; name: string; domain: string | null; workday: string | null; results: Result[] }
   | { status: "none"; name: string; domain: string | null; workday: string | null; careersUrl: string | null; note?: string };
 
-export default function CompanyJobsFinder() {
+export default function CompanyJobsFinder({ initialName = "" }: { initialName?: string }) {
   const router = useRouter();
-  const [name, setName] = useState("");
+  const [name, setName] = useState(initialName);
   const [website, setWebsite] = useState("");
   const [location, setLocation] = useState("");
   const [busy, setBusy] = useState(false);
@@ -41,6 +41,11 @@ export default function CompanyJobsFinder() {
     setMsg(res.ok ? { ok: true, text: `Added "${d.title}" at ${d.company} to My roles.` } : { ok: false, text: d.error ?? "Couldn't add that." });
     if (res.ok) router.refresh();
   }
+
+  // Arriving from "See more roles" with a company already typed: run the search straight away, once.
+  const ran = useRef(false);
+  useEffect(() => { if (initialName && !ran.current) { ran.current = true; void find(); } // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function addListing(l: Listing) {
     setAdding(l.id); setMsg(null);

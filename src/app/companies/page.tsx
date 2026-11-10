@@ -13,7 +13,8 @@ export const dynamic = "force-dynamic";
 type Co = { id: string; name: string; domain: string | null; ats_type: string | null; ats_slug: string | null; enabled: boolean; collect_error: string | null; last_collected_at: string | null };
 type Wl = { company_id: string; watching: boolean; status?: string | null; note?: string | null };
 
-export default async function CompaniesPage() {
+export default async function CompaniesPage({ searchParams }: { searchParams: Promise<{ find?: string }> }) {
+  const sp = await searchParams;
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
   const uid = user?.id ?? "";
@@ -52,7 +53,7 @@ export default async function CompaniesPage() {
         <p className="mt-1 max-w-[62ch] text-muted">Every company you add is saved and checked for jobs every morning, so new roles reach you first.</p>
       </header>
 
-      <div className="mb-6"><CompanyJobsFinder /></div>
+      <div className="mb-6"><CompanyJobsFinder initialName={(sp.find ?? "").slice(0, 100)} /></div>
 
       <div className="flex flex-wrap items-start gap-6">
         <div className="min-w-0 flex-[999_1_620px]"><CompaniesList initial={rows} /></div>

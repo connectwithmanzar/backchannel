@@ -4,8 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { JOB_COLUMNS } from "@/lib/jobs/shared-cache";
 import { Card, Pill, btn } from "@/components/ui";
 import FitRing from "@/components/FitRing";
+import Description from "@/components/Description";
 import { openToIndia, sourceLabel } from "@/lib/role-filters";
 import RoleActions from "./RoleActions";
+import CompanyActions from "./CompanyActions";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +108,7 @@ export default async function RolePage({ params }: { params: Promise<{ id: strin
           {job.description && (
             <Card className="sm:p-6">
               <h2 className="mb-2 text-lg font-semibold">The posting</h2>
-              <p className="max-h-72 overflow-y-auto whitespace-pre-line text-sm text-muted">{job.description.slice(0, 3000)}</p>
+              <Description text={job.description.slice(0, 20000)} className="max-h-[32rem] overflow-y-auto pr-2" />
             </Card>
           )}
         </div>
@@ -133,8 +135,8 @@ export default async function RolePage({ params }: { params: Promise<{ id: strin
           </Card>
           <Card>
             <h2 className="mb-2 text-[17px] font-semibold">About {company}</h2>
-            <p className="mb-3 text-sm text-muted">See all their open sales roles, your notes and the people to contact.</p>
-            <Link href="/companies" className={btn}>Open companies</Link>
+            <p className="mb-3 text-sm text-muted">Add it to your companies so it is scanned every morning, or see all their open sales roles.</p>
+            <CompanyActions company={company} domain={domain} />
           </Card>
         </aside>
       </div>

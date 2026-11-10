@@ -34,6 +34,8 @@ import { wordCount, subjectOptions, messageChecks, isAngle } from "../src/lib/ou
 import { buildBoard, stageOf, type BoardContact } from "../src/lib/board";
 import { createRequire } from "node:module";
 import { previewScore } from "../src/lib/jobs/preview";
+import { parseDescription } from "../src/lib/description";
+import { canonicalUrl } from "../src/lib/jobs/url";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -971,4 +973,48 @@ test("previewing a page scores it like a collected role and saves nothing", () =
   assert.equal(weak.openToIndia, false);
   assert.equal(good.parts.length, 5);
   assert.match(good.explanation, /Salesforce, Outreach|Salesforce/);
+});
+
+test("a posting is laid out as headings, paragraphs and bullets, even when it arrived as one long line", () => {
+  const tidy = parseDescription("About the role\nYou will run outbound.\n\nRequirements:\n- 3+ years in SDR\n- Salesforce\n• Outreach\nWhat we offer\nGood pay.");
+  assert.deepEqual(tidy, [
+    { type: "heading", text: "About the role" }, { type: "paragraph", text: "You will run outbound." },
+    { type: "heading", text: "Requirements" }, { type: "list", items: ["3+ years in SDR", "Salesforce", "Outreach"] },
+    { type: "heading", text: "What we offer" }, { type: "paragraph", text: "Good pay." },
+  ]);
+  const blob = "About the role You will run outbound to mid-market teams and book meetings for account executives. " + "We use Salesforce and Outreach every day. ".repeat(8) + "Requirements: • 3+ years of SDR work • Comfort with cold calling • Fluent English What we offer: Competitive pay and remote work.";
+  const blocks = parseDescription(blob);
+  assert.ok(blocks.some((b) => b.type === "heading" && b.text === "Requirements"));
+  const list = blocks.find((b) => b.type === "list");
+  assert.deepEqual(list && list.type === "list" ? list.items : [], ["3+ years of SDR work", "Comfort with cold calling", "Fluent English"]);
+  assert.ok(blocks.some((b) => b.type === "heading" && b.text === "What we offer"));
+  assert.ok(blocks.filter((b) => b.type === "paragraph").length >= 2);          // the long run is split up
+  assert.deepEqual(parseDescription("   "), []);
+  assert.equal(parseDescription("SHORT TEXT")[0].type, "heading");
+});
+
+test("one job has one address, so a job you saved is recognised when you open it again", () => {
+  const view = "https://www.linkedin.com/jobs/view/4012345678/";
+  assert.equal(canonicalUrl("https://in.linkedin.com/jobs/view/senior-sdr-at-acme-4012345678?trackingId=x&refId=y"), view);
+  assert.equal(canonicalUrl("https://www.linkedin.com/jobs/search/?keywords=sdr&currentJobId=4012345678&origin=JOB_SEARCH"), view);
+  assert.equal(canonicalUrl("https://boards.greenhouse.io/acme/jobs/123?gh_src=abc&gh_jid=123&utm_source=x"), "https://boards.greenhouse.io/acme/jobs/123?gh_jid=123");
+  assert.equal(canonicalUrl("https://jobs.example.com/careers/sdr/?utm_campaign=a#apply"), "https://jobs.example.com/careers/sdr");
+  assert.equal(canonicalUrl("not a url"), "not a url");
+});
+
+test("on a LinkedIn search page the extension reads only the open job, and asks you to pick one if none is open", () => {
+  const pane = { innerText: "Senior SDR\nFreshworks\nChennai, Tamil Nadu, India · 2 days ago · 100 applicants\n" + "About the job\nOutbound with Salesforce.\n".repeat(12),
+    querySelector: (s: string) => (/h1|h2/.test(s) ? { innerText: "Senior SDR" } : s.includes("/company/") ? { innerText: "Freshworks" } : s.includes("primary-description") ? { innerText: "Chennai, Tamil Nadu, India · 2 days ago" } : null) };
+  const doc = (open: boolean) => ({ title: "", querySelectorAll: () => [], querySelector: (s: string) => (open && s === ".scaffold-layout__detail" ? pane : null), body: { innerText: "ten jobs in a list ".repeat(50) } });
+  const win = (href: string) => ({ location: { href }, getSelection: () => "" });
+  const open = pageExtractor(doc(true), win("https://www.linkedin.com/jobs/search/?keywords=sdr&currentJobId=4012345678"));
+  assert.equal(open.source, "linkedin");
+  assert.equal(open.url, "https://www.linkedin.com/jobs/view/4012345678/");
+  assert.equal(open.title, "Senior SDR");
+  assert.equal(open.company, "Freshworks");
+  assert.equal(open.location, "Chennai, Tamil Nadu, India");
+  assert.match(open.text, /\nAbout the job\n/);                                  // paragraph breaks are kept
+  const none = pageExtractor(doc(false), win("https://www.linkedin.com/jobs/search/?keywords=sdr")) as unknown as { needsJobSelection?: boolean; text: string };
+  assert.equal(none.needsJobSelection, true);
+  assert.equal(none.text, "");                                                  // the whole list is never read as one job
 });

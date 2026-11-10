@@ -1,10 +1,38 @@
 // Reads the job on the page you are viewing. It runs only when you press the Backchannel button.
-// It collects the title, company, place and text of the posting and nothing else: no passwords, no other tabs.
+// It collects the title, company, place and text of ONE posting and nothing else: no passwords, no other tabs.
 function pageExtractor(doc, win) {
   doc = doc || document;
   win = win || window;
   const clean = (s) => String(s || "").replace(/\s+/g, " ").trim();
-  const htmlToText = (h) => clean(String(h || "").replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ").replace(/<\/(p|div|li|h\d|br)>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&"));
+  // Keeps paragraph and bullet breaks, so the text stays readable.
+  const tidy = (s) => String(s || "").replace(/\r/g, "").replace(/[ \t\f\v ]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  const htmlToText = (h) => tidy(String(h || "").replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ").replace(/<li[^>]*>/gi, "\n• ").replace(/<\/(p|div|li|h\d|ul|ol)>/gi, "\n").replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">"));
+  const textOf = (el) => (el ? tidy(el.innerText || el.textContent || "") : "");
+  const href = win.location.href;
+  let url;
+  try { url = new URL(href); } catch (e) { url = { hostname: "", pathname: "", searchParams: { get: () => null } }; }
+
+  // LinkedIn: a search page shows many jobs at once. Read only the one that is open on the right.
+  if (/(^|\.)linkedin\.com$/.test(url.hostname)) {
+    const view = url.pathname.match(/\/jobs\/view\/(?:[^/]*-)?(\d{6,})/);
+    const id = view ? view[1] : url.searchParams.get("currentJobId");
+    const isListPage = /\/jobs\/(search|collections|recommended)/.test(url.pathname);
+    if (isListPage || view) {
+      const selectors = [".jobs-search__job-details--container", ".jobs-search__job-details--wrapper", ".scaffold-layout__detail", ".jobs-details", ".job-view-layout", "[class*='jobs-search__job-details']", "[class*='job-details']"];
+      let pane = null;
+      for (const sel of selectors) { const el = doc.querySelector(sel); if (el && textOf(el).length > 200) { pane = el; break; } }
+      if (!id || !pane) return { source: "list", needsJobSelection: true, url: href, title: "", company: "", location: "", remote: false, text: "" };
+      const heading = pane.querySelector("h1, h2");
+      const companyLink = pane.querySelector("a[href*='/company/']");
+      const primary = pane.querySelector("[class*='primary-description']");
+      const location = clean((textOf(primary) || "").split("·")[0]);
+      return {
+        source: "linkedin", url: "https://www.linkedin.com/jobs/view/" + id + "/", title: clean(heading && heading.innerText).slice(0, 200),
+        company: clean(companyLink && companyLink.innerText).slice(0, 200), location: location.slice(0, 200), remote: /remote/i.test(location),
+        text: textOf(pane).slice(0, 12000),
+      };
+    }
+  }
 
   // 1. Structured data many job pages publish for search engines.
   let posting = null;
@@ -24,11 +52,11 @@ function pageExtractor(doc, win) {
     return clean([a.addressLocality, a.addressRegion, typeof a.addressCountry === "object" ? a.addressCountry.name : a.addressCountry].filter(Boolean).join(", "));
   };
 
-  const selection = clean(win.getSelection ? String(win.getSelection()) : "");
+  const selection = tidy(win.getSelection ? String(win.getSelection()) : "");
   if (posting) {
     const org = posting.hiringOrganization;
     return {
-      source: "structured", url: win.location.href, title: clean(posting.title),
+      source: "structured", url: href, title: clean(posting.title),
       company: clean(typeof org === "object" ? org && org.name : org),
       location: placeOf(posting.jobLocation) || (posting.jobLocationType === "TELECOMMUTE" ? "Remote" : ""),
       remote: posting.jobLocationType === "TELECOMMUTE",
@@ -39,9 +67,9 @@ function pageExtractor(doc, win) {
   // 2. Otherwise what is on screen: the heading, the page title and the visible text (or what you selected).
   const meta = (n) => { const m = doc.querySelector('meta[property="' + n + '"], meta[name="' + n + '"]'); return m ? clean(m.getAttribute("content")) : ""; };
   const h1 = doc.querySelector("h1");
-  const body = selection.length > 200 ? selection : clean((doc.querySelector("main") || doc.body || {}).innerText || "");
+  const body = selection.length > 200 ? selection : textOf(doc.querySelector("main") || doc.body);
   return {
-    source: selection.length > 200 ? "selection" : "page", url: win.location.href,
+    source: selection.length > 200 ? "selection" : "page", url: href,
     title: clean((h1 && h1.innerText) || meta("og:title") || doc.title).slice(0, 200),
     company: meta("og:site_name"), location: "", remote: false, text: body.slice(0, 12000),
   };

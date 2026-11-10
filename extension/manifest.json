@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Backchannel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Score and save the job page you are viewing. It reads the page only when you click the button.",
   "action": { "default_title": "Backchannel", "default_popup": "popup.html" },
   "permissions": ["activeTab", "scripting"],

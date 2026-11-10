@@ -7,6 +7,7 @@ import { isExcludedCompany } from "@/data/companies";
 import { isBlocked } from "@/lib/outreach/engine";
 import { scoreForUser } from "@/lib/jobs/scoring";
 import { buildPastedJob, fetchJobPage, parseJobUrl } from "@/lib/jobs/paste";
+import { canonicalUrl } from "@/lib/jobs/url";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
   if (b.url) {
     const parsed = parseJobUrl(String(b.url));
     if (!parsed.ok) return NextResponse.json({ error: parsed.reason }, { status: 400 });
-    url = parsed.url;
+    url = canonicalUrl(parsed.url);
     if (!text) {
       if (!parsed.fetchable) {
         return NextResponse.json({ error: "Backchannel doesn't read that site itself (LinkedIn, Naukri and similar forbid it). Paste the job text next to the link and I'll do the rest." }, { status: 422 });

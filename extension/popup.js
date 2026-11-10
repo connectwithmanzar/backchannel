@@ -27,8 +27,9 @@ function render(result) {
     ${india}
     <p class="muted">${esc(result.explanation)}</p>
     <div class="btns" id="btns">
-      ${saved ? `<p class="ok">Saved to Backchannel ✓</p><button class="primary" id="open">Open it in Backchannel</button><button id="tailor">Tailor my CV to this role</button>`
+      ${saved ? `<p class="ok">${result.saved ? "Already in Backchannel ✓" : "Saved to Backchannel ✓"}</p><button class="primary" id="open">Open it in Backchannel</button><button id="tailor">Tailor my CV to this role</button>`
               : `<button class="primary" id="save">Save to Backchannel</button>`}
+      ${job.company ? `<button id="addco">Add ${esc(job.company)} to my companies</button><button id="more">See more roles at ${esc(job.company)}</button>` : ""}
       <button id="people">Find people at ${esc(job.company || "this company")}</button>
     </div>
     <p class="err" id="err" hidden></p>
@@ -50,6 +51,15 @@ function render(result) {
   if ($("open")) $("open").onclick = () => open(`/roles/${saved.job_id}`);
   if ($("tailor")) $("tailor").onclick = () => open(`/roles/${saved.job_id}`);
   $("people").onclick = () => open(`/referrals?company=${encodeURIComponent(job.company || "")}`);
+  if ($("more")) $("more").onclick = () => open(`/companies?find=${encodeURIComponent(job.company)}`);
+  if ($("addco")) $("addco").onclick = async () => {
+    $("addco").disabled = true; $("addco").textContent = "Adding…";
+    const r = await api("/api/sources/import", { companies: [{ name: job.company, domain: null }] });
+    if (r.signedOut) return showSignIn();
+    const o = r.ok && r.data.outcomes && r.data.outcomes[0];
+    if (!o) { $("addco").disabled = false; $("addco").textContent = `Add ${job.company} to my companies`; return fail(r.data.error || "Couldn't add that company."); }
+    $("addco").textContent = o.status === "added" ? `Added ✓ ${o.roles ? o.roles + " roles found" : ""}` : o.status === "no_feed" ? "Added ✓ (scanned each morning)" : o.status === "already_there" ? "Already in your companies ✓" : "Skipped: on your stealth list";
+  };
   $("rescore").onclick = () => { job = { ...job, title: $("f-title").value.trim(), company: $("f-company").value.trim(), location: $("f-location").value.trim() }; score(); };
 }
 
@@ -64,6 +74,7 @@ async function score() {
   const r = await api("/api/extension/preview", { url: job.url, title: job.title, company: job.company, location: job.location, remote: job.remote, text: job.text });
   if (r.signedOut) return showSignIn();
   if (!r.ok) { view.innerHTML = `<p class="err">${esc(r.data.error || "Couldn't score this page.")}</p>`; return; }
+  if (r.data.saved && !saved) saved = { job_id: r.data.saved.job_id };
   render(r.data);
 }
 
@@ -73,6 +84,7 @@ async function start() {
     if (!tab || !/^https?:/.test(tab.url || "")) { view.innerHTML = `<p class="muted">Open a job page first, then press the Backchannel button.</p>`; return; }
     const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: pageExtractor });
     job = result;
+    if (job && job.needsJobSelection) { view.innerHTML = `<p><b>This is a list of jobs.</b></p><p class="muted">Click one job so its details open on the right, then press the Backchannel button again. Backchannel reads one job at a time, the one you are looking at.</p>`; return; }
     if (!job || (job.text || "").length < 80) { view.innerHTML = `<p class="muted">This page has too little text to score. Select the job description on the page and press the button again.</p>`; return; }
     await score();
   } catch (e) {

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import type { ScoredJob } from "@/lib/score";
 import Link from "next/link";
 import FitRing from "@/components/FitRing";
@@ -83,6 +83,7 @@ export default function RolesFeed({
   const [visaOnly, setVisaOnly] = useState(false);
   const [countries, setCountries] = useState<Set<string>>(new Set());
   const [indiaOnly, setIndiaOnly] = useState(false);
+  const [savedOnly, setSavedOnly] = useState(false);
   const [display, setDisplay] = useState<PayDisplay>("INR");
   const [payOnly, setPayOnly] = useState(false);
   const [minUsd, setMinUsd] = useState(0);
@@ -139,13 +140,16 @@ export default function RolesFeed({
     for (const j of jobs) m.set(countryOf(j.location), (m.get(countryOf(j.location)) ?? 0) + 1);
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [jobs]);
+  const isMine = useCallback((j: ScoredJob) => j.board === "pasted" || reactions[j.id]?.reaction === "bookmarked", [reactions]);
+  const savedCount = jobs.filter(isMine).length;
   const rows = useMemo(() => {
     const r = jobs.filter((j) => {
       const rxn = reactions[j.id]?.reaction;
       if (!showSkipped && rxn === "skipped") return false;
       return (
-        (!markets.size || markets.has(j.market)) &&
-        (!families.size || families.has(j.roleFamily)) &&
+        // Jobs you saved or added yourself are never hidden by the market or role-type filters.
+        (isMine(j) || ((!markets.size || markets.has(j.market)) && (!families.size || families.has(j.roleFamily)))) &&
+        (!savedOnly || isMine(j)) &&
         (workType === "any" || j.remoteType === workType) &&
         (seniority === "any" || seniorityOf(j.title) === seniority) &&
         (!visaOnly || j.visaSponsorship === "yes") &&
@@ -168,7 +172,7 @@ export default function RolesFeed({
         return b.score - a.score;
       });
     return r;
-  }, [jobs, markets, families, countries, indiaOnly, query, locationQ, posted, workType, seniority, visaOnly, payOnly, minUsd, sort, showSkipped, reactions]);
+  }, [jobs, isMine, markets, families, countries, indiaOnly, savedOnly, query, locationQ, posted, workType, seniority, visaOnly, payOnly, minUsd, sort, showSkipped, reactions]);
 
   const skippedCount = Object.values(reactions).filter((r) => r.reaction === "skipped").length;
 
@@ -185,6 +189,10 @@ export default function RolesFeed({
           <span className="text-xs font-semibold uppercase tracking-wider text-muted">Location</span>
           <input type="text" value={locationQ} onChange={(e) => setLocationQ(e.target.value)} placeholder="e.g. Bengaluru, Dubai"
             className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" />
+        </label>
+        <label className="flex items-center gap-2 text-sm font-semibold">
+          <input type="checkbox" checked={savedOnly} onChange={(e) => setSavedOnly(e.target.checked)} className="accent-accent" />
+          Saved by you ({savedCount})
         </label>
         <div className="flex flex-col gap-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted">Country</span>
