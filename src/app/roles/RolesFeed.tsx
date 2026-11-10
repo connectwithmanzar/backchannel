@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import type { ScoredJob } from "@/lib/score";
+import Link from "next/link";
+import FitRing from "@/components/FitRing";
 import { formatPay, formatUsdThreshold, type PayDisplay } from "@/lib/currency";
 import { countryOf, matchesLocation, matchesQuery, openToIndia, postedWithin, seniorityOf, sourceLabel } from "@/lib/role-filters";
 
@@ -20,10 +22,6 @@ export interface JobReaction {
   score?: number;
   explanation?: string;
   model?: string;
-}
-
-function fitTone(score: number) {
-  return score >= 80 ? "bg-good-soft text-good" : score >= 60 ? "bg-signal-soft text-signal" : "bg-sunk text-muted";
 }
 
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -301,15 +299,16 @@ export default function RolesFeed({
                     <div className="line-clamp-1 text-sm text-muted">{j.company} · {j.location}</div>
                   </div>
                   <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-1">
-                    <span className={`rounded-lg px-2.5 py-1 font-display text-xl font-extrabold num ${fitTone(j.score)}`} title="How well this role fits your profile">
-                      <span className="sr-only">Fit </span>{j.score}%
-                    </span>
+                    <FitRing score={j.score} size={56} />
                     <span className={j.payMax ? "text-sm font-semibold num" : "text-xs text-muted"}>
                       {j.payMax ? formatPay(j.payMin, j.payMax, j.currency, display) : "Pay not published"}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 sm:col-span-2">
-                    <span className="rounded-md bg-signal-soft px-2 py-0.5 text-xs font-semibold capitalize text-signal">
+                    {openToIndia(j.location, j.remoteType) && (
+                      <span className="rounded-md bg-good-soft px-2 py-0.5 text-xs font-semibold text-good">Open to India</span>
+                    )}
+                    <span className="rounded-md bg-signal-soft px-2 py-0.5 text-xs font-semibold text-signal">
                       {sourceLabel(j.board)}
                     </span>
                     <span className="rounded-md bg-sunk px-2 py-0.5 text-xs">{j.roleFamily}</span>
@@ -366,8 +365,11 @@ export default function RolesFeed({
                     )}
                     {/* Actions */}
                     <div className="flex flex-wrap gap-2">
+                      <Link href={`/roles/${j.id}`} className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accent-ink">
+                        See why it fits
+                      </Link>
                       <a href={j.url} target="_blank" rel="noopener noreferrer"
-                        className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-ink">
+                        className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-semibold hover:border-fg/40">
                         Open job ↗
                       </a>
                       <ReactionButton icon="🔖" label={rxn === "bookmarked" ? "Saved" : "Save"}

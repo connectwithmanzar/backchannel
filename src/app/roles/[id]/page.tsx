@@ -1,0 +1,143 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { JOB_COLUMNS } from "@/lib/jobs/shared-cache";
+import { Card, Pill, btn } from "@/components/ui";
+import FitRing from "@/components/FitRing";
+import { openToIndia, sourceLabel } from "@/lib/role-filters";
+import RoleActions from "./RoleActions";
+
+export const dynamic = "force-dynamic";
+
+const NEGATIVE = /outside|doesn't|isn't|below|little|haven't|can't/i;
+const STAGES = [["applied", "Applied"], ["screening", "Reply or screen"], ["interview", "Interview"], ["offer", "Offer"]] as const;
+
+export default async function RolePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
+  const db = await createClient();
+  const { data: { user } } = await db.auth.getUser();
+  const uid = user?.id ?? "";
+
+  const { data: job } = await db.from("jobs").select(JOB_COLUMNS).eq("id", id).maybeSingle();
+  if (!job) notFound();
+  const [{ data: score }, { data: app }] = await Promise.all([
+    db.from("job_scores").select("score, parts, explanation, reaction").eq("user_id", uid).eq("job_id", id).maybeSingle(),
+    db.from("applications").select("id, status, stage, tailored_cv, cv_changes, cover_note").eq("user_id", uid).eq("job_id", id).maybeSingle(),
+  ]);
+  const company = (job.companies as unknown as { name: string; domain: string | null } | null)?.name ?? job.company_name ?? "Unknown company";
+  const domain = (job.companies as unknown as { name: string; domain: string | null } | null)?.domain ?? "";
+  const parts = (score?.parts ?? []) as { label: string; value: number }[];
+  const bits: string[] = String(score?.explanation ?? "").replace(/\.$/, "").split("; ").filter(Boolean);
+  const fits = bits.filter((b) => !NEGATIVE.test(b));
+  const gaps = bits.filter((b) => NEGATIVE.test(b));
+  const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+  const indiaOk = openToIndia(job.location ?? "", job.remote_type ?? "unknown");
+  const stageIdx = app ? STAGES.findIndex(([k]) => k === (app.stage ?? "applied")) : -1;
+  const changes = (app?.cv_changes ?? []) as string[];
+
+  return (
+    <section className="py-6">
+      <Link href="/roles" className="text-sm font-semibold text-accent">← Back to matches</Link>
+
+      <Card className="mt-4 flex flex-wrap items-center justify-between gap-5 sm:p-6">
+        <div className="min-w-0 flex-1 basis-96">
+          <h1 className="text-2xl font-bold sm:text-3xl">{job.title}</h1>
+          <p className="mt-1 text-sm text-muted">{company} · {job.location || "Location not stated"}{job.posted_at ? ` · posted ${new Date(job.posted_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" })}` : ""} · {sourceLabel(job.board ?? "")}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {indiaOk && <Pill tone="good">Open to India</Pill>}
+            {job.remote_type && job.remote_type !== "unknown" && <Pill>{cap(job.remote_type)}</Pill>}
+            {job.pay_band_status !== "verified" && <Pill>Pay not published</Pill>}
+            {job.visa_sponsorship === "yes" && <Pill tone="good">Visa sponsorship offered</Pill>}
+          </div>
+        </div>
+        <RoleActions jobId={id} reaction={score?.reaction ?? null} hasApplication={!!app} url={job.url ?? ""} />
+      </Card>
+
+      <div className="mt-6 flex flex-wrap items-start gap-6">
+        <div className="flex min-w-0 flex-[999_1_620px] flex-col gap-6">
+          {score ? (
+            <Card className="flex flex-wrap gap-7 sm:p-6">
+              <FitRing score={score.score ?? 0} size={110} />
+              <div className="flex min-w-0 flex-1 basis-72 flex-col gap-3">
+                <h2 className="text-lg font-semibold">How this score is made</h2>
+                <ul className="flex flex-col gap-2.5 text-sm">
+                  {parts.map((p) => (
+                    <li key={p.label} className="grid grid-cols-[110px_1fr_36px] items-center gap-3">
+                      <span>{p.label}</span>
+                      <span className="h-2 overflow-hidden rounded-full bg-line" aria-hidden="true"><span className="block h-full bg-accent" style={{ width: `${Math.max(2, p.value)}%` }} /></span>
+                      <b className="num text-right">{Math.round(p.value)}</b>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted">Pay that is not in the posting is scored as neutral, not guessed.</p>
+              </div>
+            </Card>
+          ) : (
+            <Card><p className="text-sm text-muted">This role has not been scored yet. It is scored with the next morning run, or press “Score now” on Matches.</p></Card>
+          )}
+
+          {(fits.length > 0 || gaps.length > 0) && (
+            <div className="flex flex-wrap gap-6">
+              <Card className="min-w-0 flex-1 basis-72 sm:p-6">
+                <h2 className="mb-3 text-lg font-semibold">Why it fits</h2>
+                {fits.length ? <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">{fits.map((b) => <li key={b}>{cap(b)}.</li>)}</ul> : <p className="text-sm text-muted">Nothing stands out yet. Add your tools and target roles on your profile.</p>}
+              </Card>
+              <Card className="min-w-0 flex-1 basis-72 sm:p-6">
+                <h2 className="mb-3 text-lg font-semibold">What is missing</h2>
+                {gaps.length ? <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">{gaps.map((b) => <li key={b}>{cap(b)}.</li>)}</ul> : <p className="text-sm text-muted">No gaps found against your profile.</p>}
+              </Card>
+            </div>
+          )}
+
+          <Card className="sm:p-6">
+            <h2 className="mb-1 text-lg font-semibold">Your CV, tailored to this role</h2>
+            {app?.tailored_cv ? (
+              <>
+                <p className="mb-3 text-sm text-muted">Only facts from your CV are used. Review it before you send it anywhere.</p>
+                {changes.length > 0 && <ul className="mb-3 list-disc pl-5 text-sm">{changes.map((c, i) => <li key={i}>{c}</li>)}</ul>}
+                <Link href="/autopilot" className={btn}>Review, edit and download in Applications</Link>
+              </>
+            ) : (
+              <p className="text-sm text-muted">Press “Tailor my CV to this role” above. It rewrites your CV for this posting using only what your CV already says, and lists every change.</p>
+            )}
+          </Card>
+
+          {job.description && (
+            <Card className="sm:p-6">
+              <h2 className="mb-2 text-lg font-semibold">The posting</h2>
+              <p className="max-h-72 overflow-y-auto whitespace-pre-line text-sm text-muted">{job.description.slice(0, 3000)}</p>
+            </Card>
+          )}
+        </div>
+
+        <aside className="flex min-w-[280px] flex-[1_1_300px] flex-col gap-4">
+          <Card>
+            <h2 className="mb-2 text-[17px] font-semibold">Who to ask about this role</h2>
+            <p className="mb-3 text-sm text-muted">Find the hiring side or a recruiter at {company}. You message them yourself; nothing touches your LinkedIn.</p>
+            <Link href={`/referrals?company=${encodeURIComponent(company)}&domain=${encodeURIComponent(domain)}&job=${encodeURIComponent(id)}`} className={btn}>Find people at {company}</Link>
+          </Card>
+          <Card>
+            <h2 className="mb-3 text-[17px] font-semibold">Where this stands</h2>
+            <ol className="flex flex-col gap-2.5 text-sm">
+              <li className="flex items-center gap-2.5"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[11px] text-accent-ink" aria-hidden="true">✓</span>Found</li>
+              {STAGES.map(([key, label], i) => {
+                const done = stageIdx >= i;
+                return (
+                  <li key={key} className={`flex items-center gap-2.5 ${done ? "" : "text-muted"}`}>
+                    <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${done ? "bg-accent text-accent-ink" : "border-2 border-line"}`} aria-hidden="true">{done ? "✓" : ""}</span>{label}
+                  </li>
+                );
+              })}
+            </ol>
+          </Card>
+          <Card>
+            <h2 className="mb-2 text-[17px] font-semibold">About {company}</h2>
+            <p className="mb-3 text-sm text-muted">See all their open sales roles, your notes and the people to contact.</p>
+            <Link href="/companies" className={btn}>Open companies</Link>
+          </Card>
+        </aside>
+      </div>
+    </section>
+  );
+}

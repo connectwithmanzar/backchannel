@@ -9,19 +9,17 @@ type Group = { id: string; label: string; links: NavLink[] };
 
 const PRIMARY: NavLink[] = [
   { href: "/today", label: "Today" },
-  { href: "/roles", label: "Roles" },
+  { href: "/roles", label: "Matches" },
   { href: "/companies", label: "Companies" },
+  { href: "/outreach", label: "Outreach" },
+  { href: "/pipeline", label: "Pipeline" },
 ];
 
 const GROUPS: Group[] = [
-  { id: "pipeline", label: "Pipeline", links: [
-    { href: "/autopilot", label: "Applications" }, { href: "/outreach", label: "Outreach" },
-    { href: "/referrals", label: "Referrals" }, { href: "/offers", label: "Offers" },
-    { href: "/pipeline", label: "Funnel" },
-  ] },
   { id: "more", label: "More", links: [
-    { href: "/profile", label: "My profile" }, { href: "/pay", label: "Pay benchmark" },
-    { href: "/sources", label: "Company sources" },
+    { href: "/autopilot", label: "Applications" }, { href: "/referrals", label: "Referrals" },
+    { href: "/offers", label: "Offers" }, { href: "/profile", label: "My profile" },
+    { href: "/pay", label: "Pay benchmark" }, { href: "/sources", label: "Company sources" },
   ] },
 ];
 
@@ -78,7 +76,7 @@ export default function Nav({ email }: { email: string }) {
     <div ref={rootRef}>
       <header className="sticky top-0 z-20 border-b border-line bg-surface">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5">
-          <Link href="/today" className="flex items-center gap-2 font-display text-xl font-extrabold">
+          <Link href="/today" className="flex items-center gap-2 font-display text-xl font-bold">
             <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
               <rect x="1" y="1" width="24" height="24" rx="7" fill="var(--accent)" />
               <path d="M7 9h9M7 13h12M7 17h6" stroke="var(--accent-ink)" strokeWidth="2.2" strokeLinecap="round" />
@@ -89,7 +87,7 @@ export default function Nav({ email }: { email: string }) {
           <nav aria-label="Main" className="ml-2 hidden flex-1 items-center gap-1 md:flex">
             {PRIMARY.map((l) => (
               <Link key={l.href} href={l.href} aria-current={isOn(path, l.href) ? "page" : undefined}
-                className={`rounded-full px-3 py-1.5 text-sm font-medium ${isOn(path, l.href) ? "bg-accent-soft text-fg" : "text-muted hover:text-fg"}`}>
+                className={`rounded-xl px-3.5 py-2 text-sm font-medium ${isOn(path, l.href) ? "bg-accent-soft font-semibold text-accent" : "text-muted hover:bg-sunk hover:text-fg"}`}>
                 {l.label}
               </Link>
             ))}
@@ -97,7 +95,7 @@ export default function Nav({ email }: { email: string }) {
               <div key={g.id} className="relative">
                 <button type="button" aria-expanded={open === `top-${g.id}`} aria-controls={`menu-top-${g.id}`}
                   onClick={() => setOpen(open === `top-${g.id}` ? null : `top-${g.id}`)}
-                  className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium ${groupActive(g) ? "bg-accent-soft text-fg" : "text-muted hover:text-fg"}`}>
+                  className={`flex items-center gap-1 rounded-xl px-3.5 py-2 text-sm font-medium ${groupActive(g) ? "bg-accent-soft font-semibold text-accent" : "text-muted hover:bg-sunk hover:text-fg"}`}>
                   {g.label}
                   <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </button>
@@ -115,17 +113,17 @@ export default function Nav({ email }: { email: string }) {
 
       <nav aria-label="Main (mobile)" className={`fixed inset-x-0 bottom-0 ${open?.startsWith("bottom") ? "z-50" : "z-20"} border-t border-line bg-surface md:hidden`}
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-        <div className="mx-auto grid max-w-md grid-cols-5">
+        <div className="mx-auto grid max-w-md grid-cols-6">
           {PRIMARY.map((l) => (
             <Link key={l.href} href={l.href} aria-current={isOn(path, l.href) ? "page" : undefined}
-              className={`py-3.5 text-center text-xs font-semibold ${isOn(path, l.href) ? "text-accent" : "text-muted"}`}>
+              className={`py-3.5 text-center text-[11px] font-semibold ${isOn(path, l.href) ? "text-accent" : "text-muted"}`}>
               {l.label}
             </Link>
           ))}
           {GROUPS.map((g) => (
             <button key={g.id} type="button" aria-expanded={open === `bottom-${g.id}`} aria-controls={`menu-bottom-${g.id}`}
               onClick={() => setOpen(open === `bottom-${g.id}` ? null : `bottom-${g.id}`)}
-              className={`py-3.5 text-center text-xs font-semibold ${groupActive(g) || open === `bottom-${g.id}` ? "text-accent" : "text-muted"}`}>
+              className={`py-3.5 text-center text-[11px] font-semibold ${groupActive(g) || open === `bottom-${g.id}` ? "text-accent" : "text-muted"}`}>
               {g.label}
             </button>
           ))}

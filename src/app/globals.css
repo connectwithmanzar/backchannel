@@ -2,22 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens from the Backchannel prototype */
+/* Design tokens: warm neutral ground, one deep green accent. Contrast checked against the surfaces they sit on. */
 :root {
-  --bg: #edf0f2; --surface: #ffffff; --sunk: #e3e7eb; --line: #cdd4db;
-  --fg: #121a24; --muted: #56616e; --accent: #2340c8; --accent-ink: #ffffff; --accent-soft: #dde3fb;
-  --signal: #9a5b00; --signal-soft: #fbefd9; --good: #16794a; --good-soft: #dcf2e6; --warn: #a33a1d; --warn-soft: #f8e1d9;
+  --bg: #f6f5f1; --surface: #ffffff; --sunk: #eeece6; --line: #e4e2db;
+  --fg: #15171a; --muted: #5b6068; --accent: #0f6b5c; --accent-ink: #ffffff; --accent-soft: #e3f1ee;
+  --signal: #8a4a06; --signal-soft: #fff1de; --good: #0b5246; --good-soft: #e3f1ee; --warn: #9b2c1c; --warn-soft: #fbe6e1;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0e1319; --surface: #161d26; --sunk: #1d2631; --line: #2c3743;
-    --fg: #e7ecf2; --muted: #9aa6b4; --accent: #8fa3ff; --accent-ink: #0e1319; --accent-soft: #232e58;
+    --bg: #0f1412; --surface: #171e1b; --sunk: #1f2724; --line: #2b3531;
+    --fg: #e8eeeb; --muted: #9aa7a1; --accent: #4fc3a8; --accent-ink: #06201a; --accent-soft: #17302a;
     --signal: #f2b65a; --signal-soft: #3a2a10; --good: #5fd39a; --good-soft: #143326; --warn: #ff9a7d; --warn-soft: #3d1f16;
     color-scheme: dark;
   }
 }
 body { background: var(--bg); color: var(--fg); }
-h1, h2, h3 { font-family: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif; text-wrap: balance; letter-spacing: -0.01em; }
+h1, h2, h3 { font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif; text-wrap: balance; letter-spacing: -0.01em; }
 .num { font-variant-numeric: tabular-nums; }
 
 /* Height of the phone bottom tab bar, so floating buttons sit above it. */
