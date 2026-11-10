@@ -13,6 +13,8 @@ import { scoreJob, parseMinOteByMarket, familiesFromTitles, mentions, buildSearc
 import { companyQuality, signalsFromRows } from "../src/lib/companyQuality";
 import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddress, isDelayNotice, isAutoReply } from "../src/lib/outreach/limits";
+import { formatInr, formatPay, formatUsdThreshold, convert } from "../src/lib/currency";
+import { seniorityOf, matchesQuery, matchesLocation, postedWithin } from "../src/lib/role-filters";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -538,4 +540,39 @@ test("warm-up key: exact match only, and closed when no key is set", () => {
   assert.equal(isWarmAuthorized(null, key), false);
   assert.equal(isWarmAuthorized(key, undefined), false);                // no key configured
   assert.equal(isWarmAuthorized("short", "short"), false);              // keys under 16 characters are refused
+});
+
+test("pay shows in rupees the Indian way, from any currency", () => {
+  assert.equal(formatInr(85000), "₹85,000");
+  assert.equal(formatInr(4500000), "₹45 L");
+  assert.equal(formatInr(12500000), "₹1.3 Cr");
+  assert.equal(formatInr(1200000), "₹12 L");
+  assert.equal(convert(84, "USD", "INR"), 7056);
+  assert.equal(formatPay(60000, 80000, "USD", "INR"), "₹50.4 L – ₹67.2 L");     // 60k and 80k dollars at 84 rupees
+  assert.equal(formatPay(60000, 80000, "USD", "USD"), "$60k – $80k");
+  assert.equal(formatPay(3000000, 4500000, "INR", "INR"), "₹30 L – ₹45 L");
+  assert.equal(formatPay(undefined, 100000, "EUR", "USD"), "$108k");
+  assert.equal(formatPay(10, 20, "XYZ", "INR"), "XYZ 0k");                      // unknown currency falls back to as-posted
+  assert.equal(formatUsdThreshold(0, "INR"), "any");
+  assert.equal(formatUsdThreshold(50000, "INR"), "₹42 L+");
+});
+
+test("role search: words in any order, level, location and posting date", () => {
+  const job = { title: "Senior SDR", company: "Acme", location: "Bengaluru, India (Hybrid)", description: "Outbound with Salesforce and Outreach" };
+  assert.equal(matchesQuery(job, "acme sdr"), true);
+  assert.equal(matchesQuery(job, "salesforce outbound"), true);
+  assert.equal(matchesQuery(job, "acme account executive"), false);
+  assert.equal(matchesQuery(job, "  "), true);
+  assert.equal(matchesLocation(job, "bengaluru"), true);
+  assert.equal(matchesLocation(job, "dubai, india"), true);          // comma means "or"
+  assert.equal(matchesLocation(job, "dubai"), false);
+  assert.equal(seniorityOf("Senior SDR"), "senior");
+  assert.equal(seniorityOf("Head of Sales"), "lead");
+  assert.equal(seniorityOf("Associate BDR"), "entry");
+  assert.equal(seniorityOf("Account Executive"), "mid");
+  const now = Date.parse("2026-11-10T00:00:00Z");
+  assert.equal(postedWithin("2026-11-05T00:00:00Z", 7, now), true);
+  assert.equal(postedWithin("2026-10-01T00:00:00Z", 7, now), false);
+  assert.equal(postedWithin(undefined, 7, now), true);                // unknown date is kept
+  assert.equal(postedWithin("not a date", 7, now), true);
 });

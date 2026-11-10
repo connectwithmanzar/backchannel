@@ -1,6 +1,8 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import type { ScoredJob } from "@/lib/score";
+import { formatPay, formatUsdThreshold, type PayDisplay } from "@/lib/currency";
+import { matchesLocation, matchesQuery, postedWithin, seniorityOf } from "@/lib/role-filters";
 
 const MARKETS: Record<string, string> = {
   india: "India",
@@ -22,13 +24,6 @@ export interface JobReaction {
 
 function fitTone(score: number) {
   return score >= 80 ? "bg-good-soft text-good" : score >= 60 ? "bg-signal-soft text-signal" : "bg-sunk text-muted";
-}
-
-function money(n?: number, cur?: string) {
-  if (!n || !cur) return "";
-  if (cur === "INR") return `₹${(n / 1e5).toFixed(1).replace(/\.0$/, "")} L`;
-  const sym: Record<string, string> = { USD: "$", EUR: "€", GBP: "£" };
-  return `${sym[cur] ?? cur + " "}${Math.round(n / 1000)}k`;
 }
 
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -80,7 +75,13 @@ export default function RolesFeed({
 }) {
   const [markets, setMarkets] = useState<Set<string>>(new Set(defaultMarkets));
   const [families, setFamilies] = useState<Set<string>>(new Set());
-  const [remoteOnly, setRemoteOnly] = useState(false);
+  const [query, setQuery] = useState("");
+  const [locationQ, setLocationQ] = useState("");
+  const [posted, setPosted] = useState(0);
+  const [workType, setWorkType] = useState("any");
+  const [seniority, setSeniority] = useState("any");
+  const [visaOnly, setVisaOnly] = useState(false);
+  const [display, setDisplay] = useState<PayDisplay>("INR");
   const [payOnly, setPayOnly] = useState(false);
   const [minUsd, setMinUsd] = useState(0);
   const [sort, setSort] = useState<"fit" | "pay" | "new">("fit");
@@ -88,6 +89,13 @@ export default function RolesFeed({
   const [showSkipped, setShowSkipped] = useState(false);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [reactions, setReactions] = useState<Record<string, JobReaction>>(initialReactions);
+  useEffect(() => {
+    try { const v = localStorage.getItem("bc-pay-display"); if (v === "INR" || v === "USD" || v === "original") setDisplay(v); } catch { /* storage can be blocked */ }
+  }, []);
+  function changeDisplay(v: PayDisplay) {
+    setDisplay(v);
+    try { localStorage.setItem("bc-pay-display", v); } catch { /* ignore */ }
+  }
   const [, startTransition] = useTransition();
 
   const toggle = (s: Set<string>, set: (x: Set<string>) => void, k: string) => {
@@ -131,7 +139,12 @@ export default function RolesFeed({
       return (
         (!markets.size || markets.has(j.market)) &&
         (!families.size || families.has(j.roleFamily)) &&
-        (!remoteOnly || j.remoteType === "remote") &&
+        (workType === "any" || j.remoteType === workType) &&
+        (seniority === "any" || seniorityOf(j.title) === seniority) &&
+        (!visaOnly || j.visaSponsorship === "yes") &&
+        postedWithin(j.postedAt, posted) &&
+        matchesQuery(j, query) &&
+        matchesLocation(j, locationQ) &&
         (!payOnly || j.payBandStatus === "verified") &&
         (!minUsd || (j.payUsdMax ?? 0) >= minUsd)
       );
@@ -146,7 +159,7 @@ export default function RolesFeed({
         return b.score - a.score;
       });
     return r;
-  }, [jobs, markets, families, remoteOnly, payOnly, minUsd, sort, showSkipped, reactions]);
+  }, [jobs, markets, families, query, locationQ, posted, workType, seniority, visaOnly, payOnly, minUsd, sort, showSkipped, reactions]);
 
   const skippedCount = Object.values(reactions).filter((r) => r.reaction === "skipped").length;
 
@@ -154,6 +167,16 @@ export default function RolesFeed({
     <div className="mt-6 grid gap-6 md:grid-cols-[240px_minmax(0,1fr)]">
       {/* Filters */}
       <aside className="flex min-w-0 flex-col gap-5" aria-label="Filters">
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted">Search roles</span>
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Title, company, skill"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" />
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted">Location</span>
+          <input type="text" value={locationQ} onChange={(e) => setLocationQ(e.target.value)} placeholder="e.g. Bengaluru, Dubai"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" />
+        </label>
         <div className="flex flex-col gap-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted">Market</span>
           <div className="flex flex-wrap gap-1.5">
@@ -172,13 +195,31 @@ export default function RolesFeed({
         </div>
         <label className="flex flex-col gap-2 text-sm">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-            Min pay (USD) <span className="num">{minUsd ? `$${minUsd / 1000}k+` : "any"}</span>
+            Min pay ({display === "USD" ? "USD" : "per year"}) <span className="num">{formatUsdThreshold(minUsd, display)}</span>
           </span>
           <input type="range" min={0} max={200000} step={10000} value={minUsd} onChange={(e) => setMinUsd(+e.target.value)} className="accent-accent" />
         </label>
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted">Work type</span>
+          <select value={workType} onChange={(e) => setWorkType(e.target.value)} className="rounded-lg border border-line bg-surface px-2 py-2">
+            <option value="any">Any</option><option value="remote">Remote</option><option value="hybrid">Hybrid</option><option value="onsite">On-site</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted">Level</span>
+          <select value={seniority} onChange={(e) => setSeniority(e.target.value)} className="rounded-lg border border-line bg-surface px-2 py-2">
+            <option value="any">Any</option><option value="entry">Entry</option><option value="mid">Mid</option><option value="senior">Senior</option><option value="lead">Lead or manager</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted">Posted</span>
+          <select value={posted} onChange={(e) => setPosted(+e.target.value)} className="rounded-lg border border-line bg-surface px-2 py-2">
+            <option value={0}>Any time</option><option value={7}>Last 7 days</option><option value={30}>Last 30 days</option>
+          </select>
+        </label>
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={remoteOnly} onChange={(e) => setRemoteOnly(e.target.checked)} className="accent-accent" />
-          Remote only
+          <input type="checkbox" checked={visaOnly} onChange={(e) => setVisaOnly(e.target.checked)} className="accent-accent" />
+          Visa sponsorship offered
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={payOnly} onChange={(e) => setPayOnly(e.target.checked)} className="accent-accent" />
@@ -196,6 +237,11 @@ export default function RolesFeed({
       <div className="min-w-0">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3 text-sm text-muted">
           <span className="num">{rows.length} of {jobs.length} roles</span>
+          <label>Pay in{" "}
+            <select value={display} onChange={(e) => changeDisplay(e.target.value as PayDisplay)} className="rounded-lg border border-line bg-surface px-2 py-1">
+              <option value="INR">₹ INR</option><option value="USD">$ USD</option><option value="original">As posted</option>
+            </select>
+          </label>
           <label>Sort{" "}
             <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="rounded-lg border border-line bg-surface px-2 py-1">
               <option value="fit">Best fit</option>
@@ -238,7 +284,7 @@ export default function RolesFeed({
                       <span className="sr-only">Fit </span>{j.score}%
                     </span>
                     <span className={j.payMax ? "text-sm font-semibold num" : "text-xs text-muted"}>
-                      {j.payMax ? `${money(j.payMin, j.currency)}–${money(j.payMax, j.currency)}` : "Pay not published"}
+                      {j.payMax ? formatPay(j.payMin, j.payMax, j.currency, display) : "Pay not published"}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 sm:col-span-2">
