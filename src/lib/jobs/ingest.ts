@@ -87,7 +87,7 @@ async function ingestCompany(c: CompanyRow, repair: boolean): Promise<CompanyRes
 }
 
 /** Collects sales roles from every enabled company board, in parallel, within the time budget. */
-export async function runIngestion(opts: { companyId?: string; repair?: boolean } = {}) {
+export async function runIngestion(opts: { companyId?: string; companyIds?: string[]; repair?: boolean } = {}) {
   const started = Date.now();
   const svc = serviceClient();
   await syncSeeds();
@@ -95,6 +95,7 @@ export async function runIngestion(opts: { companyId?: string; repair?: boolean 
   let q = svc.from("companies").select("id, name, domain, ats_type, ats_slug").eq("enabled", true)
     .in("ats_type", ["greenhouse", "lever", "ashby", "smartrecruiters"]).not("ats_slug", "is", null);
   if (opts.companyId) q = q.eq("id", opts.companyId);
+  if (opts.companyIds) q = q.in("id", opts.companyIds);
   const { data, error } = await q;
   if (error) throw new Error(`Could not read companies: ${error.message}`);
 

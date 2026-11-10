@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { isOwner } from "@/lib/owner";
+import ImportCompanies from "./ImportCompanies";
 import SourcesClient, { type SourceRow } from "./SourcesClient";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,7 @@ export default async function SourcesPage() {
           {last.summary?.failed ?? 0} failed · {last.summary?.repaired ?? 0} repaired
         </p>
       )}
+      {isOwner(user?.email) && <div className="mt-5"><ImportCompanies /></div>}
       <SourcesClient rows={(companies ?? []) as SourceRow[]} owner={isOwner(user?.email)} />
     </section>
   );

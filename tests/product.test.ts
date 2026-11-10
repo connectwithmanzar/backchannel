@@ -17,6 +17,7 @@ import { formatInr, formatPay, formatUsdThreshold, convert } from "../src/lib/cu
 import { seniorityOf, matchesQuery, matchesLocation, postedWithin } from "../src/lib/role-filters";
 import { parseLocations, searchCacheKey } from "../src/lib/contacts/apollo";
 import { buildJobQuery, buildCompanyQuery, parseResults, cleanSnippet } from "../src/lib/websearch";
+import { parseCompanyList, chunk } from "../src/lib/company-import";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -617,4 +618,17 @@ test("job results drop noise, read as plain text, and put real job pages first",
   assert.deepEqual(out.map((r) => r.host), ["jobs.acme.com", "accenture.com"]);
   assert.equal(out[0].snippet, "Apply Role Outbound");
   assert.equal(cleanSnippet("# Title | [a](http://b)"), "Title a");
+});
+
+test("company list import handles pasted lines, CSV, duplicates and spreadsheet formulas", () => {
+  const { rows, skipped } = parseCompanyList("Company,Website\nAcme, https://www.acme.com/careers\n\"Globex, Inc\"\tglobex.io\nacme.com\nInitech\n=HYPERLINK(\"x\"),evil.com\nAcme, other.com");
+  assert.deepEqual(rows.map((r) => r.name), ["Acme", "Globex, Inc", "Initech", "HYPERLINK(x)"]);
+  assert.equal(rows[0].domain, "acme.com");
+  assert.equal(rows[1].domain, "globex.io");
+  assert.equal(rows[2].domain, null);
+  assert.ok(!rows.some((r) => /^[=+\-@]/.test(r.name)));
+  assert.equal(skipped, 2);                                    // the bare acme.com line and the second Acme
+  assert.equal(parseCompanyList("  \n ").rows.length, 0);
+  assert.equal(parseCompanyList(Array.from({ length: 500 }, (_, i) => `Co${i}, co${i}.com`).join("\n")).rows.length, 300);
+  assert.deepEqual(chunk([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
 });
