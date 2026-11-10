@@ -180,7 +180,10 @@ export default async function TodayPage() {
           <Card>
             <h2 className="mb-1 text-[17px] font-semibold">Where roles come from</h2>
             <p className="text-sm text-muted">{plural((watch ?? []).length, "watched company", "watched companies")} and {plural(sc.length, "scored role")}. This is not every job: add companies, search the open web, or save any role you find.</p>
-            <Link href="/companies" className={`${btn} mt-3`}>Add companies</Link>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link href="/roles?saved=1" className={btn}>Your saved jobs</Link>
+              <Link href="/companies" className={btn}>Add companies</Link>
+            </div>
           </Card>
         </aside>
       </div>

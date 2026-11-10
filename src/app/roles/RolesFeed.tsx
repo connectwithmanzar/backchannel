@@ -67,7 +67,9 @@ export default function RolesFeed({
   reactions: initialReactions = {},
   defaultMarkets = [],
   initialQuery = "",
+  initialSaved = false,
 }: {
+  initialSaved?: boolean;
   initialQuery?: string;
   jobs: ScoredJob[];
   reactions?: Record<string, JobReaction>;
@@ -83,7 +85,7 @@ export default function RolesFeed({
   const [visaOnly, setVisaOnly] = useState(false);
   const [countries, setCountries] = useState<Set<string>>(new Set());
   const [indiaOnly, setIndiaOnly] = useState(false);
-  const [savedOnly, setSavedOnly] = useState(false);
+  const [savedOnly, setSavedOnly] = useState(initialSaved);
   const [display, setDisplay] = useState<PayDisplay>("INR");
   const [payOnly, setPayOnly] = useState(false);
   const [minUsd, setMinUsd] = useState(0);
