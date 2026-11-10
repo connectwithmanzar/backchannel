@@ -1005,7 +1005,7 @@ test("one job has one address, so a job you saved is recognised when you open it
 test("on a LinkedIn search page the extension reads only the open job, and asks you to pick one if none is open", () => {
   const pane = { innerText: "Senior SDR\nFreshworks\nChennai, Tamil Nadu, India · 2 days ago · 100 applicants\n" + "About the job\nOutbound with Salesforce.\n".repeat(12),
     querySelector: (s: string) => (/h1|h2/.test(s) ? { innerText: "Senior SDR" } : s.includes("/company/") ? { innerText: "Freshworks" } : s.includes("primary-description") ? { innerText: "Chennai, Tamil Nadu, India · 2 days ago" } : null) };
-  const doc = (open: boolean) => ({ title: "", querySelectorAll: () => [], querySelector: (s: string) => (open && s === ".scaffold-layout__detail" ? pane : null), body: { innerText: "ten jobs in a list ".repeat(50) } });
+  const doc = (open: boolean, byStructure = false) => ({ title: "", querySelectorAll: (s: string) => (byStructure && s.startsWith("div") ? [{ textContent: "About the job " + "x".repeat(600), querySelector: (q: string) => (q.includes("/company/") ? {} : null) }, { ...pane, textContent: pane.innerText, querySelector: (q: string) => (q.includes("/jobs/view/") ? { getAttribute: () => "/jobs/view/senior-sdr-4099999999/" } : pane.querySelector(q)) }] : []), querySelector: (s: string) => (open && s === ".scaffold-layout__detail" ? pane : null), body: { innerText: "ten jobs in a list ".repeat(50) } });
   const win = (href: string) => ({ location: { href }, getSelection: () => "" });
   const open = pageExtractor(doc(true), win("https://www.linkedin.com/jobs/search/?keywords=sdr&currentJobId=4012345678"));
   assert.equal(open.source, "linkedin");
@@ -1017,4 +1017,12 @@ test("on a LinkedIn search page the extension reads only the open job, and asks 
   const none = pageExtractor(doc(false), win("https://www.linkedin.com/jobs/search/?keywords=sdr")) as unknown as { needsJobSelection?: boolean; text: string };
   assert.equal(none.needsJobSelection, true);
   assert.equal(none.text, "");                                                  // the whole list is never read as one job
+  // LinkedIn renames its panels often: the open job is still found by what the panel holds, and its number from a link inside it.
+  const byShape = pageExtractor(doc(false, true), win("https://www.linkedin.com/jobs/search-results/?keywords=sdr")) as unknown as { source: string; title: string; url: string };
+  assert.equal(byShape.source, "linkedin");
+  assert.equal(byShape.title, "Senior SDR");
+  assert.equal(byShape.url, "https://www.linkedin.com/jobs/view/4099999999/");
+  // Text you select yourself still works when nothing is found.
+  const picked = pageExtractor(doc(false), { location: { href: "https://www.linkedin.com/jobs/search/?keywords=sdr" }, getSelection: () => "Selected description. ".repeat(20) }) as unknown as { source: string };
+  assert.equal(picked.source, "selection");
 });

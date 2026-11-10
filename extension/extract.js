@@ -12,25 +12,43 @@ function pageExtractor(doc, win) {
   let url;
   try { url = new URL(href); } catch (e) { url = { hostname: "", pathname: "", searchParams: { get: () => null } }; }
 
+  const selection = tidy(win.getSelection ? String(win.getSelection()) : "");
+
   // LinkedIn: a search page shows many jobs at once. Read only the one that is open on the right.
   if (/(^|\.)linkedin\.com$/.test(url.hostname)) {
     const view = url.pathname.match(/\/jobs\/view\/(?:[^/]*-)?(\d{6,})/);
-    const id = view ? view[1] : url.searchParams.get("currentJobId");
     const isListPage = /\/jobs\/(search|collections|recommended)/.test(url.pathname);
     if (isListPage || view) {
+      // 1. Known panel names; 2. otherwise the smallest block that holds both a company link and "About the job".
       const selectors = [".jobs-search__job-details--container", ".jobs-search__job-details--wrapper", ".scaffold-layout__detail", ".jobs-details", ".job-view-layout", "[class*='jobs-search__job-details']", "[class*='job-details']"];
       let pane = null;
       for (const sel of selectors) { const el = doc.querySelector(sel); if (el && textOf(el).length > 200) { pane = el; break; } }
-      if (!id || !pane) return { source: "list", needsJobSelection: true, url: href, title: "", company: "", location: "", remote: false, text: "" };
-      const heading = pane.querySelector("h1, h2");
-      const companyLink = pane.querySelector("a[href*='/company/']");
-      const primary = pane.querySelector("[class*='primary-description']");
-      const location = clean((textOf(primary) || "").split("·")[0]);
-      return {
-        source: "linkedin", url: "https://www.linkedin.com/jobs/view/" + id + "/", title: clean(heading && heading.innerText).slice(0, 200),
-        company: clean(companyLink && companyLink.innerText).slice(0, 200), location: location.slice(0, 200), remote: /remote/i.test(location),
-        text: textOf(pane).slice(0, 12000),
-      };
+      if (!pane) {
+        let bestLen = Infinity;
+        Array.from(doc.querySelectorAll("div, section, article, main")).forEach((el) => {
+          const t = el.textContent || "";
+          if (t.length < 400 || t.length > 40000 || t.length >= bestLen) return;
+          if (!/about the job/i.test(t) || !el.querySelector("a[href*='/company/']")) return;
+          pane = el; bestLen = t.length;
+        });
+      }
+      // The job's number: from the address, else from a link inside the panel, else from the highlighted card.
+      let id = view ? view[1] : url.searchParams.get("currentJobId");
+      if (!id && pane) { const link = pane.querySelector("a[href*='/jobs/view/']"); const m = link && (link.getAttribute("href") || "").match(/\/jobs\/view\/(?:[^/]*-)?(\d{6,})/); if (m) id = m[1]; }
+      if (!id) { const card = doc.querySelector("[data-job-id].jobs-search-results-list__list-item--active, li[class*='--active'] [data-job-id], [aria-current='true'][data-job-id]"); if (card) id = card.getAttribute("data-job-id"); }
+      if (pane) {
+        const heading = pane.querySelector("h1, h2");
+        const companyLink = pane.querySelector("a[href*='/company/']");
+        const primary = pane.querySelector("[class*='primary-description']");
+        const location = clean((textOf(primary) || "").split("·")[0]);
+        return {
+          source: "linkedin", url: id ? "https://www.linkedin.com/jobs/view/" + id + "/" : href, title: clean(heading && heading.innerText).slice(0, 200),
+          company: clean(companyLink && companyLink.innerText).slice(0, 200), location: location.slice(0, 200), remote: /remote/i.test(location),
+          text: textOf(pane).slice(0, 12000),
+        };
+      }
+      // Nothing found. Text you selected yourself still works; otherwise say why.
+      if (selection.length <= 200) return { source: "list", needsJobSelection: true, debug: "job number " + (id ? "found" : "not found") + ", job details not found", url: href, title: "", company: "", location: "", remote: false, text: "" };
     }
   }
 
@@ -52,7 +70,6 @@ function pageExtractor(doc, win) {
     return clean([a.addressLocality, a.addressRegion, typeof a.addressCountry === "object" ? a.addressCountry.name : a.addressCountry].filter(Boolean).join(", "));
   };
 
-  const selection = tidy(win.getSelection ? String(win.getSelection()) : "");
   if (posting) {
     const org = posting.hiringOrganization;
     return {

@@ -73,7 +73,15 @@ async function score() {
   view.innerHTML = `<p class="muted">Scoring this role against your profile…</p>`;
   const r = await api("/api/extension/preview", { url: job.url, title: job.title, company: job.company, location: job.location, remote: job.remote, text: job.text });
   if (r.signedOut) return showSignIn();
-  if (!r.ok) { view.innerHTML = `<p class="err">${esc(r.data.error || "Couldn't score this page.")}</p>`; return; }
+  if (!r.ok) {
+    view.innerHTML = `<p class="err">${esc(r.data.error || "Couldn't score this page.")}</p>
+      <label>Job title<input id="f-title" value="${esc(job.title)}"></label>
+      <label>Company<input id="f-company" value="${esc(job.company)}"></label>
+      <label>Location<input id="f-location" value="${esc(job.location)}"></label>
+      <button class="primary" id="rescore" style="margin-top:8px">Score this</button>`;
+    document.getElementById("rescore").onclick = () => { job = { ...job, title: document.getElementById("f-title").value.trim(), company: document.getElementById("f-company").value.trim(), location: document.getElementById("f-location").value.trim() }; score(); };
+    return;
+  }
   if (r.data.saved && !saved) saved = { job_id: r.data.saved.job_id };
   render(r.data);
 }
@@ -84,7 +92,7 @@ async function start() {
     if (!tab || !/^https?:/.test(tab.url || "")) { view.innerHTML = `<p class="muted">Open a job page first, then press the Backchannel button.</p>`; return; }
     const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: pageExtractor });
     job = result;
-    if (job && job.needsJobSelection) { view.innerHTML = `<p><b>This is a list of jobs.</b></p><p class="muted">Click one job so its details open on the right, then press the Backchannel button again. Backchannel reads one job at a time, the one you are looking at.</p>`; return; }
+    if (job && job.needsJobSelection) { view.innerHTML = `<p><b>This is a list of jobs.</b></p><p class="muted">I could not find an open job on this page. Click a job so its details show on the right, then press the button again. If it still fails, drag to select the job description text on the right and press the button again.</p><p class="muted" style="font-size:11px">${esc(job.debug || "")}</p>`; return; }
     if (!job || (job.text || "").length < 80) { view.innerHTML = `<p class="muted">This page has too little text to score. Select the job description on the page and press the button again.</p>`; return; }
     await score();
   } catch (e) {
