@@ -12,6 +12,8 @@ export default function FindPeople({ configured, initialCompany = "", initialDom
   const router = useRouter();
   const [company, setCompany] = useState(initialCompany);
   const [domain, setDomain] = useState(initialDomain);
+  const [location, setLocation] = useState("");
+  const [kind, setKind] = useState("both");
   const [people, setPeople] = useState<Person[] | null>(null);
   const [fromCache, setFromCache] = useState(false);
   const [revealed, setRevealed] = useState<Record<string, Revealed>>({});
@@ -26,7 +28,7 @@ export default function FindPeople({ configured, initialCompany = "", initialDom
 
   async function search(refresh = false) {
     setBusy("search"); setMsg(null); setPeople(null);
-    const { ok, data } = await call("search", { company, domain, refresh });
+    const { ok, data } = await call("search", { company, domain, location, kind, refresh });
     setBusy("");
     if (!ok) { setMsg({ ok: false, text: data.error ?? "Search failed." }); return; }
     setPeople(data.people);
@@ -64,9 +66,15 @@ export default function FindPeople({ configured, initialCompany = "", initialDom
       ) : (
         <>
           <p className="text-sm text-muted">Enter a target company and its website. You get the sales leaders and recruiters there (first name and job title). Backchannel never sends LinkedIn messages: you find them on LinkedIn and send the ask yourself.</p>
-          <form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]" onSubmit={(e) => { e.preventDefault(); search(); }}>
+          <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); search(); }}>
             <input aria-label="Company" className={input} placeholder="Company, e.g. Apollo.io" value={company} onChange={(e) => setCompany(e.target.value)} />
             <input aria-label="Website" className={input} placeholder="Website, e.g. apollo.io" value={domain} onChange={(e) => setDomain(e.target.value)} />
+            <input aria-label="Location" className={input} placeholder="Location, e.g. Dubai, Bengaluru (optional)" value={location} onChange={(e) => setLocation(e.target.value)} />
+            <select aria-label="Who to look for" className={input} value={kind} onChange={(e) => setKind(e.target.value)}>
+              <option value="both">Sales leaders, then recruiters</option>
+              <option value="hiring">Sales leaders only</option>
+              <option value="recruiter">Recruiters only</option>
+            </select>
             <button type="submit" className={btnPrimary} disabled={busy === "search" || !company.trim() || !domain.trim()}>{busy === "search" ? "Searching…" : "Find people"}</button>
           </form>
           {msg && <p role="status" className={`text-sm ${msg.ok ? "text-good" : "text-warn"}`}>{msg.text}</p>}

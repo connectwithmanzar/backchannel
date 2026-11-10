@@ -42,9 +42,22 @@ export function classifyTitle(title: string): PersonRole {
   return "other";
 }
 
-export function buildSearchUrl(domain: string, titles: string[] = HIRING_TITLES): string {
+export type PeopleKind = "hiring" | "recruiter" | "both";
+
+/** "Dubai, Bengaluru" becomes ["Dubai", "Bengaluru"]; at most five places, each trimmed. */
+export function parseLocations(raw: string): string[] {
+  return raw.split(/[,;]/).map((s) => s.trim().slice(0, 60)).filter(Boolean).slice(0, 5);
+}
+
+/** Same search with different filters must not reuse each other's saved result. */
+export function searchCacheKey(domain: string, locations: string[], kind: PeopleKind): string {
+  return [domain, locations.map((l) => l.toLowerCase()).sort().join("+"), kind].join("|");
+}
+
+export function buildSearchUrl(domain: string, titles: string[] = HIRING_TITLES, locations: string[] = []): string {
   const p = new URLSearchParams();
   p.append("q_organization_domains_list[]", domain);
+  for (const l of locations) p.append("person_locations[]", l);
   for (const t of titles) p.append("person_titles[]", t);
   p.append("include_similar_titles", "true");
   p.append("per_page", "15");
@@ -91,11 +104,14 @@ export function mergePeople(first: FoundPerson[], second: FoundPerson[], limit =
   return [...first, ...second].filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true))).slice(0, limit);
 }
 
-export async function searchPeople(domain: string, companyName: string): Promise<FoundPerson[]> {
-  const hiring = parsePeople(await call(buildSearchUrl(domain, HIRING_TITLES), { method: "POST" }), companyName);
-  if (hiring.length >= MIN_HIRING_PEOPLE) return mergePeople(hiring, []);
-  const recruiters = parsePeople(await call(buildSearchUrl(domain, RECRUITER_TITLES), { method: "POST" }), companyName);
-  return mergePeople(hiring, recruiters);
+export async function searchPeople(domain: string, companyName: string, opts: { locations?: string[]; kind?: PeopleKind } = {}): Promise<FoundPerson[]> {
+  const locations = opts.locations ?? [];
+  const kind = opts.kind ?? "both";
+  const run = async (titles: string[]) => parsePeople(await call(buildSearchUrl(domain, titles, locations), { method: "POST" }), companyName);
+  if (kind === "recruiter") return mergePeople(await run(RECRUITER_TITLES), []);
+  const hiring = await run(HIRING_TITLES);
+  if (kind === "hiring" || hiring.length >= MIN_HIRING_PEOPLE) return mergePeople(hiring, []);
+  return mergePeople(hiring, await run(RECRUITER_TITLES));
 }
 
 /** Full name and LinkedIn link for one person. May use Apollo credits; never requests email or phone. */

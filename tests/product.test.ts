@@ -15,6 +15,7 @@ import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddress, isDelayNotice, isAutoReply } from "../src/lib/outreach/limits";
 import { formatInr, formatPay, formatUsdThreshold, convert } from "../src/lib/currency";
 import { seniorityOf, matchesQuery, matchesLocation, postedWithin } from "../src/lib/role-filters";
+import { buildSearchUrl, parseLocations, searchCacheKey } from "../src/lib/contacts/apollo";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -575,4 +576,14 @@ test("role search: words in any order, level, location and posting date", () => 
   assert.equal(postedWithin("2026-10-01T00:00:00Z", 7, now), false);
   assert.equal(postedWithin(undefined, 7, now), true);                // unknown date is kept
   assert.equal(postedWithin("not a date", 7, now), true);
+});
+
+test("people search can be limited to places, and each filter set is saved separately", () => {
+  assert.deepEqual(parseLocations(" Dubai, Bengaluru ;; "), ["Dubai", "Bengaluru"]);
+  assert.equal(parseLocations("a,b,c,d,e,f,g").length, 5);
+  const url = decodeURIComponent(buildSearchUrl("acme.com", ["recruiter"], ["Dubai"]));
+  assert.match(url, /person_locations\[\]=Dubai/);
+  assert.doesNotMatch(decodeURIComponent(buildSearchUrl("acme.com")), /person_locations/);
+  assert.notEqual(searchCacheKey("acme.com", ["Dubai"], "both"), searchCacheKey("acme.com", [], "both"));
+  assert.equal(searchCacheKey("acme.com", ["Dubai", "Pune"], "hiring"), searchCacheKey("acme.com", ["pune", "dubai"], "hiring"));
 });

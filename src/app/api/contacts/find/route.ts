@@ -4,7 +4,7 @@ import { serviceClient } from "@/lib/supabase/service";
 import { rateLimitShared, retryAfter } from "@/lib/rate-limit";
 import { isExcludedCompany } from "@/data/companies";
 import { isBlocked } from "@/lib/outreach/engine";
-import { ApolloError, apolloConfigured, cleanDomain, revealPerson, searchPeople } from "@/lib/contacts/apollo";
+import { ApolloError, apolloConfigured, cleanDomain, parseLocations, revealPerson, searchCacheKey, searchPeople, type PeopleKind } from "@/lib/contacts/apollo";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -46,17 +46,20 @@ export async function POST(req: NextRequest) {
       if (isExcludedCompany(company, domain) || (await isBlocked(db, user.id, `x@${domain}`, company))) {
         return NextResponse.json({ error: `${company} is on your stealth or excluded list, so I won't look for people there.` }, { status: 400 });
       }
+      const locations = parseLocations(String(b.location ?? ""));
+      const kind: PeopleKind = b.kind === "hiring" || b.kind === "recruiter" ? b.kind : "both";
+      const cacheKey = searchCacheKey(domain, locations, kind);
       const { data: cached } = await svc.from("contact_lookups").select("result, created_at")
-        .eq("user_id", user.id).eq("kind", "search").eq("company_key", domain).maybeSingle();
+        .eq("user_id", user.id).eq("kind", "search").eq("company_key", cacheKey).maybeSingle();
       if (!b.refresh && cached && Date.now() - Date.parse(cached.created_at) < CACHE_DAYS * 864e5) {
         return NextResponse.json({ ok: true, people: cached.result, cached: true });
       }
       if ((await usedThisMonth("search")) >= SEARCH_CAP) {
         return NextResponse.json({ error: `You've used your ${SEARCH_CAP} company searches for this month.` }, { status: 429 });
       }
-      const people = await searchPeople(domain, company);
+      const people = await searchPeople(domain, company, { locations, kind });
       await svc.from("contact_lookups").upsert(
-        { user_id: user.id, kind: "search", company_key: domain, result: people, created_at: new Date().toISOString() },
+        { user_id: user.id, kind: "search", company_key: cacheKey, result: people, created_at: new Date().toISOString() },
         { onConflict: "user_id,kind,company_key" }
       );
       return NextResponse.json({ ok: true, people, cached: false });
