@@ -16,7 +16,7 @@ import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddr
 import { formatInr, formatPay, formatUsdThreshold, convert } from "../src/lib/currency";
 import { seniorityOf, matchesQuery, matchesLocation, postedWithin } from "../src/lib/role-filters";
 import { parseLocations, searchCacheKey } from "../src/lib/contacts/apollo";
-import { buildJobQuery, buildCompanyQuery, parseResults } from "../src/lib/websearch";
+import { buildJobQuery, buildCompanyQuery, parseResults, cleanSnippet } from "../src/lib/websearch";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -605,4 +605,16 @@ test("open-web search builds clean queries and drops LinkedIn and unsafe links",
   ] });
   assert.deepEqual(out.map((r) => r.host), ["jobs.acme.com"]);
   assert.deepEqual(parseResults(null), []);
+});
+
+test("job results drop noise, read as plain text, and put real job pages first", () => {
+  const out = parseResults({ results: [
+    { title: "Careers", url: "https://www.accenture.com/us-en/careers", content: "x" },
+    { title: "SDR", url: "https://tavily.com/knowledge/company/abc", content: "x" },
+    { title: "post", url: "https://www.facebook.com/odoo/posts/1", content: "x" },
+    { title: "Sales Development Representative", url: "https://jobs.acme.com/sdr-1", content: "[Apply](https://x.com) ## Role *Outbound*" },
+  ] }, "jobs");
+  assert.deepEqual(out.map((r) => r.host), ["jobs.acme.com", "accenture.com"]);
+  assert.equal(out[0].snippet, "Apply Role Outbound");
+  assert.equal(cleanSnippet("# Title | [a](http://b)"), "Title a");
 });

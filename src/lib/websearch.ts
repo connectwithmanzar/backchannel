@@ -3,6 +3,9 @@
 const ENDPOINT = "https://api.tavily.com/search";
 
 export const BLOCKED_HOSTS = ["linkedin.com"];
+// Pages that are never a job or a company worth adding: the search provider's own profiles and social posts.
+const NOISE_HOSTS = ["tavily.com", "facebook.com", "instagram.com", "twitter.com", "x.com", "youtube.com", "tiktok.com", "pinterest.com"];
+const JOB_HINT = /\b(jobs?|careers?|vacanc\w*|hiring|apply|openings?|positions?|roles?)\b/i;
 
 export interface WebResult { title: string; url: string; host: string; snippet: string }
 
@@ -30,24 +33,34 @@ export function hostOf(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
 }
 
-export function parseResults(json: unknown): WebResult[] {
+/** Strips markdown links, headings and stray symbols so a snippet reads as plain text. */
+export function cleanSnippet(raw: string): string {
+  return raw.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[#*_`>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 400);
+}
+
+const matchesHost = (host: string, list: string[]) => list.some((b) => host === b || host.endsWith(`.${b}`));
+
+/** Parses search results. For jobs, real job pages come first and generic careers landing pages last. */
+export function parseResults(json: unknown, kind: "jobs" | "companies" = "companies"): WebResult[] {
   const rows = (json as { results?: { title?: string; url?: string; content?: string }[] } | null)?.results;
   if (!Array.isArray(rows)) return [];
   const seen = new Set<string>();
   return rows.flatMap((r) => {
     if (typeof r?.url !== "string" || !/^https:\/\//.test(r.url)) return [];
     const host = hostOf(r.url);
-    if (!host || BLOCKED_HOSTS.some((b) => host === b || host.endsWith(`.${b}`)) || seen.has(r.url)) return [];
+    if (!host || matchesHost(host, BLOCKED_HOSTS) || matchesHost(host, NOISE_HOSTS) || seen.has(r.url)) return [];
     seen.add(r.url);
-    return [{ title: (r.title ?? host).slice(0, 160), url: r.url, host, snippet: (r.content ?? "").slice(0, 600) }];
-  });
+    return [{ title: (r.title ?? host).slice(0, 160), url: r.url, host, snippet: cleanSnippet(r.content ?? "") }];
+  }).sort((a, b) => (kind === "jobs" ? jobScore(b) - jobScore(a) : 0));
 }
+
+const jobScore = (r: WebResult) => (JOB_HINT.test(r.url) ? 2 : 0) + (JOB_HINT.test(r.title) ? 1 : 0) - (/\/careers\/?$|\/job-categories\//i.test(r.url) ? 2 : 0);
 
 export class WebSearchError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
-export async function searchWeb(query: string, opts: { days?: number; max?: number } = {}): Promise<WebResult[]> {
+export async function searchWeb(query: string, opts: { days?: number; max?: number; kind?: "jobs" | "companies" } = {}): Promise<WebResult[]> {
   const body: Record<string, unknown> = {
     query, max_results: opts.max ?? 10, search_depth: "basic", exclude_domains: BLOCKED_HOSTS,
     ...(opts.days ? { time_range: opts.days <= 7 ? "week" : "month" } : {}),
@@ -60,5 +73,5 @@ export async function searchWeb(query: string, opts: { days?: number; max?: numb
   if (res.status === 429) throw new WebSearchError("The web search limit was reached. Try again later.", 429);
   if (res.status === 401 || res.status === 403) throw new WebSearchError("The web search key was refused. Check TAVILY_API_KEY.", 502);
   if (!res.ok) throw new WebSearchError(`Web search returned an error (${res.status}).`, 502);
-  return parseResults(await res.json());
+  return parseResults(await res.json(), opts.kind);
 }

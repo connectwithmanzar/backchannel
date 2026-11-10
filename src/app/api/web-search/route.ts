@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     : buildJobQuery({ role: s(b.role), company: s(b.company), location: s(b.location), level: s(b.level), tools: s(b.tools), workType: s(b.workType), visa: b.visa === true });
   try {
     // Stealth: never surface a result from an excluded company (for example the current employer).
-    const results = (await searchWeb(query, { days })).filter((r) => !isExcludedCompany(r.title, r.url));
+    const results = (await searchWeb(query, { days, kind: b.kind === "companies" ? "companies" : "jobs" })).filter((r) => !isExcludedCompany(r.title, r.url));
     return NextResponse.json({ ok: true, query, results });
   } catch (e) {
     if (e instanceof WebSearchError) return NextResponse.json({ error: e.message }, { status: e.status });
