@@ -9,8 +9,8 @@ import { isBlocked } from "@/lib/outreach/engine";
 import { discoverBoard } from "@/lib/collectors/ats";
 import { runIngestion } from "@/lib/jobs/ingest";
 import { cleanDomain } from "@/lib/contacts/apollo";
-import { newBoards } from "@/lib/jobs/discover";
-import { probeCareersSite, resolveDomain, searchCompanyRoles, squash } from "@/lib/jobs/company-finder";
+import { jsearchConfigured, listingsForCompany, searchJSearch } from "@/lib/collectors/jsearch";
+import { probeCareersSite, resolveDomain, searchCompanyBoards, searchCompanyRoles } from "@/lib/jobs/company-finder";
 import { webSearchConfigured } from "@/lib/websearch";
 import { SHARED_JOBS_TAG } from "@/lib/jobs/shared-cache";
 
@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Slow down a little. Try again in ${retryAfter(`cjobs:${user.id}`)}s.` }, { status: 429 });
   }
   const b = await req.json().catch(() => ({}));
+  const place = String(b.location ?? "").replace(/[^\p{L}\p{N}\s,.-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 60);
   const name = String(b.name ?? "").trim().replace(/\s+/g, " ").slice(0, 100);
   if (name.length < 2) return NextResponse.json({ error: "Enter a company name." }, { status: 400 });
   let domain = typeof b.website === "string" && b.website.trim() ? cleanDomain(b.website) : null;
@@ -78,17 +79,26 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 4. Search their own site and the main job boards for the company name.
+  // 4. Search the job systems themselves for the company name: one result reveals the whole board.
+  if (owner && webSearchConfigured()) {
+    for (const f of await searchCompanyBoards(name).catch(() => [])) {
+      const r = await addBoard(f.ats, f.slug);
+      if (r && r.roles.length) return NextResponse.json({ ok: true, status: "board", how: `found through search (${f.ats})`, name, roles: r.roles });
+    }
+  }
+
+  // 5. Real listings from a licensed Google-for-Jobs feed, when its key is set.
+  if (jsearchConfigured()) {
+    try {
+      const cards = await searchJSearch(`sales jobs at ${name}${place ? ` in ${place}` : ""}`);
+      const { shown, hidden } = listingsForCompany(cards, name);
+      if (shown.length) return NextResponse.json({ ok: true, status: "listings", name, listings: shown.slice(0, 25), hidden });
+    } catch (e) { return NextResponse.json({ ok: true, status: "none", name, domain, workday, careersUrl: domain ? `https://${domain}/careers` : null, note: (e as Error).message }); }
+  }
+
+  // 6. Individual posting pages on their site and the main job boards (category and landing pages are dropped).
   if (webSearchConfigured()) {
     const results = await searchCompanyRoles(name, domain).catch(() => []);
-    // A result that sits on a job system and belongs to this company means we can watch the whole board.
-    if (owner) {
-      const key = squash(name).slice(0, 6);
-      for (const f of newBoards(results.map((x) => x.url), new Set()).filter((b) => squash(b.slug).includes(key))) {
-        const r = await addBoard(f.ats, f.slug);
-        if (r && r.roles.length) return NextResponse.json({ ok: true, status: "board", how: `found through search (${f.ats})`, name, roles: r.roles });
-      }
-    }
     if (results.length) return NextResponse.json({ ok: true, status: "results", name, domain, workday, results });
   }
   return NextResponse.json({ ok: true, status: "none", name, domain, workday, careersUrl: domain ? `https://${domain}/careers` : null });

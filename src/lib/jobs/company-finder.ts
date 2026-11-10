@@ -73,10 +73,37 @@ export async function resolveDomain(name: string): Promise<string | null> {
   try { return pickHomepage(name, await searchWeb(`${name} official website`, { max: 8 })); } catch { return null; }
 }
 
+/**
+ * True for a link to one specific posting, false for a category, search or landing page such as "Sales jobs | Sales jobs at Adobe".
+ * A posting link has a job path followed by an id or title, or a long number, or a known board-job parameter.
+ */
+export function looksLikePosting(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (parseAtsUrl(url) && /\/(jobs?|[0-9a-f-]{8,})\//i.test(u.pathname + "/")) return true;
+    if (u.search.includes("gh_jid") || u.search.includes("jobId")) return true;
+    if (/\/(job|jobs|position|positions|opening|openings|vacancy|requisition|req)\/[^/]{4,}/i.test(u.pathname)) return true;
+    return /\/\d{5,}(\/|$|-)|_[A-Z]{1,3}\d{4,}/.test(u.pathname);
+  } catch { return false; }
+}
+
+/** The company's job-system boards, found by searching the job systems themselves for its name (Workday, Greenhouse, Lever...). */
+export async function searchCompanyBoards(name: string): Promise<{ ats: Found["ats"]; slug: string }[]> {
+  const hosts = JOB_HOSTS.filter((h) => /greenhouse|lever|ashbyhq|smartrecruiters|myworkdayjobs/.test(h));
+  const results = await searchWeb(`${name} sales`, { max: 20, kind: "jobs", includeDomains: hosts });
+  const key = squash(name).slice(0, 6);
+  const boards = new Map<string, { ats: Found["ats"]; slug: string }>();
+  for (const r of results) {
+    const f = parseAtsUrl(r.url);
+    if (f && squash(f.slug).includes(key)) boards.set(`${f.ats}/${f.slug.toLowerCase()}`, f);
+  }
+  return [...boards.values()];
+}
+
 /** Last resort: search the company's own site and the main job sites, keeping only results that mention the company. */
 export async function searchCompanyRoles(name: string, domain: string | null): Promise<WebResult[]> {
   const hosts = [...(domain ? [domain] : []), ...JOB_HOSTS];
   const results = await searchWeb(`${name} sales jobs careers`, { max: 15, kind: "jobs", includeDomains: hosts });
   const key = squash(name);
-  return results.filter((r) => squash(`${r.title} ${r.url} ${r.snippet}`).includes(key));
+  return results.filter((r) => looksLikePosting(r.url) && squash(`${r.title} ${r.url} ${r.snippet}`).includes(key));
 }

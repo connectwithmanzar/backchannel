@@ -27,6 +27,8 @@ import { isSafeHost, findBoardsInHtml, pickHomepage, careerPageCandidates } from
 import { parseWorkdayUrl, splitWorkdaySlug, parsePostedOn, parseWorkdayList } from "../src/lib/collectors/workday-url";
 import { fetchWorkday } from "../src/lib/collectors/workday";
 import { boardName } from "../src/lib/websearch";
+import { parseJSearch, listingsForCompany } from "../src/lib/collectors/jsearch";
+import { looksLikePosting } from "../src/lib/jobs/company-finder";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -820,4 +822,30 @@ test("Workday boards are recognised from links, read safely, and only sales role
     assert.ok(calls.every((c) => c.startsWith("https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/External")));
     await assert.rejects(() => fetchWorkday("evil.com|External"), /not a valid Workday board/);
   } finally { globalThis.fetch = realFetch; }
+});
+
+test("company results keep real postings, drop category pages, and read licensed Google-Jobs-style listings", () => {
+  assert.equal(looksLikePosting("https://adobe.wd5.myworkdayjobs.com/en-US/external_experienced/job/Rome/Enterprise-Sales-Account-Manager_R167568"), true);
+  assert.equal(looksLikePosting("https://boards.greenhouse.io/acme/jobs/12345"), true);
+  assert.equal(looksLikePosting("https://jobs.lever.co/acme/3f2a8c1e-aaaa-bbbb-cccc-1234567890ab"), true);
+  assert.equal(looksLikePosting("https://careers.acme.com/us/en/job/12345/Sales-Rep"), true);
+  assert.equal(looksLikePosting("https://careers.adobe.com/us/en/sales-jobs"), false);
+  assert.equal(looksLikePosting("https://careers.adobe.com/us/en/search-results"), false);
+  assert.equal(looksLikePosting("https://careers.adobe.com/"), false);
+  assert.equal(looksLikePosting("not a url"), false);
+  const cards = parseJSearch({ data: [
+    { job_id: "1", job_title: "Account Executive", employer_name: "Adobe", job_city: "Bengaluru", job_state: "Karnataka", job_country: "IN", job_apply_link: "https://careers.adobe.com/j/1", job_publisher: "Adobe Careers", job_posted_at_datetime_utc: "2026-11-08T00:00:00.000Z", job_description: "Sell Creative Cloud\n\n to enterprise", job_min_salary: 1000000, job_max_salary: 2000000, job_salary_currency: "INR", job_salary_period: "YEAR" },
+    { job_id: "2", job_title: "Software Engineer", employer_name: "Adobe Systems", job_apply_link: "https://careers.adobe.com/j/2" },
+    { job_id: "3", job_title: "Sales Manager", employer_name: "Alpha India", job_apply_link: "https://example.com/j/3" },
+    { job_id: "4", job_title: "No link", employer_name: "Adobe" },
+    { job_id: "5", job_title: "Bad link", employer_name: "Adobe", job_apply_link: "http://insecure.example.com" },
+  ] });
+  assert.equal(cards.length, 3);
+  assert.equal(cards[0].location, "Bengaluru, Karnataka, IN");
+  assert.equal(cards[0].snippet, "Sell Creative Cloud to enterprise");
+  assert.equal(cards[0].pay, "INR 1000000-2000000 per year");
+  const { shown, hidden } = listingsForCompany(cards, "Adobe");
+  assert.deepEqual(shown.map((c) => c.id), ["1"]);          // other employers are dropped; non-sales roles are counted, not shown
+  assert.equal(hidden, 1);
+  assert.deepEqual(parseJSearch(null), []);
 });
