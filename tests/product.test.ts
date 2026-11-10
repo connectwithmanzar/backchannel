@@ -1091,3 +1091,21 @@ test("jsearch: a Gulf or India place picks that country", () => {
   assert.equal(countryFor("sales jobs at Razorpay in Bengaluru"), "in");
   assert.equal(countryFor("sales jobs at Stripe"), null);
 });
+
+import { validAlertListings, htmlToTextWithLinks } from "@/lib/jobs/alert-import";
+
+test("alert import keeps only jobs whose link is really in the email", () => {
+  const email = "SDR at Acme (https://www.linkedin.com/comm/jobs/view/3912345678/?trk=abc)";
+  const rows = [
+    { title: "SDR", company: "Acme", location: "Dubai", url: "https://www.linkedin.com/comm/jobs/view/3912345678/?trk=abc" },
+    { title: "BDR", company: "Ghost", location: "x", url: "https://example.com/invented" },
+    { title: "SDR", company: "Acme", location: "Dubai", url: "https://www.linkedin.com/comm/jobs/view/3912345678/?trk=abc" },
+  ];
+  const out = validAlertListings(rows, email);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].url, "https://www.linkedin.com/jobs/view/3912345678/");
+});
+
+test("alert import keeps links when an email is pasted as html", () => {
+  assert.match(htmlToTextWithLinks('<p><a href="https://naukri.com/job-1">Sales Executive</a> Acme</p>'), /Sales Executive \(https:\/\/naukri.com\/job-1\)/);
+});

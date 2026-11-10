@@ -11,6 +11,7 @@ import { shortDateTime } from "@/lib/format";
 import RolesFeed, { type JobReaction } from "./RolesFeed";
 import RunNowButton from "./RunNowButton";
 import PasteJob from "./PasteJob";
+import AlertImport from "./AlertImport";
 import WebSearch from "./WebSearch";
 import CompanyJobsFinder from "./CompanyJobsFinder";
 import ScopeSwitch from "@/components/ScopeSwitch";
@@ -134,7 +135,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
         </details>
       )}
 
-      <PasteJob />
+      <PasteJob /><AlertImport />
 
       {jobs.length === 0 && (
         <div className="mt-4 rounded-card bg-signal-soft px-4 py-3 text-sm text-signal">
