@@ -14,10 +14,10 @@ const DAY = 24 * 3600 * 1000;
 // Day offset, channel, which generated text to use
 export const SEQUENCE: { day: number; channel: "email" | "linkedin_task"; key: "email1" | "email2" | "email3" | "li_connect" | "li_message"; label: string }[] = [
   { day: 0, channel: "email", key: "email1", label: "Intro email" },
-  { day: 2, channel: "linkedin_task", key: "li_connect", label: "LinkedIn connection request" },
-  { day: 4, channel: "email", key: "email2", label: "Follow-up with a proof point" },
-  { day: 7, channel: "linkedin_task", key: "li_message", label: "LinkedIn message (if connected)" },
-  { day: 10, channel: "email", key: "email3", label: "Short final note" },
+  { day: 1, channel: "linkedin_task", key: "li_connect", label: "LinkedIn connection request" },
+  { day: 3, channel: "email", key: "email2", label: "Follow-up with a proof point" },
+  { day: 5, channel: "linkedin_task", key: "li_message", label: "LinkedIn message (if connected)" },
+  { day: 7, channel: "email", key: "email3", label: "Short final note" },
 ];
 
 type Gen = { subject: string; email1: string; email2: string; email3: string; li_connect: string; li_message: string };
@@ -59,7 +59,7 @@ RECIPIENT: ${c.name}${c.title ? `, ${c.title}` : ""} at ${c.company_name}
 ${job ? `ROLE THEY'RE HIRING FOR: ${job.title}\n${untrusted("job_description", htmlToText(job.description ?? "").slice(0, 2500))}` : "No specific open role; ask about upcoming sales hiring."}
 ${c.notes ? `SENDER'S NOTES ABOUT THIS PERSON: ${untrusted("sender_notes", c.notes)}` : ""}
 
-Return JSON: {"subject": "short, specific subject (max 7 words)", "email1": "intro", "email2": "follow-up 4 days later, adds one proof point from the facts", "email3": "brief final note 10 days later", "li_connect": "LinkedIn connection note, max 280 characters", "li_message": "LinkedIn message after connecting, max 500 characters"}`,
+Return JSON: {"subject": "short, specific subject (max 7 words)", "email1": "intro", "email2": "follow-up 3 days later, adds one proof point from the facts", "email3": "brief final note 7 days later", "li_connect": "LinkedIn connection note, max 280 characters", "li_message": "LinkedIn message after connecting, max 500 characters"}`,
     { maxTokens: 1800 }
   );
   const sig = prefs?.email_signature?.trim();

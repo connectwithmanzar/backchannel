@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Empty, Pill, btn, btnPrimary, input, label } from "@/components/ui";
 import { postJson, copyText } from "@/lib/api";
+import { buildQueue, todoCount, type QueueItem } from "@/lib/outreach/queue";
 
 export interface Step { id: string; contact_id: string; step_index: number; channel: "email" | "linkedin_task"; status: string; subject: string | null; body: string | null; scheduled_for: string | null; sent_at: string | null; error: string | null }
 export interface ContactRow { id: string; name: string; title: string | null; email: string | null; linkedin_url: string | null; company_name: string | null; notes: string | null; steps: Step[] }
@@ -18,6 +19,7 @@ const STATUS: Record<string, [string, "neutral" | "good" | "warn" | "signal" | "
   draft: ["Draft · needs your OK", "signal"], scheduled: ["Scheduled", "accent"], sent: ["Sent", "good"], replied: ["Replied", "good"],
   stopped: ["Stopped", "neutral"], failed: ["Failed", "warn"], task_open: ["To do", "signal"], task_done: ["Done", "good"], opened: ["Opened", "good"],
 };
+const OPT_OUT_LINE = /\n*[^\n]*(unsubscribe|opt[- ]?out|not interested)[^\n]*$/i;
 const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "");
 
 export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady, aiReady, notice, sentToday, settings }: {
@@ -64,15 +66,64 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
   }
 
   const now = Date.now();
-  const tasks = contacts.flatMap((c) => c.steps.filter((s) => s.channel === "linkedin_task" && s.status === "task_open" && s.scheduled_for && new Date(s.scheduled_for).getTime() <= now).map((s) => ({ c, s })));
-  const replies = contacts.filter((c) => c.steps.some((s) => s.status === "replied")).length;
+  const queue = buildQueue(contacts, now);
+  const replies = queue.replied.length;
+  const [reviewing, setReviewing] = useState<string | null>(null);
+  const copyAndNote = async (text: string) => setMsg((await copyText(text)) ? { ok: true, text: "Copied. Paste it on LinkedIn." } : { ok: false, text: "Select the text and copy it." });
+
+  function renderCard(item: QueueItem<ContactRow>, kind: "needsOk" | "followUp" | "linkedin") {
+    const { contact: c, step: s } = item;
+    const label = kind === "needsOk" ? "First email · needs your OK" : kind === "followUp" ? `Follow-up · step ${s.step_index + 1}` : s.subject ?? "LinkedIn message";
+    return (
+      <li key={s.id} className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0"><b>{c.name}</b> <span className="text-muted">· {c.title ? `${c.title}, ` : ""}{c.company_name}</span></div>
+          <Pill tone={kind === "linkedin" ? "accent" : "signal"}>{label}</Pill>
+        </div>
+        <p className="line-clamp-2 whitespace-pre-wrap text-sm text-muted">{(s.body ?? "").replace(OPT_OUT_LINE, "").trim()}</p>
+        <div className="flex flex-wrap gap-2">
+          {kind === "linkedin" ? (
+            <>
+              <button className={btnPrimary} onClick={async () => { await copyAndNote(s.body ?? ""); if (c.linkedin_url) window.open(c.linkedin_url, "_blank", "noopener,noreferrer"); }} disabled={!c.linkedin_url}>Open profile and copy message</button>
+              {!c.linkedin_url && <button className={btn} onClick={() => copyAndNote(s.body ?? "")}>Copy message</button>}
+              <button className={btn} disabled={!!busy} onClick={() => act(s.id, "/api/outreach", { action: "task_done", id: s.id }, "Marked sent.")}>I sent it</button>
+            </>
+          ) : (
+            <>
+              <button className={btnPrimary} onClick={() => setReviewing(reviewing === s.id ? null : s.id)}>{reviewing === s.id ? "Hide" : "Review and send"}</button>
+              {c.linkedin_url && <a className={btn} href={c.linkedin_url} target="_blank" rel="noopener noreferrer">Open profile ↗</a>}
+            </>
+          )}
+          <button className={btn} disabled={!!busy} onClick={() => act(c.id + "rp", "/api/outreach", { action: "mark_replied", contact_id: c.id }, "Marked as replied. Sequence stopped.")}>They replied</button>
+        </div>
+        {kind !== "linkedin" && reviewing === s.id && <StepEditor s={s} busy={busy} gmail={!!gmailEmail} act={act} />}
+      </li>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5">
       {msg && <p role="status" className={`rounded-lg px-3 py-2 text-sm ${msg.ok ? "bg-good-soft text-good" : "bg-warn-soft text-warn"}`}>{msg.text}</p>}
       {!aiReady && <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">AI isn&apos;t connected yet, so sequences can&apos;t be written. Add an AI key in Vercel.</p>}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <Card className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <span className={label}>Today</span>
+            <h2 className="text-2xl font-bold">{todoCount(queue) ? `${todoCount(queue)} to do` : "Nothing due right now"}</h2>
+          </div>
+          {gmailEmail && <span className="text-sm text-muted num">{sentToday} of {settings.todayLimit} emails sent in the last 24h</span>}
+        </div>
+        {todoCount(queue) === 0 && <p className="text-sm text-muted">{contacts.length ? "You're caught up. New follow-ups appear here on their day, and replies stop a sequence." : "Add a hiring manager, sales leader or recruiter below to start."}</p>}
+        {queue.needsOk.length > 0 && <div><h3 className="mb-2 font-semibold">Needs your OK ({queue.needsOk.length})</h3><ul className="flex flex-col gap-2">{queue.needsOk.map((i) => {renderCard(i, "needsOk")})}</ul></div>}
+        {queue.followUps.length > 0 && <div><h3 className="mb-2 font-semibold">Follow-ups due ({queue.followUps.length})</h3><ul className="flex flex-col gap-2">{queue.followUps.map((i) => {renderCard(i, "followUp")})}</ul></div>}
+        {queue.linkedin.length > 0 && <div><h3 className="mb-2 font-semibold">LinkedIn to send by hand ({queue.linkedin.length})</h3><ul className="flex flex-col gap-2">{queue.linkedin.map((i) => {renderCard(i, "linkedin")})}</ul></div>}
+        {queue.replied.length > 0 && <div><h3 className="mb-2 font-semibold">Replied ({queue.replied.length})</h3><ul className="flex flex-col gap-1 text-sm">{queue.replied.map((c) => <li key={c.id}><button type="button" className="font-semibold text-accent hover:underline" onClick={() => { setOpen(c.id); document.getElementById(`p-${c.id}`)?.scrollIntoView({ behavior: "smooth" }); }}>{c.name}, {c.company_name}</button> <span className="text-muted">· read the reply</span></li>)}</ul></div>}
+        {queue.waiting.length > 0 && <p className="text-sm text-muted">Waiting on {queue.waiting.length} {queue.waiting.length === 1 ? "person" : "people"} to reply: {queue.waiting.slice(0, 6).map((c) => c.name).join(", ")}{queue.waiting.length > 6 ? "…" : ""}</p>}
+      </Card>
+      <details open={!gmailEmail}>
+        <summary className="cursor-pointer rounded-card border border-line bg-surface px-4 py-3 text-lg font-bold">Gmail, sending rules and weekly numbers</summary>
+      <div className="mt-3 grid gap-4 md:grid-cols-3">
         <Card className="flex flex-col gap-2">
           <span className={label}>Gmail</span>
           {gmailEmail ? (
@@ -103,23 +154,7 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
         </Card>
       </div>
 
-      {tasks.length > 0 && (
-        <Card className="flex flex-col gap-3">
-          <h2 className="text-xl font-bold">LinkedIn tasks for today</h2>
-          {tasks.map(({ c, s }) => (
-            <div key={s.id} className="flex flex-col gap-2 rounded-lg bg-sunk p-3">
-              <div><b>{s.subject}</b> · {c.name}, {c.company_name}</div>
-              <p className="whitespace-pre-wrap text-sm">{s.body}</p>
-              <div className="flex flex-wrap gap-2">
-                <button className={btn} onClick={async () => setMsg((await copyText(s.body ?? "")) ? { ok: true, text: "Copied. Paste it on LinkedIn." } : { ok: false, text: "Select the text and copy it." })}>Copy message</button>
-                {c.linkedin_url && <a className={btn} href={c.linkedin_url} target="_blank" rel="noopener noreferrer">Open profile ↗</a>}
-                <button className={btn} disabled={!!busy} onClick={() => act(s.id, "/api/outreach", { action: "task_done", id: s.id }, "Marked done.")}>Mark done</button>
-              </div>
-            </div>
-          ))}
-        </Card>
-      )}
-
+      </details>
       {gmailEmail && contacts.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
           <button className={btn} disabled={checking} onClick={() => checkNow(false)}>{checking ? "Checking your inbox…" : "Check replies now"}</button>
@@ -132,7 +167,7 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
             const first = c.steps.find((s) => s.step_index === 0);
             const state = c.steps.some((s) => s.status === "replied") ? ["Replied", "good"] : c.steps.every((s) => ["stopped", "task_done", "sent", "replied"].includes(s.status)) ? ["Finished", "neutral"] : first?.status === "draft" ? ["Waiting for your OK", "signal"] : ["In sequence", "accent"];
             return (
-              <li key={c.id}><Card>
+              <li key={c.id} id={`p-${c.id}`}><Card>
                 <button type="button" onClick={() => setOpen(open === c.id ? null : c.id)} aria-expanded={open === c.id} className="flex w-full flex-wrap items-center justify-between gap-2 text-left">
                   <div className="min-w-0"><b>{c.name}</b> <span className="text-muted">· {c.title ? `${c.title}, ` : ""}{c.company_name}</span><div className="text-sm text-muted break-all">{c.email ?? "No email (LinkedIn only)"}</div></div>
                   <Pill tone={state[1] as "good"}>{state[0]}</Pill>
@@ -192,7 +227,7 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
   );
 }
 
-function StepEditor({ s, busy, gmail, act }: { s: Step; busy: string | null; gmail: boolean; act: (k: string, u: string, b: object, ok: string) => Promise<void> }) {
+export function StepEditor({ s, busy, gmail, act }: { s: Step; busy: string | null; gmail: boolean; act: (k: string, u: string, b: object, ok: string) => Promise<void> }) {
   const [subject, setSubject] = useState(s.subject ?? "");
   const [body, setBody] = useState(s.body ?? "");
   const editable = ["draft", "scheduled", "failed", "task_open"].includes(s.status);

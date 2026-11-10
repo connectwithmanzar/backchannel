@@ -18,6 +18,7 @@ import { seniorityOf, matchesQuery, matchesLocation, postedWithin } from "../src
 import { parseLocations, searchCacheKey } from "../src/lib/contacts/apollo";
 import { buildJobQuery, buildCompanyQuery, parseResults, cleanSnippet } from "../src/lib/websearch";
 import { parseCompanyList, chunk } from "../src/lib/company-import";
+import { buildQueue, todoCount } from "../src/lib/outreach/queue";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -631,4 +632,22 @@ test("company list import handles pasted lines, CSV, duplicates and spreadsheet 
   assert.equal(parseCompanyList("  \n ").rows.length, 0);
   assert.equal(parseCompanyList(Array.from({ length: 500 }, (_, i) => `Co${i}, co${i}.com`).join("\n")).rows.length, 300);
   assert.deepEqual(chunk([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
+});
+
+test("the daily outreach queue sorts people into what to do now", () => {
+  const past = new Date(Date.now() - 864e5).toISOString(), future = new Date(Date.now() + 864e5).toISOString();
+  const st = (id: string, i: number, channel: "email" | "linkedin_task", status: string, when: string | null) => ({ id, step_index: i, channel, status, scheduled_for: when });
+  const fresh = { id: "a", name: "Fresh", steps: [st("a0", 0, "email", "draft", past), st("a1", 1, "linkedin_task", "task_open", future)] };
+  const chasing = { id: "b", name: "Chasing", steps: [st("b0", 0, "email", "sent", past), st("b1", 1, "linkedin_task", "task_open", past), st("b2", 2, "email", "draft", past), st("b3", 4, "email", "draft", future)] };
+  const early = { id: "c", name: "Early", steps: [st("c0", 0, "email", "draft", past), st("c2", 2, "email", "draft", past)] };
+  const waiting = { id: "d", name: "Waiting", steps: [st("d0", 0, "email", "sent", past), st("d2", 2, "email", "draft", future)] };
+  const replied = { id: "e", name: "Replied", steps: [st("e0", 0, "email", "replied", past), st("e2", 2, "email", "draft", past)] };
+  const finished = { id: "f", name: "Done", steps: [st("f0", 0, "email", "stopped", past)] };
+  const q = buildQueue([fresh, chasing, early, waiting, replied, finished]);
+  assert.deepEqual(q.needsOk.map((i) => i.step.id), ["a0", "c0"]);
+  assert.deepEqual(q.followUps.map((i) => i.step.id), ["b2"]);          // only after the first email went out, and only when due
+  assert.deepEqual(q.linkedin.map((i) => i.step.id), ["b1"]);
+  assert.deepEqual(q.replied.map((c) => c.id), ["e"]);
+  assert.deepEqual(q.waiting.map((c) => c.id), ["d"]);
+  assert.equal(todoCount(q), 4);
 });
