@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiJson, hasAIKey, NO_AI_MESSAGE, untrusted, DATA_NOTICE } from "@/lib/ai";
 import { accessToken, sendEmail, threadState } from "./gmail";
 import { MAX_EMAILS_PER_DAY, bouncePaused, effectiveDailyLimit } from "./limits";
+import { ANGLES, type Angle } from "./message-checks";
 import { OPT_OUT, autoSendDecision, renderTemplate } from "./templates";
 import { inRecipientWindow, knownRecipientTimezone } from "./timezone";
 
@@ -36,7 +37,7 @@ export async function isBlocked(db: SupabaseClient, userId: string, email: strin
 }
 
 /** Writes the 3 emails + 2 LinkedIn notes for one contact, using only facts from the user's profile. */
-export async function generateSequence(db: SupabaseClient, userId: string, c: { name: string; title?: string | null; company_name: string; notes?: string | null; job_id?: string | null }) {
+export async function generateSequence(db: SupabaseClient, userId: string, c: { name: string; title?: string | null; company_name: string; notes?: string | null; job_id?: string | null }, angle: Angle = "role") {
   if (!hasAIKey()) throw new Error(NO_AI_MESSAGE);
   const [{ data: p }, { data: prefs }, jobRes] = await Promise.all([
     db.from("profiles").select("name, current_role, years_in_sales, quota_attainment_pct, meetings_per_month, segment, motion, tools, cv_text").eq("user_id", userId).maybeSingle(),
@@ -53,13 +54,14 @@ export async function generateSequence(db: SupabaseClient, userId: string, c: { 
   const g = await aiJson<Gen>(
     `You write short, human outreach from a B2B sales professional to someone who hires at a company they want to join.
 Rules: ${DATA_NOTICE} Only use facts given about the sender; never invent numbers, names, mutual connections or company news. If no company news is given, don't claim any.
-Plain text, no em-dashes, no buzzwords, no "I hope this finds you well". Each email 70-120 words with one clear ask (a 15-minute call or the right person to talk to). Sign off with the sender's first name only.`,
+Plain text, no em-dashes, no buzzwords, no "I hope this finds you well". The first email is 60-90 words and never more than 100. It opens with one specific reason for writing to this person, gives one proof point taken from the facts, and makes ONE ask. Do not attach anything or include links. Sign off with the sender's first name only.`,
     `SENDER FACTS:\n${facts || "(only the name is known)"}\nSender name: ${p?.name ?? ""}\n${p?.cv_text ? `CV excerpt:\n${p.cv_text.slice(0, 3000)}` : ""}
 RECIPIENT: ${c.name}${c.title ? `, ${c.title}` : ""} at ${c.company_name}
 ${job ? `ROLE THEY'RE HIRING FOR: ${job.title}\n${untrusted("job_description", htmlToText(job.description ?? "").slice(0, 2500))}` : "No specific open role; ask about upcoming sales hiring."}
+THE ASK FOR THE FIRST EMAIL: ${ANGLES.find((a) => a.id === angle)?.ask}
 ${c.notes ? `SENDER'S NOTES ABOUT THIS PERSON: ${untrusted("sender_notes", c.notes)}` : ""}
 
-Return JSON: {"subject": "short, specific subject (max 7 words)", "email1": "intro", "email2": "follow-up 3 days later, adds one proof point from the facts", "email3": "brief final note 7 days later", "li_connect": "LinkedIn connection note, max 280 characters", "li_message": "LinkedIn message after connecting, max 500 characters"}`,
+Return JSON: {"subject": "plain subject, at most 5 words and 40 characters, no clickbait, may use the recipient's first name", "email1": "intro", "email2": "follow-up 3 days later, adds one proof point from the facts", "email3": "brief final note 7 days later", "li_connect": "LinkedIn connection note, max 280 characters", "li_message": "LinkedIn message after connecting, max 500 characters"}`,
     { maxTokens: 1800 }
   );
   const sig = prefs?.email_signature?.trim();

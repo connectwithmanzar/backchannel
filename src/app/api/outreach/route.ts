@@ -5,6 +5,7 @@ import { checkReplies, generateSequence, OPT_OUT, sendStep, startSequence, stopC
 import { accessToken, threadReplies } from "@/lib/outreach/gmail";
 import { rateLimitShared, retryAfter } from "@/lib/rate-limit";
 import { validateTemplate } from "@/lib/outreach/templates";
+import { isAngle } from "@/lib/outreach/message-checks";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -59,11 +60,21 @@ export async function POST(req: NextRequest) {
       case "regenerate": {
         const { data: c } = await db.from("contacts").select("name, title, company_name, notes, job_id").eq("id", b.contact_id).single();
         if (!c) return NextResponse.json({ error: "Contact not found." }, { status: 404 });
-        const g = await generateSequence(db, user.id, c);
+        const g = await generateSequence(db, user.id, c, isAngle(b.angle) ? b.angle : "role");
         const { data: steps } = await db.from("outreach").select("id, step_index, channel, status").eq("contact_id", b.contact_id);
         const keys = ["email1", "li_connect", "email2", "li_message", "email3"] as const;
         await Promise.all((steps ?? []).filter((s) => ["draft", "scheduled", "task_open"].includes(s.status)).map((s) =>
           db.from("outreach").update({ body: g[keys[s.step_index]], ...(s.channel === "email" ? { subject: s.step_index === 0 ? g.subject : `Re: ${g.subject}` } : {}) }).eq("id", s.id)));
+        return NextResponse.json({ ok: true });
+      }
+      case "set_outcome": {
+        const allowed = ["call_booked", "referral", "interview", "declined"];
+        if (b.outcome !== null && !allowed.includes(b.outcome)) return NextResponse.json({ error: "Unknown outcome." }, { status: 400 });
+        const { data: own } = await db.from("contacts").select("id").eq("id", b.contact_id).maybeSingle();
+        if (!own) return NextResponse.json({ error: "Contact not found." }, { status: 404 });
+        const { error } = await db.from("contacts").update({ outcome: b.outcome }).eq("id", b.contact_id);
+        if (error) return NextResponse.json({ error: /outcome|schema cache/i.test(error.message) ? "Recording outcomes needs the latest database update (migration 0013) to be run once." : "Couldn't save that." }, { status: 503 });
+        if (b.outcome === "interview") await db.from("funnel_events").insert({ user_id: user.id, type: "interview", ref_id: b.contact_id });
         return NextResponse.json({ ok: true });
       }
       case "delete_contact": {

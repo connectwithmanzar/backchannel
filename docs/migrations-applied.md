@@ -24,3 +24,5 @@ adds daily backups.
 ## Optional settings that switch on extra protection
 - `TOKEN_ENC_KEY` (64 hex characters): encrypts Gmail tokens. After setting it, disconnect and reconnect Gmail once so the stored token is encrypted.
 - `HEARTBEAT_OUTREACH_URL` and `HEARTBEAT_DAILY_URL`: a monitor address (for example a Healthchecks.io check) pinged after each successful run.
+
+- 0013_company_status.sql: PENDING. Adds status and notes per company (Interested, Applied, Not for me) and a per-person outcome (call booked, referral, interview) for the Pipeline board. Everything else works without it.

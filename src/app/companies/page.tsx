@@ -1,157 +1,78 @@
 import { createClient } from "@/lib/supabase/server";
-import ScopeSwitch from "@/components/ScopeSwitch";
-import WebSearch from "../roles/WebSearch";
-import CompanyCard, { type CompanyData } from "./CompanyCard";
-import CurateButton from "./CurateButton";
+import { isOwner } from "@/lib/owner";
 import { isExcludedCompany } from "@/data/companies";
+import { Card } from "@/components/ui";
+import { roleCounts, type CompanyRow, type CompanyStatus } from "@/lib/company-list";
+import CompanyJobsFinder from "../roles/CompanyJobsFinder";
+import ImportCompanies from "../sources/ImportCompanies";
+import DiscoverButton from "../sources/DiscoverButton";
+import CompaniesList from "./CompaniesList";
 
 export const dynamic = "force-dynamic";
 
+type Co = { id: string; name: string; domain: string | null; ats_type: string | null; ats_slug: string | null; enabled: boolean; collect_error: string | null; last_collected_at: string | null };
+type Wl = { company_id: string; watching: boolean; status?: string | null; note?: string | null };
 
-type DbInsight = {
-  user_id: string;
-  company_id: string;
-  why_great: string | null;
-  criteria_tags: string[] | null;
-  awards: { name: string; year?: number; source_url?: string }[] | null;
-  visa_note: string | null;
-  hidden: boolean | null;
-  companies: {
-    id: string;
-    name: string;
-    domain: string | null;
-    country: string | null;
-    hq: string | null;
-    sector: string | null;
-  } | null;
-};
+export default async function CompaniesPage() {
+  const db = await createClient();
+  const { data: { user } } = await db.auth.getUser();
+  const uid = user?.id ?? "";
 
-type DbWatchlist = { company_id: string; watching: boolean };
-type DbJob = { company_id: string | null };
-
-export default async function CompaniesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ filter?: string }>;
-}) {
-  const supabase = await createClient();
-  const params = await searchParams;
-  const filter = params.filter ?? "all";
-
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const [insightsRes, watchlistRes, jobsRes] = await Promise.all([
-    supabase
-      .from("company_insights")
-      .select("user_id, company_id, why_great, criteria_tags, awards, visa_note, hidden, companies(id, name, domain, country, hq, sector)")
-      .eq("hidden", false),
-    supabase.from("watchlist").select("company_id, watching"),
-    supabase.from("jobs").select("company_id").eq("is_active", true),
+  const [{ data: companies }, { data: jobs }, withStatus] = await Promise.all([
+    db.from("companies").select("id, name, domain, ats_type, ats_slug, enabled, collect_error, last_collected_at").order("name").limit(1500),
+    db.from("jobs").select("company_id, location, created_at").eq("is_active", true).limit(8000),
+    db.from("watchlist").select("company_id, watching, status, note").eq("user_id", uid),
   ]);
+  // The status and note columns arrive with migration 0013. Until it is run, read the plain list instead.
+  const watch: Wl[] = withStatus.error
+    ? (((await db.from("watchlist").select("company_id, watching").eq("user_id", uid)).data ?? []) as Wl[])
+    : ((withStatus.data ?? []) as Wl[]);
+  const byCompany = new Map(watch.map((w) => [w.company_id, w]));
+  const counts = roleCounts(jobs ?? []);
 
-  const watchMap: Record<string, boolean> = {};
-  for (const w of (watchlistRes.data ?? []) as DbWatchlist[]) {
-    watchMap[w.company_id] = w.watching;
-  }
-
-  const jobCountMap: Record<string, number> = {};
-  for (const j of (jobsRes.data ?? []) as DbJob[]) {
-    if (j.company_id) jobCountMap[j.company_id] = (jobCountMap[j.company_id] ?? 0) + 1;
-  }
-
-  const companies: CompanyData[] = ((insightsRes.data ?? []) as unknown as DbInsight[])
-    .filter((r) => r.companies !== null && !isExcludedCompany(r.companies.name, r.companies.domain))
-    .map((r) => {
-      const co = r.companies!;
+  const rows: CompanyRow[] = ((companies ?? []) as Co[])
+    .filter((c) => !isExcludedCompany(c.name, c.domain, c.ats_slug))
+    .map((c) => {
+      const w = byCompany.get(c.id);
+      const k = counts.get(c.id) ?? { roles: 0, inIndia: 0, newThisWeek: 0 };
       return {
-        id: co.id,
-        name: co.name,
-        domain: co.domain,
-        country: co.country,
-        hq: co.hq,
-        sector: co.sector,
-        why_great: r.why_great,
-        criteria_tags: r.criteria_tags ?? [],
-        awards: (r.awards as { name: string; year?: number; source_url?: string }[]) ?? [],
-        visa_note: r.visa_note,
-        watching: watchMap[co.id] ?? false,
-        open_jobs: jobCountMap[co.id] ?? 0,
+        id: c.id, name: c.name, domain: c.domain, atsType: c.ats_type, hasBoard: !!c.ats_slug, enabled: c.enabled,
+        error: c.collect_error, lastCheckedAt: c.last_collected_at, ...k,
+        status: (w?.status ?? null) as CompanyStatus, note: w?.note ?? "", watching: w?.watching ?? false,
       };
-    });
-
-  const filtered = filter === "hiring"
-    ? companies.filter((c) => c.open_jobs > 0)
-    : filter === "not-hiring"
-    ? companies.filter((c) => c.open_jobs === 0)
-    : filter === "watching"
-    ? companies.filter((c) => c.watching)
-    : companies;
-
-  const tabs = [
-    { id: "all", label: "All", count: companies.length },
-    { id: "hiring", label: "Hiring now", count: companies.filter((c) => c.open_jobs > 0).length },
-    { id: "not-hiring", label: "Not hiring yet", count: companies.filter((c) => c.open_jobs === 0).length },
-    { id: "watching", label: "Watching", count: companies.filter((c) => c.watching).length },
-  ];
+    })
+    // Companies with open roles first, then by how many.
+    .sort((a, b) => b.roles - a.roles || a.name.localeCompare(b.name));
+  const owner = isOwner(user?.email);
 
   return (
     <section className="py-6">
-      <div className="text-xs font-semibold uppercase tracking-wider text-muted">
-        AI-curated on request
-      </div>
-      <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">Great companies</h1>
-      <p className="mt-2 max-w-[62ch] text-muted">
-        Companies that match your criteria, curated by AI. Watch them to get
-        signals when they fund, expand, or open roles.
-      </p>
+      <header className="mb-6">
+        <h1 className="text-3xl font-bold">Companies</h1>
+        <p className="mt-1 max-w-[62ch] text-muted">Every company you add is saved and checked for jobs every morning, so new roles reach you first.</p>
+      </header>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        {user && <CurateButton />}
-      </div>
+      <div className="mb-6"><CompanyJobsFinder /></div>
 
-      <div className="mt-6">
-      <ScopeSwitch mineLabel="My companies" mine={<>
-      {/* Filter tabs */}
-      <div className="mt-6 flex flex-wrap gap-1 border-b border-line pb-1">
-        {tabs.map((t) => {
-          const on = t.id === filter;
-          return (
-            <a
-              key={t.id}
-              href={`/companies?filter=${t.id}`}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                on
-                  ? "bg-accent-soft text-fg"
-                  : "text-muted hover:text-fg"
-              }`}
-            >
-              {t.label}
-              <span className="ml-1 num text-xs opacity-60">{t.count}</span>
-            </a>
-          );
-        })}
-      </div>
-
-      {/* Company grid */}
-      {filtered.length === 0 ? (
-        <div className="mt-8 rounded-card bg-signal-soft px-4 py-6 text-center text-sm text-signal">
-          {companies.length === 0 ? (
+      <div className="flex flex-wrap items-start gap-6">
+        <div className="min-w-0 flex-[999_1_620px]"><CompaniesList initial={rows} /></div>
+        <aside className="flex min-w-[280px] flex-[1_1_320px] flex-col gap-4" aria-label="Add companies">
+          {owner ? (
             <>
-              <p className="font-semibold">No companies curated yet.</p>
-              <p className="mt-1 text-muted">Click <b>Find more companies with AI</b> above to get started.</p>
+              <ImportCompanies />
+              <DiscoverButton />
             </>
           ) : (
-            <p>No companies match this filter.</p>
+            <Card><p className="text-sm text-muted">Only the account owner can add companies in bulk.</p></Card>
           )}
-        </div>
-      ) : (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((c) => (
-            <CompanyCard key={c.id} company={c} />
-          ))}
-        </div>
-      )}
-      </>} web={<WebSearch kind="companies" />} />
+          <Card>
+            <h2 className="mb-2 text-[17px] font-semibold">Coverage</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-bg p-3"><div className="font-display text-2xl font-bold num">{rows.length}</div><div className="text-sm text-muted">Companies</div></div>
+              <div className="rounded-xl bg-bg p-3"><div className="font-display text-2xl font-bold num">{rows.reduce((n, c) => n + c.roles, 0)}</div><div className="text-sm text-muted">Open sales roles</div></div>
+            </div>
+          </Card>
+        </aside>
       </div>
     </section>
   );

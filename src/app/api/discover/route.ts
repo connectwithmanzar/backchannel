@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isCronAuthorized, isOwner } from "@/lib/owner";
-import { discoverCompanies } from "@/lib/jobs/discover";
+import { discoverCompanies, scanBoardlessCompanies } from "@/lib/jobs/discover";
 import { SHARED_JOBS_TAG } from "@/lib/jobs/shared-cache";
 
 export const runtime = "nodejs";
@@ -10,8 +10,9 @@ export const maxDuration = 300;
 
 async function run() {
   const result = await discoverCompanies();
+  const scan = await scanBoardlessCompanies().catch((e) => ({ scanned: 0, saved: 0, note: (e as Error).message }));
   revalidateTag(SHARED_JOBS_TAG, { expire: 0 });
-  return NextResponse.json({ ok: true, ...result });
+  return NextResponse.json({ ok: true, ...result, boardless: scan });
 }
 
 // GET /api/discover: daily scheduled run (Bearer CRON_SECRET), from the GitHub Actions workflow.

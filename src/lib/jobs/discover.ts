@@ -2,6 +2,9 @@ import { serviceClient } from "@/lib/supabase/service";
 import { isExcludedCompany } from "@/data/companies";
 import { JOB_HOSTS, boardName, parseAtsUrl, searchWeb, webSearchConfigured } from "@/lib/websearch";
 import { runIngestion } from "@/lib/jobs/ingest";
+import { normalise } from "@/lib/jobs/process";
+import { jsearchConfigured, listingToRaw, listingsForCompany, searchJSearch } from "@/lib/collectors/jsearch";
+import { rateLimitShared } from "@/lib/rate-limit";
 
 export const DISCOVERY_ROLES = [
   "sales development representative", "business development representative", "account executive", "inside sales",
@@ -56,4 +59,39 @@ export async function discoverCompanies(opts: { maxSearches?: number; maxNew?: n
   }
   const run = ids.length ? await runIngestion({ companyIds: ids, repair: false }) : null;
   return { searches, found: boards.length, added: ids.length, sales_roles: run?.sales_roles ?? 0 };
+}
+
+const MONTH = 30 * 864e5;
+// The free job-listing plan allows 200 requests a month: 80 go to this scan, 100 to your own searches, 20 stay spare.
+export const SCAN_MONTHLY_CAP = 80;
+export const SCAN_STALE_DAYS = 14;
+
+/**
+ * Companies with no public job board are scanned in rotation through the job-listings feed: the ones checked longest ago
+ * first, a few each day. Roles that stop appearing for two weeks are closed.
+ */
+export async function scanBoardlessCompanies(opts: { maxCompanies?: number } = {}) {
+  if (!jsearchConfigured()) return { scanned: 0, saved: 0, note: "Job listings feed isn't set up (JSEARCH_API_KEY)." };
+  const svc = serviceClient();
+  const { data: due } = await svc.from("companies").select("id, name, domain").eq("enabled", true).is("ats_slug", null)
+    .order("last_collected_at", { ascending: true, nullsFirst: true }).limit(opts.maxCompanies ?? 3);
+  let scanned = 0, saved = 0;
+  const now = new Date().toISOString();
+  for (const c of due ?? []) {
+    if (isExcludedCompany(c.name, c.domain)) continue;
+    if (!(await rateLimitShared("jsearch:scan", SCAN_MONTHLY_CAP, MONTH))) return { scanned, saved, note: "This month's scan allowance is used up." };
+    try {
+      const { shown } = listingsForCompany(await searchJSearch(`sales jobs at ${c.name}`), c.name);
+      const rows = shown.map((l) => ({ company_id: c.id, ...normalise(listingToRaw(l), c.name), source_type: "public" as const, source: "jsearch", company_name: c.name, added_by: null, last_checked_at: now, is_active: true }));
+      const unique = [...new Map(rows.map((r) => [r.dedupe_hash, r])).values()];
+      if (unique.length) await svc.from("jobs").upsert(unique, { onConflict: "dedupe_hash" });
+      await svc.from("companies").update({ last_collected_at: now, collect_error: null, open_sales_roles: unique.length }).eq("id", c.id);
+      scanned++; saved += unique.length;
+    } catch (e) {
+      await svc.from("companies").update({ last_collected_at: now, collect_error: (e as Error).message.slice(0, 200) }).eq("id", c.id);
+    }
+  }
+  const cutoff = new Date(Date.now() - SCAN_STALE_DAYS * 864e5).toISOString();
+  await svc.from("jobs").update({ is_active: false }).eq("source", "jsearch").eq("is_active", true).lt("last_checked_at", cutoff);
+  return { scanned, saved };
 }

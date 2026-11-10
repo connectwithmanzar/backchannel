@@ -66,14 +66,16 @@ export default function RolesFeed({
   jobs,
   reactions: initialReactions = {},
   defaultMarkets = [],
+  initialQuery = "",
 }: {
+  initialQuery?: string;
   jobs: ScoredJob[];
   reactions?: Record<string, JobReaction>;
   defaultMarkets?: string[];
 }) {
   const [markets, setMarkets] = useState<Set<string>>(new Set(defaultMarkets));
   const [families, setFamilies] = useState<Set<string>>(new Set());
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [locationQ, setLocationQ] = useState("");
   const [posted, setPosted] = useState(0);
   const [workType, setWorkType] = useState("any");

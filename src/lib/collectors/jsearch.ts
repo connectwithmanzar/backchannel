@@ -8,6 +8,13 @@ export interface ListingCard {
   postedAt: string | null; remote: boolean; snippet: string; pay: string | null;
 }
 
+import type { RawJob } from "@/lib/collectors/ats";
+
+/** A listing as the common job shape, so it is stored and scored like every other role. */
+export function listingToRaw(c: ListingCard): RawJob {
+  return { external_id: c.id, title: c.title, location: c.location, url: c.url, description: c.snippet, posted_at: c.postedAt, board: "jsearch", remote: c.remote };
+}
+
 export function jsearchConfigured(): boolean {
   return (process.env.JSEARCH_API_KEY ?? "").length > 10;
 }

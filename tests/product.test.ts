@@ -27,8 +27,11 @@ import { isSafeHost, findBoardsInHtml, pickHomepage, careerPageCandidates } from
 import { parseWorkdayUrl, splitWorkdaySlug, parsePostedOn, parseWorkdayList } from "../src/lib/collectors/workday-url";
 import { fetchWorkday } from "../src/lib/collectors/workday";
 import { boardName } from "../src/lib/websearch";
-import { parseJSearch, listingsForCompany } from "../src/lib/collectors/jsearch";
+import { parseJSearch, listingsForCompany, listingToRaw } from "../src/lib/collectors/jsearch";
 import { looksLikePosting } from "../src/lib/jobs/company-finder";
+import { roleCounts, filterCompanies, filterCounts, needsAttention, type CompanyRow } from "../src/lib/company-list";
+import { wordCount, subjectOptions, messageChecks, isAngle } from "../src/lib/outreach/message-checks";
+import { buildBoard, stageOf, type BoardContact } from "../src/lib/board";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -848,4 +851,72 @@ test("company results keep real postings, drop category pages, and read licensed
   assert.deepEqual(shown.map((c) => c.id), ["1"]);          // other employers are dropped; non-sales roles are counted, not shown
   assert.equal(hidden, 1);
   assert.deepEqual(parseJSearch(null), []);
+});
+
+test("company list counts roles per company and filters by status, India and attention", () => {
+  const now = Date.parse("2026-11-10T00:00:00Z");
+  const counts = roleCounts([
+    { company_id: "a", location: "Pune, India", created_at: "2026-11-08T00:00:00Z" },
+    { company_id: "a", location: "London, UK", created_at: "2026-10-01T00:00:00Z" },
+    { company_id: "b", location: "Remote", created_at: "2026-11-09T00:00:00Z" },
+    { company_id: null, location: "Dubai", created_at: "2026-11-09T00:00:00Z" },
+  ], now);
+  assert.deepEqual(counts.get("a"), { roles: 2, inIndia: 1, newThisWeek: 1 });
+  assert.deepEqual(counts.get("b"), { roles: 1, inIndia: 0, newThisWeek: 1 });
+  assert.equal(counts.size, 2);                                              // roles with no company are ignored
+  const row = (o: Partial<CompanyRow>): CompanyRow => ({ id: "x", name: "X", domain: null, atsType: "lever", hasBoard: true, enabled: true, error: null, lastCheckedAt: null, roles: 0, inIndia: 0, newThisWeek: 0, status: null, note: "", watching: false, ...o });
+  const rows = [row({ id: "1", name: "Acme", inIndia: 2 }), row({ id: "2", name: "Globex", status: "interested" }), row({ id: "3", name: "Initech", status: "not_for_me" }), row({ id: "4", name: "Hooli", hasBoard: false }), row({ id: "5", name: "Umbrella", error: "timed out", status: "applied" })];
+  assert.deepEqual(filterCompanies(rows, "all").map((c) => c.id), ["1", "2", "4", "5"]);   // "not for me" is hidden unless searched
+  assert.deepEqual(filterCompanies(rows, "india").map((c) => c.id), ["1"]);
+  assert.deepEqual(filterCompanies(rows, "interested").map((c) => c.id), ["2"]);
+  assert.deepEqual(filterCompanies(rows, "attention").map((c) => c.id), ["4", "5"]);
+  assert.deepEqual(filterCompanies(rows, "all", "init").map((c) => c.id), ["3"]);
+  assert.equal(needsAttention(row({ enabled: false, hasBoard: false })), false);
+  assert.deepEqual(filterCounts(rows), { all: 4, india: 1, interested: 1, applied: 1, attention: 2 });
+});
+
+test("a company with no job board gets its roles from listings in the common job shape", () => {
+  const [card] = parseJSearch({ data: [{ job_id: "9", job_title: "Business Development Representative", employer_name: "Postman", job_city: "Bengaluru", job_country: "IN", job_apply_link: "https://careers.postman.com/j/9", job_publisher: "Postman Careers", job_posted_at_datetime_utc: "2026-11-09T00:00:00Z", job_description: "Outbound to developers", job_is_remote: false }] });
+  const raw = listingToRaw(card);
+  assert.equal(raw.board, "jsearch");
+  assert.equal(raw.title, "Business Development Representative");
+  assert.equal(raw.url, "https://careers.postman.com/j/9");
+  assert.equal(raw.posted_at, "2026-11-09T00:00:00.000Z");
+  assert.equal(raw.remote, false);
+});
+
+test("outreach message checks: words, subject options and the quality checklist", () => {
+  const body = "Hi Priya,\n\nI saw the Senior SDR opening at Freshworks and wanted to ask you directly. I have booked meetings for enterprise teams for six years.\n\nIs it still open, and is it worth my applying?\n\nManzar\n\nIf this is not relevant, tell me and I will not write again.";
+  assert.equal(wordCount(body), 37);                                           // the opt-out line is not counted
+  const ok = messageChecks({ subject: "Priya, quick question", body, company: "Freshworks" });
+  assert.ok(ok.checks.every((c) => c.ok), JSON.stringify(ok.checks.filter((c) => !c.ok)));
+  const bad = messageChecks({ subject: "An extremely long subject line that nobody will read in full", body: "Hello, see https://x.com and the attached CV. Interested? Open? Hiring?", company: "Freshworks" });
+  const failed = bad.checks.filter((c) => !c.ok).map((c) => c.id).sort();
+  assert.deepEqual(failed, ["ask", "optout", "plain", "specific", "subject"]);
+  assert.deepEqual(subjectOptions({ firstName: "Priya Nair", company: "Freshworks", role: "Senior SDR" }), ["Priya, quick question", "Senior SDR at Freshworks", "Your sales team at Freshworks"]);
+  assert.equal(subjectOptions({ firstName: "", company: "Acme" })[0], "Quick question");
+  assert.equal(isAngle("referral"), true);
+  assert.equal(isAngle("spam"), false);
+});
+
+test("the outreach board places people by stage and puts today's follow-ups first", () => {
+  const past = new Date(Date.now() - 864e5).toISOString(), future = new Date(Date.now() + 864e5).toISOString();
+  const st = (id: string, i: number, channel: "email" | "linkedin_task", status: string, when: string | null) => ({ id, step_index: i, channel, status, scheduled_for: when });
+  const c = (id: string, steps: ReturnType<typeof st>[], outcome: BoardContact["outcome"] = null): BoardContact => ({ id, name: id, title: null, company_name: "Co", outcome, steps });
+  const fresh = c("fresh", [st("a", 0, "email", "draft", past)]);
+  const waiting = c("waiting", [st("b", 0, "email", "sent", past), st("b2", 2, "email", "draft", future)]);
+  const due = c("due", [st("d", 0, "email", "sent", past), st("d2", 2, "email", "draft", past)]);
+  const replied = c("replied", [st("e", 0, "email", "replied", past)]);
+  const call = c("call", [st("f", 0, "email", "replied", past)], "call_booked");
+  const interview = c("interview", [st("g", 0, "email", "sent", past)], "referral");
+  const declined = c("declined", [st("h", 0, "email", "sent", past)], "declined");
+  const board = buildBoard([fresh, waiting, due, replied, call, interview, declined]);
+  assert.deepEqual(board.columns.toContact.map((x) => x.id), ["fresh"]);
+  assert.deepEqual(board.columns.waiting.map((x) => x.id), ["waiting", "due"]);
+  assert.deepEqual(board.columns.replied.map((x) => x.id), ["replied"]);
+  assert.deepEqual(board.columns.call.map((x) => x.id), ["call"]);       // what you recorded beats the reply
+  assert.deepEqual(board.columns.interview.map((x) => x.id), ["interview"]);
+  assert.equal(stageOf(declined), null);
+  assert.deepEqual(board.followUps.map((x) => x.id), ["due"]);
+  assert.deepEqual(board.needsAnswer.map((x) => x.id), ["replied"]);
 });

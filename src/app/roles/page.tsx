@@ -24,7 +24,8 @@ export const dynamic = "force-dynamic";
 
 
 
-export default async function RolesPage() {
+export default async function RolesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const sp = await searchParams;
   const [supabase, user] = await Promise.all([createClient(), getSessionUser()]);
 
   // Independent queries run together instead of one after another.
@@ -150,7 +151,7 @@ export default async function RolesPage() {
       )}
 
       <CompanyJobsFinder />
-      <ScopeSwitch mineLabel="My roles" mine={<RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets} />} web={<WebSearch kind="jobs" />} />
+      <ScopeSwitch mineLabel="My roles" mine={<RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets} initialQuery={(sp.q ?? "").slice(0, 100)} />} web={<WebSearch kind="jobs" />} />
     </section>
   );
 }

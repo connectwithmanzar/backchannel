@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Card, Empty, Pill, btn, btnPrimary, input, label } from "@/components/ui";
 import { postJson, copyText } from "@/lib/api";
 import { buildQueue, todoCount, type QueueItem } from "@/lib/outreach/queue";
+import { ANGLES, messageChecks, subjectOptions } from "@/lib/outreach/message-checks";
 
 export interface Step { id: string; contact_id: string; step_index: number; channel: "email" | "linkedin_task"; status: string; subject: string | null; body: string | null; scheduled_for: string | null; sent_at: string | null; error: string | null }
 export interface ContactRow { id: string; name: string; title: string | null; email: string | null; linkedin_url: string | null; company_name: string | null; notes: string | null; steps: Step[] }
@@ -96,7 +97,7 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
           )}
           <button className={btn} disabled={!!busy} onClick={() => act(c.id + "rp", "/api/outreach", { action: "mark_replied", contact_id: c.id }, "Marked as replied. Sequence stopped.")}>They replied</button>
         </div>
-        {kind !== "linkedin" && reviewing === s.id && <StepEditor s={s} busy={busy} gmail={!!gmailEmail} act={act} />}
+        {kind !== "linkedin" && reviewing === s.id && <StepEditor s={s} busy={busy} gmail={!!gmailEmail} act={act} ctx={{ firstName: c.name.split(" ")[0], company: c.company_name ?? "" }} />}
       </li>
     );
   }
@@ -174,7 +175,7 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
                 </button>
                 {open === c.id && (
                   <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
-                    {c.steps.map((s) => <StepEditor key={s.id} s={s} busy={busy} gmail={!!gmailEmail} act={act} />)}
+                    {c.steps.map((s) => <StepEditor key={s.id} s={s} busy={busy} gmail={!!gmailEmail} act={act} ctx={{ firstName: c.name.split(" ")[0], company: c.company_name ?? "" }} />)}
                     {c.steps.some((s) => s.status === "replied" || s.status === "sent") && gmailEmail && (
                       <div className="rounded-lg border border-line bg-sunk p-3">
                         <button className={btn} disabled={replyView[c.id]?.loading} onClick={() => loadReply(c.id)}>{replyView[c.id]?.loading ? "Loading…" : replyView[c.id]?.messages ? "Refresh replies" : "View replies"}</button>
@@ -189,7 +190,12 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
                       </div>
                     )}
                     <div className="flex flex-wrap gap-2">
-                      <button className={btn} disabled={!!busy} onClick={() => act(c.id + "re", "/api/outreach", { action: "regenerate", contact_id: c.id }, "Rewritten.")}>{busy === c.id + "re" ? "Rewriting…" : "Rewrite unsent steps with AI"}</button>
+                      <div className="flex w-full flex-wrap items-center gap-2" role="group" aria-label="Write another version">
+                        <span className="text-sm font-semibold text-muted">Write another version:</span>
+                        {ANGLES.map((a) => (
+                          <button key={a.id} className={btn} disabled={!!busy} title={a.ask} onClick={() => act(c.id + "re" + a.id, "/api/outreach", { action: "regenerate", contact_id: c.id, angle: a.id }, `Rewritten as: ${a.label.toLowerCase()}.`)}>{busy === c.id + "re" + a.id ? "Rewriting…" : a.label}</button>
+                        ))}
+                      </div>
                       <button className={btn} disabled={!!busy} onClick={() => act(c.id + "rp", "/api/outreach", { action: "mark_replied", contact_id: c.id }, "Marked as replied. Sequence stopped.")}>They replied</button>
                       <button className={btn} disabled={!!busy} onClick={() => act(c.id + "st", "/api/outreach", { action: "stop", contact_id: c.id }, "Sequence stopped.")}>Stop sequence</button>
                       <button className={btn} disabled={!!busy} onClick={() => { if (!window.confirm(`Delete ${c.name} and all their drafts? This can't be undone.`)) return; void act(c.id + "del", "/api/outreach", { action: "delete_contact", contact_id: c.id }, "Contact deleted."); }}>Delete</button>
@@ -227,24 +233,46 @@ export default function OutreachClient({ contacts, jobs, gmailEmail, gmailReady,
   );
 }
 
-export function StepEditor({ s, busy, gmail, act }: { s: Step; busy: string | null; gmail: boolean; act: (k: string, u: string, b: object, ok: string) => Promise<void> }) {
+export function StepEditor({ s, busy, gmail, act, ctx }: { s: Step; busy: string | null; gmail: boolean; act: (k: string, u: string, b: object, ok: string) => Promise<void>; ctx: { firstName: string; company: string } }) {
   const [subject, setSubject] = useState(s.subject ?? "");
   const [body, setBody] = useState(s.body ?? "");
   const editable = ["draft", "scheduled", "failed", "task_open"].includes(s.status);
   const [txt, tone] = STATUS[s.status] ?? [s.status, "neutral"];
+  const isEmail = s.channel === "email";
+  const { words, checks } = messageChecks({ subject, body, company: ctx.company, firstName: ctx.firstName });
+  const options = s.step_index === 0 ? subjectOptions({ firstName: ctx.firstName, company: ctx.company }) : [];
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-line p-3">
+    <div className="flex flex-col gap-2 rounded-xl border border-line p-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <b>{s.channel === "email" ? "Email" : "LinkedIn"} · step {s.step_index + 1}</b>
+        <b>{isEmail ? "Email" : "LinkedIn"} · step {s.step_index + 1}</b>
         <span className="flex items-center gap-2 text-muted num">{s.sent_at ? `Sent ${fmtDate(s.sent_at)}` : s.scheduled_for ? `Due ${fmtDate(s.scheduled_for)}` : ""}<Pill tone={tone}>{txt}</Pill></span>
       </div>
       {s.error && <p className="text-sm text-warn">{s.error}</p>}
-      {s.channel === "email" && <input id={`s-${s.id}`} aria-label="Subject" className={input} value={subject} disabled={!editable} onChange={(e) => setSubject(e.target.value)} />}
-      <textarea id={`b-${s.id}`} aria-label="Message" rows={s.channel === "email" ? 8 : 3} className={input} value={body} disabled={!editable} onChange={(e) => setBody(e.target.value)} />
+      {isEmail && editable && options.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Subject suggestions">
+          <span className="text-xs font-semibold text-muted">Subject ideas:</span>
+          {options.map((o) => <button key={o} type="button" onClick={() => setSubject(o)} className={`rounded-full px-3 py-1 text-xs font-semibold ${subject === o ? "bg-accent text-accent-ink" : "bg-sunk text-muted hover:text-fg"}`}>{o}</button>)}
+        </div>
+      )}
+      {isEmail && <input id={`s-${s.id}`} aria-label="Subject" className={input} value={subject} disabled={!editable} onChange={(e) => setSubject(e.target.value)} />}
+      <textarea id={`b-${s.id}`} aria-label="Message" rows={isEmail ? 8 : 3} className={input} value={body} disabled={!editable} onChange={(e) => setBody(e.target.value)} />
+      {isEmail && editable && (
+        <div className="flex flex-col gap-2 rounded-xl bg-bg p-3 text-sm">
+          <div className={`font-semibold num ${words > 100 ? "text-warn" : "text-good"}`}>{words} words · {words > 100 ? "too long, aim for under 100" : "good length"}</div>
+          <ul className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+            {checks.map((c) => (
+              <li key={c.id} className={`flex items-center gap-2 ${c.ok ? "" : "text-signal"}`}>
+                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] ${c.ok ? "bg-accent text-accent-ink" : "border-2 border-signal"}`} aria-hidden="true">{c.ok ? "✓" : ""}</span>
+                <span>{c.label}<span className="sr-only">{c.ok ? ": yes" : ": needs a look"}</span></span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {editable && (
         <div className="flex flex-wrap gap-2">
           <button className={btn} disabled={!!busy} onClick={() => act(s.id + "e", "/api/outreach", { action: "edit_step", id: s.id, subject, body, channel: s.channel }, "Saved.")}>Save edits</button>
-          {s.channel === "email" && (s.status === "draft" || s.status === "failed" || s.status === "scheduled") && (
+          {isEmail && (s.status === "draft" || s.status === "failed" || s.status === "scheduled") && (
             <button className={btnPrimary} disabled={!!busy || !gmail} title={gmail ? "" : "Connect Gmail first"}
               onClick={() => { if (!window.confirm("Send this email now? It can't be unsent.")) return; void act(s.id + "s", "/api/outreach", { action: "send_now", id: s.id }, s.step_index === 0 ? "Sent. Follow-ups are due on their dates for you to approve, and stop if they reply." : "Sent."); }}>
               {busy === s.id + "s" ? "Sending…" : s.step_index === 0 ? "Approve and send" : "Send now"}

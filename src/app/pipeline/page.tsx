@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, PageHeader } from "@/components/ui";
 import { buildPipeline } from "@/lib/pipeline";
+import type { BoardContact, Outcome } from "@/lib/board";
+import BoardView from "./BoardView";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +10,15 @@ export default async function PipelinePage() {
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
   const uid = user?.id ?? "";
+  // The outcome column arrives with migration 0013; until it is run, read people without it.
+  const withOutcome = await db.from("contacts").select("id, name, title, company_name, outcome").eq("user_id", uid);
+  const plainContacts = withOutcome.error ? await db.from("contacts").select("id, name, title, company_name").eq("user_id", uid) : null;
+  const contactRows = ((withOutcome.error ? plainContacts?.data : withOutcome.data) ?? []) as { id: string; name: string; title: string | null; company_name: string | null; outcome?: Outcome }[];
+  const { data: stepRows } = await db.from("outreach").select("id, contact_id, step_index, channel, status, scheduled_for").eq("user_id", uid).order("step_index");
+  const board: BoardContact[] = contactRows.map((c) => ({
+    id: c.id, name: c.name, title: c.title, company_name: c.company_name, outcome: c.outcome ?? null,
+    steps: (stepRows ?? []).filter((x) => x.contact_id === c.id) as BoardContact["steps"],
+  }));
   const [{ count: saved }, { data: apps }, { data: steps }, { data: refs }] = await Promise.all([
     db.from("job_scores").select("job_id", { count: "exact", head: true }).eq("user_id", uid).in("reaction", ["bookmarked", "applied"]),
     db.from("applications").select("stage, status, jobs(board)").eq("user_id", uid),
@@ -24,9 +35,11 @@ export default async function PipelinePage() {
 
   return (
     <section className="py-6">
-      <PageHeader eyebrow="Pipeline · all time" title="Where your search stands">
-        Every role you saved, application you sent, person you contacted and answer you got, in one place. The weekly view is on Today.
+      <PageHeader eyebrow="Pipeline" title="Where everyone stands">
+        Today&apos;s follow-ups first, then everyone you have contacted by stage. Your all-time numbers are below.
       </PageHeader>
+      <div className="mb-10"><BoardView contacts={board} outcomeReady={!withOutcome.error} /></div>
+      <h2 className="mb-4 text-xl font-semibold">Your numbers, all time</h2>
       {p.hints.length > 0 && (
         <Card className="mb-5 flex flex-col gap-2 border-signal">
           <h2 className="text-lg font-bold">What to fix first</h2>
