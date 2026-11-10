@@ -1,8 +1,11 @@
 import { cleanDomain } from "@/lib/contacts/apollo";
 
-export interface ImportRow { name: string; domain: string | null }
+import type { CompanyExtra } from "@/lib/clay-import";
+
+export interface ImportRow { name: string; domain: string | null; extra?: CompanyExtra }
 
 export const MAX_IMPORT_ROWS = 300;
+export const MAX_CLAY_ROWS = 1200;
 export const IMPORT_BATCH = 20;
 
 /** Spreadsheet formulas start with = + - @, which are stripped so a pasted cell can never run as one. */

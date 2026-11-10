@@ -1,12 +1,15 @@
 import { countryOf } from "@/lib/role-filters";
 
 export type CompanyStatus = "interested" | "applied" | "not_for_me" | null;
-export type CompanyFilter = "all" | "india" | "interested" | "applied" | "attention";
+export type CompanyFilter = "all" | "india" | "hiring" | "gulf" | "interested" | "applied" | "attention";
+const GULF = ["United Arab Emirates", "Saudi Arabia", "Qatar", "Kuwait", "Bahrain", "Oman"];
 
 export interface CompanyRow {
   id: string; name: string; domain: string | null; atsType: string | null; hasBoard: boolean; enabled: boolean;
   error: string | null; lastCheckedAt: string | null;
   roles: number; inIndia: number; newThisWeek: number;
+  country: string | null; size: string | null; sector: string | null; linkedinUrl: string | null; companyType: string | null;
+  hiring: "yes" | "unclear" | "no" | null; linkedinOpenings: number | null;
   status: CompanyStatus; note: string; watching: boolean;
 }
 
@@ -37,6 +40,8 @@ export function filterCompanies(rows: CompanyRow[], filter: CompanyFilter, query
       case "india": return c.inIndia > 0;
       case "interested": return c.status === "interested";
       case "applied": return c.status === "applied";
+      case "hiring": return c.hiring === "yes";
+      case "gulf": return c.country !== null && GULF.includes(c.country);
       case "attention": return needsAttention(c);
       default: return c.status !== "not_for_me" || q !== "";
     }
@@ -47,6 +52,8 @@ export function filterCounts(rows: CompanyRow[]): Record<CompanyFilter, number> 
   return {
     all: rows.filter((c) => c.status !== "not_for_me").length,
     india: rows.filter((c) => c.inIndia > 0).length,
+    hiring: rows.filter((c) => c.hiring === "yes").length,
+    gulf: rows.filter((c) => c.country !== null && GULF.includes(c.country)).length,
     interested: rows.filter((c) => c.status === "interested").length,
     applied: rows.filter((c) => c.status === "applied").length,
     attention: rows.filter(needsAttention).length,

@@ -869,7 +869,7 @@ test("company list counts roles per company and filters by status, India and att
   assert.deepEqual(counts.get("a"), { roles: 2, inIndia: 1, newThisWeek: 1 });
   assert.deepEqual(counts.get("b"), { roles: 1, inIndia: 0, newThisWeek: 1 });
   assert.equal(counts.size, 2);                                              // roles with no company are ignored
-  const row = (o: Partial<CompanyRow>): CompanyRow => ({ id: "x", name: "X", domain: null, atsType: "lever", hasBoard: true, enabled: true, error: null, lastCheckedAt: null, roles: 0, inIndia: 0, newThisWeek: 0, status: null, note: "", watching: false, ...o });
+  const row = (o: Partial<CompanyRow>): CompanyRow => ({ id: "x", name: "X", domain: null, atsType: "lever", hasBoard: true, enabled: true, error: null, lastCheckedAt: null, roles: 0, inIndia: 0, newThisWeek: 0, country: null, size: null, sector: null, linkedinUrl: null, companyType: null, hiring: null, linkedinOpenings: null, status: null, note: "", watching: false, ...o });
   const rows = [row({ id: "1", name: "Acme", inIndia: 2 }), row({ id: "2", name: "Globex", status: "interested" }), row({ id: "3", name: "Initech", status: "not_for_me" }), row({ id: "4", name: "Hooli", hasBoard: false }), row({ id: "5", name: "Umbrella", error: "timed out", status: "applied" })];
   assert.deepEqual(filterCompanies(rows, "all").map((c) => c.id), ["1", "2", "4", "5"]);   // "not for me" is hidden unless searched
   assert.deepEqual(filterCompanies(rows, "india").map((c) => c.id), ["1"]);
@@ -877,7 +877,7 @@ test("company list counts roles per company and filters by status, India and att
   assert.deepEqual(filterCompanies(rows, "attention").map((c) => c.id), ["4", "5"]);
   assert.deepEqual(filterCompanies(rows, "all", "init").map((c) => c.id), ["3"]);
   assert.equal(needsAttention(row({ enabled: false, hasBoard: false })), false);
-  assert.deepEqual(filterCounts(rows), { all: 4, india: 1, interested: 1, applied: 1, attention: 2 });
+  assert.deepEqual(filterCounts(rows), { all: 4, india: 1, hiring: 0, gulf: 0, interested: 1, applied: 1, attention: 2 });
 });
 
 test("a company with no job board gets its roles from listings in the common job shape", () => {
@@ -1108,4 +1108,34 @@ test("alert import keeps only jobs whose link is really in the email", () => {
 
 test("alert import keeps links when an email is pasted as html", () => {
   assert.match(htmlToTextWithLinks('<p><a href="https://naukri.com/job-1">Sales Executive</a> Acme</p>'), /Sales Executive \(https:\/\/naukri.com\/job-1\)/);
+});
+
+import { parseClayCsv, selectClay, cleanExtra } from "@/lib/clay-import";
+
+const CLAY = 'Gulf & India Companies,,,,\nName,Domain,Country,City,Size,Industry,LinkedIn URL,Job Openings,Use AI Company Name,Is Hiring,Classification\n' +
+  '"Acme, Inc",acme.com,India,Pune,51-200,SaaS,https://www.linkedin.com/company/acme,12,Acme,yes,B2B\n' +
+  'Beta,beta.ae,United Arab Emirates,Dubai,11-50,Retail,https://evil.example/x,3,,unclear,B2C\n' +
+  'Gamma,gamma.in,India,Delhi,201-500,Fintech,https://www.linkedin.com/company/gamma,40,Gamma,no,B2B\n';
+
+test("clay import reads quoted cells, skips the title row and cleans fields", () => {
+  const rows = parseClayCsv(CLAY);
+  assert.equal(rows?.length, 3);
+  assert.equal(rows?.[0].name, "Acme");
+  assert.equal(rows?.[0].extra.hq, "Pune");
+  assert.equal(rows?.[1].extra.linkedin_url, null);
+  assert.equal(parseClayCsv("a,b\n1,2"), null);
+});
+
+test("clay filters never keep companies marked not hiring and rank hiring first", () => {
+  const rows = parseClayCsv(CLAY) ?? [];
+  const yes = selectClay(rows, { countries: [], hiring: "yes", b2bOnly: false });
+  assert.deepEqual(yes.map((c) => c.name), ["Acme"]);
+  const wide = selectClay(rows, { countries: [], hiring: "yes_unclear", b2bOnly: false });
+  assert.deepEqual(wide.map((c) => c.name), ["Acme", "Beta"]);
+  assert.equal(selectClay(rows, { countries: ["India"], hiring: "yes_unclear", b2bOnly: true }).length, 1);
+});
+
+test("cleanExtra rejects unexpected values", () => {
+  const x = cleanExtra({ hiring_signal: "maybe", company_type: "X", linkedin_openings: "-4", country: "=HYPERLINK(1)" });
+  assert.equal(x.hiring_signal, null); assert.equal(x.company_type, null); assert.equal(x.linkedin_openings, null); assert.equal(x.country, "HYPERLINK(1)");
 });

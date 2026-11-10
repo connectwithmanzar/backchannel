@@ -5,7 +5,7 @@ import { Card, Pill, btn, btnPrimary, input } from "@/components/ui";
 import { filterCompanies, filterCounts, needsAttention, type CompanyFilter, type CompanyRow, type CompanyStatus } from "@/lib/company-list";
 
 const FILTERS: { id: CompanyFilter; label: string }[] = [
-  { id: "all", label: "All" }, { id: "india", label: "Hiring in India" }, { id: "interested", label: "Interested" },
+  { id: "all", label: "All" }, { id: "india", label: "Hiring in India" }, { id: "hiring", label: "Hiring now" }, { id: "gulf", label: "Gulf" }, { id: "interested", label: "Interested" },
   { id: "applied", label: "Applied" }, { id: "attention", label: "Needs attention" },
 ];
 const STATUS_LABEL: Record<Exclude<CompanyStatus, null>, string> = { interested: "Interested", applied: "Applied", not_for_me: "Not for me" };
@@ -82,12 +82,18 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Pill tone={c.roles ? "good" : "neutral"}>{c.roles ? `${c.roles} sales role${c.roles === 1 ? "" : "s"}${c.inIndia ? ` · ${c.inIndia} in India` : ""}` : "No open sales roles"}</Pill>
                   {c.newThisWeek > 0 && <Pill tone="signal">Signal: {c.newThisWeek} new this week</Pill>}
+                  {c.hiring === "yes" && <Pill tone="good">Hiring now</Pill>}
+                  {c.companyType && c.companyType !== "Unclear" && <Pill>{c.companyType}</Pill>}
+                  {c.country && <Pill>{c.country}</Pill>}
+                  {c.size && <Pill>{c.size} people</Pill>}
+                  {c.sector && <Pill>{c.sector}</Pill>}
                   {c.note && <Pill>Has a note</Pill>}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link href={`/roles?q=${encodeURIComponent(c.name)}`} className={c.roles ? btnPrimary : btn}>View roles</Link>
                   <Link href={`/referrals?company=${encodeURIComponent(c.name)}&domain=${encodeURIComponent(c.domain ?? "")}`} className={btn}>Find people</Link>
                   <button type="button" className={btn} aria-expanded={open} onClick={() => { setNotesOpen(open ? null : c.id); setDraft((d) => ({ ...d, [c.id]: d[c.id] ?? c.note })); }}>{open ? "Close notes" : "Notes"}</button>
+                  {c.linkedinUrl && <a className={btn} href={c.linkedinUrl} target="_blank" rel="noopener noreferrer">LinkedIn ↗</a>}
                   {!c.hasBoard && c.domain && <a className={btn} href={`https://${c.domain}/careers`} target="_blank" rel="noopener noreferrer">Careers page ↗</a>}
                 </div>
                 {open && (

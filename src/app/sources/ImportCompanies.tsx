@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { btn, btnPrimary, Card } from "@/components/ui";
-import { chunk, parseCompanyList } from "@/lib/company-import";
+import { chunk, MAX_CLAY_ROWS, parseCompanyList, type ImportRow } from "@/lib/company-import";
+import { countryCounts, parseClayCsv, selectClay, type ClayCompany } from "@/lib/clay-import";
 import { suggestedAsText } from "@/data/suggested-companies";
 
 type Outcome = { name: string; status: "added" | "no_feed" | "already_there" | "excluded"; ats?: string; roles?: number };
@@ -15,17 +16,28 @@ export default function ImportCompanies() {
   const [outcomes, setOutcomes] = useState<Outcome[] | null>(null);
   const [roles, setRoles] = useState(0);
   const [error, setError] = useState("");
+  const [clay, setClay] = useState<ClayCompany[] | null>(null);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [hiring, setHiring] = useState<"yes" | "yes_unclear">("yes");
+  const [b2bOnly, setB2bOnly] = useState(false);
+
+  const picked = useMemo(() => (clay ? selectClay(clay, { countries, hiring, b2bOnly }).slice(0, MAX_CLAY_ROWS) : []), [clay, countries, hiring, b2bOnly]);
 
   async function readFile(file: File | undefined) {
     if (!file) return;
-    if (file.size > 500_000) { setError("That file is too big. Use a plain CSV or text file under 500 KB."); return; }
-    setText(await file.text());
-    setError("");
+    if (file.size > 3_000_000) { setError("That file is too big. Use a CSV under 3 MB."); return; }
+    const body = await file.text();
+    const found = parseClayCsv(body);
+    setError(""); setOutcomes(null);
+    if (found) {
+      setClay(found); setText("");
+      setCountries(countryCounts(found).slice(0, 3).map(([c]) => c));
+    } else { setClay(null); setText(body); }
   }
 
   async function run() {
-    const { rows } = parseCompanyList(text);
-    if (!rows.length) { setError("Add at least one company, one per line, like: Acme, acme.com"); return; }
+    const rows: ImportRow[] = clay ? picked.map((c) => ({ name: c.name, domain: c.domain, extra: c.extra })) : parseCompanyList(text).rows;
+    if (!rows.length) { setError(clay ? "No companies match these filters." : "Add at least one company, one per line, like: Acme, acme.com"); return; }
     setBusy(true); setError(""); setOutcomes(null); setRoles(0);
     const all: Outcome[] = [];
     let total = 0;
@@ -51,11 +63,28 @@ export default function ImportCompanies() {
       <p className="text-sm text-muted">
         Paste or upload your target companies, one per line: <code>Company, website</code>. Backchannel finds each one&apos;s public careers board and pulls the sales roles. Companies without a public board are listed so you can check them by hand.
       </p>
-      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} aria-label="Companies"
+      {clay && (
+        <div className="rounded-xl bg-bg p-3 text-sm">
+          <p className="font-semibold">Clay list found: {clay.length} companies</p>
+          <fieldset className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            <legend className="sr-only">Countries</legend>
+            {countryCounts(clay).slice(0, 6).map(([c, n]) => (
+              <label key={c} className="flex items-center gap-1.5"><input type="checkbox" checked={countries.includes(c)} onChange={(e) => setCountries((cs) => (e.target.checked ? [...cs, c] : cs.filter((x) => x !== c)))} />{c} <span className="text-muted">({n})</span></label>
+            ))}
+          </fieldset>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            <label className="flex items-center gap-1.5"><input type="radio" name="hiring" checked={hiring === "yes"} onChange={() => setHiring("yes")} />Hiring: yes only</label>
+            <label className="flex items-center gap-1.5"><input type="radio" name="hiring" checked={hiring === "yes_unclear"} onChange={() => setHiring("yes_unclear")} />Yes and unclear</label>
+            <label className="flex items-center gap-1.5"><input type="checkbox" checked={b2bOnly} onChange={(e) => setB2bOnly(e.target.checked)} />B2B and B2B2C only</label>
+          </div>
+          <p className="mt-2 text-muted">{picked.length} will be added, best targets first (hiring, then B2B, then most LinkedIn openings). Companies marked not hiring are never added.</p>
+        </div>
+      )}
+      <textarea value={text} onChange={(e) => { setText(e.target.value); setClay(null); }} rows={6} aria-label="Companies"
         placeholder={"Acme, acme.com\nGlobex, globex.io\nInitech"}
         className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-sm" />
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={btnPrimary} disabled={busy || !text.trim()} onClick={run}>{busy ? "Adding…" : "Add companies"}</button>
+        <button type="button" className={btnPrimary} disabled={busy || (clay ? picked.length === 0 : !text.trim())} onClick={run}>{busy ? "Adding…" : clay ? `Add ${picked.length} companies` : "Add companies"}</button>
         <label className={`${btn} cursor-pointer`}>
           Upload CSV
           <input type="file" accept=".csv,.txt,text/csv,text/plain" className="sr-only" disabled={busy} onChange={(e) => readFile(e.target.files?.[0])} />
