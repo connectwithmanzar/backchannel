@@ -103,7 +103,7 @@ export interface NormalisedJob {
   location: string;
   remote_type: "remote" | "hybrid" | "onsite" | "unknown";
   market: string;
-  source_type: "careers";
+  source_type: "careers" | "public";
   board: string;
   url: string;
   posted_at: string | null;

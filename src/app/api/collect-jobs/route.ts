@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as userClient } from "@/lib/supabase/server";
 import { isOwner, isCronAuthorized } from "@/lib/owner";
-import { runIngestion } from "@/lib/jobs/ingest";
+import { runAggregators, runIngestion } from "@/lib/jobs/ingest";
 import { revalidateTag } from "next/cache";
 import { SHARED_JOBS_TAG } from "@/lib/jobs/shared-cache";
 
@@ -17,8 +17,9 @@ export async function POST(req: NextRequest) {
   try {
     const companyId = new URL(req.url).searchParams.get("company") ?? undefined;
     const result = await runIngestion({ companyId });
+    const feeds = companyId ? null : await runAggregators().catch((e) => ({ error: (e as Error).message }));
     revalidateTag(SHARED_JOBS_TAG, { expire: 0 });
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({ ok: true, ...result, feeds });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
@@ -29,8 +30,9 @@ export async function GET(req: NextRequest) {
   if (!isCronAuthorized(req.headers.get("authorization"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
     const result = await runIngestion();
+    const feeds = await runAggregators().catch((e) => ({ error: (e as Error).message }));
     revalidateTag(SHARED_JOBS_TAG, { expire: 0 });
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({ ok: true, ...result, feeds });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

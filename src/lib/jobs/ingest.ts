@@ -2,6 +2,7 @@ import { serviceClient } from "@/lib/supabase/service";
 import { COMPANY_SEEDS, isExcludedCompany } from "@/data/companies";
 import { BoardNotFound, discoverBoard, fetchBoard, type AtsType } from "@/lib/collectors/ats";
 import { isSalesRole, normalise } from "@/lib/jobs/process";
+import { fetchAggregators } from "@/lib/collectors/aggregators";
 
 export type CompanyResult = {
   company_id: string;
@@ -122,4 +123,28 @@ export async function runIngestion(opts: { companyId?: string; companyIds?: stri
   };
   await svc.from("collect_runs").insert({ summary, results: results.sort((a, b) => b.sales - a.sales) });
   return { ...summary, results };
+}
+
+const STALE_AFTER_DAYS = 4;
+
+/**
+ * Collects sales roles from the free multi-company feeds and stores them as shared roles.
+ * Roles a feed stops listing are closed once they have not been seen for a few days.
+ */
+export async function runAggregators() {
+  const svc = serviceClient();
+  const { jobs, report } = await fetchAggregators();
+  const now = new Date().toISOString();
+  const rows = jobs
+    .filter((j) => !isExcludedCompany(j.company, j.raw.url))
+    .map((j) => ({ ...normalise(j.raw, j.company), source_type: "public" as const, company_name: j.company, source: j.raw.board, added_by: null, last_checked_at: now, is_active: true }));
+  const unique = [...new Map(rows.map((r) => [r.dedupe_hash, r])).values()];
+  let saved = 0;
+  for (let i = 0; i < unique.length; i += 100) {
+    const { error } = await svc.from("jobs").upsert(unique.slice(i, i + 100), { onConflict: "dedupe_hash", ignoreDuplicates: false });
+    if (error) report.push({ feed: "save", fetched: 0, sales: 0, error: error.message }); else saved += Math.min(100, unique.length - i);
+  }
+  const cutoff = new Date(Date.now() - STALE_AFTER_DAYS * 864e5).toISOString();
+  await svc.from("jobs").update({ is_active: false }).in("source", ["remotive", "arbeitnow", "adzuna"]).is("added_by", null).eq("is_active", true).lt("last_checked_at", cutoff);
+  return { saved, report };
 }

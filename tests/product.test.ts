@@ -19,6 +19,7 @@ import { parseLocations, searchCacheKey } from "../src/lib/contacts/apollo";
 import { buildJobQuery, buildCompanyQuery, parseResults, cleanSnippet } from "../src/lib/websearch";
 import { parseCompanyList, chunk } from "../src/lib/company-import";
 import { buildQueue, todoCount } from "../src/lib/outreach/queue";
+import { parseRemotive, parseArbeitnow, parseAdzuna } from "../src/lib/collectors/aggregators";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -650,4 +651,25 @@ test("the daily outreach queue sorts people into what to do now", () => {
   assert.deepEqual(q.replied.map((c) => c.id), ["e"]);
   assert.deepEqual(q.waiting.map((c) => c.id), ["d"]);
   assert.equal(todoCount(q), 4);
+});
+
+test("free job feeds are read into one shape and bad rows are dropped", () => {
+  const r = parseRemotive({ jobs: [
+    { id: 1, url: "https://remotive.com/j/1", title: "SDR", company_name: "Acme", candidate_required_location: "Worldwide", publication_date: "2026-11-01T00:00:00", description: "<p>Outbound</p>" },
+    { id: 2, title: "No link" },
+  ] });
+  assert.equal(r.length, 1);
+  assert.equal(r[0].raw.location, "Remote · Worldwide");
+  assert.equal(r[0].raw.remote, true);
+  const a = parseArbeitnow({ data: [{ slug: "s1", url: "https://www.arbeitnow.com/jobs/s1", title: "BDR", company_name: "Beta", location: "Berlin", remote: false, created_at: 1762732800 }] });
+  assert.equal(a[0].raw.posted_at, "2025-11-10T00:00:00.000Z");
+  const z = parseAdzuna({ results: [
+    { id: "9", title: "<b>SDR</b>", redirect_url: "https://adzuna.in/x", company: { display_name: "Gamma" }, location: { display_name: "Pune, India" }, salary_min: 600000, salary_max: 900000, salary_is_predicted: "0", created: "2026-11-09T00:00:00Z" },
+    { id: "10", title: "AE", redirect_url: "https://adzuna.in/y", salary_min: 1, salary_max: 2, salary_is_predicted: "1" },
+  ] });
+  assert.equal(z[0].raw.title, "SDR");
+  assert.equal(z[0].raw.pay_verified, true);              // a real published range
+  assert.equal(z[1].raw.pay_verified, undefined);         // a predicted range is never shown as published pay
+  assert.deepEqual(parseRemotive(null), []);
+  assert.deepEqual(parseAdzuna({}), []);
 });
