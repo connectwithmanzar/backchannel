@@ -15,7 +15,7 @@ import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddress, isDelayNotice, isAutoReply } from "../src/lib/outreach/limits";
 import { formatInr, formatPay, formatUsdThreshold, convert } from "../src/lib/currency";
 import { seniorityOf, matchesQuery, matchesLocation, postedWithin } from "../src/lib/role-filters";
-import { buildSearchUrl, parseLocations, searchCacheKey } from "../src/lib/contacts/apollo";
+import { parseLocations, searchCacheKey } from "../src/lib/contacts/apollo";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
