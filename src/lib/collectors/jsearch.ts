@@ -44,8 +44,19 @@ export function listingsForCompany(cards: ListingCard[], company: string): { sho
   return { shown, hidden: mine.length - shown.length };
 }
 
-export async function searchJSearch(query: string, opts: { pages?: number; datePosted?: "all" | "month" | "week" } = {}): Promise<ListingCard[]> {
-  const url = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(query)}&page=1&num_pages=${opts.pages ?? 1}&date_posted=${opts.datePosted ?? "month"}`;
+const COUNTRY_HINTS: [RegExp, string][] = [
+  [/\b(uae|dubai|abu dhabi|sharjah|emirates)\b/i, "ae"], [/\b(saudi|riyadh|jeddah|ksa)\b/i, "sa"],
+  [/\b(india|bengaluru|bangalore|mumbai|delhi|gurgaon|gurugram|hyderabad|chennai|pune|noida)\b/i, "in"],
+];
+
+/** The two-letter country the listings search should favour, read from a place or query; null when none is named. */
+export function countryFor(text: string): string | null {
+  return COUNTRY_HINTS.find(([re]) => re.test(text))?.[1] ?? null;
+}
+
+export async function searchJSearch(query: string, opts: { pages?: number; datePosted?: "all" | "month" | "week"; country?: string | null } = {}): Promise<ListingCard[]> {
+  const country = opts.country ?? countryFor(query);
+  const url = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(query)}&page=1&num_pages=${opts.pages ?? 1}&date_posted=${opts.datePosted ?? "month"}${country ? `&country=${country}` : ""}`;
   const res = await fetch(url, {
     headers: { "x-rapidapi-key": process.env.JSEARCH_API_KEY ?? "", "x-rapidapi-host": "jsearch.p.rapidapi.com" },
     signal: AbortSignal.timeout(20_000), cache: "no-store",

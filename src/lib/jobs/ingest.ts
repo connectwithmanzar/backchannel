@@ -145,6 +145,6 @@ export async function runAggregators() {
     if (error) report.push({ feed: "save", fetched: 0, sales: 0, error: error.message }); else saved += Math.min(100, unique.length - i);
   }
   const cutoff = new Date(Date.now() - STALE_AFTER_DAYS * 864e5).toISOString();
-  await svc.from("jobs").update({ is_active: false }).in("source", ["remotive", "arbeitnow", "adzuna"]).is("added_by", null).eq("is_active", true).lt("last_checked_at", cutoff);
+  await svc.from("jobs").update({ is_active: false }).in("source", ["remotive", "arbeitnow", "adzuna", "remoteok", "weworkremotely", "himalayas"]).is("added_by", null).eq("is_active", true).lt("last_checked_at", cutoff);
   return { saved, report };
 }

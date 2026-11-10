@@ -12,7 +12,7 @@ export interface RawJob {
   url: string;
   description: string;
   posted_at: string | null;
-  board: AtsType | "remotive" | "arbeitnow" | "adzuna" | "jsearch";
+  board: AtsType | "remotive" | "arbeitnow" | "adzuna" | "jsearch" | "remoteok" | "weworkremotely" | "himalayas";
   remote?: boolean;
   currency?: string;
   base_min?: number;

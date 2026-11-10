@@ -13,6 +13,8 @@ export const JOB_HOSTS = [
   "careers.smartrecruiters.com", "myworkdayjobs.com", "jobs.jobvite.com", "recruitee.com", "teamtailor.com", "breezy.hr", "bamboohr.com",
   "personio.de", "personio.com", "join.com", "pinpointhq.com", "jobs.workable.com", "builtin.com", "himalayas.app", "remoteok.com", "weworkremotely.com",
   "welcometothejungle.com", "otta.com", "wellfound.com", "instahyre.com", "cutshort.io", "foundit.in", "naukrigulf.com", "bayt.com", "gulftalent.com",
+  "hirist.tech", "founditgulf.com", "laimoon.com", "tanqeeb.com", "akhtaboot.com", "mihnati.com", "startup.jobs", "workatastartup.com", "jobspresso.co", "hasjob.co",
+  "magnitt.com", "wamda.com", "revgenius.com", "joinpavilion.com", "bravado.co",
 ];
 
 // The ATS hosts whose job pages carry the company's board name, so one result reveals a whole company's board.

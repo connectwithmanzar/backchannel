@@ -3,6 +3,7 @@
 // We keep the title, company, place and the link back to the original listing, and send you there to apply.
 import type { RawJob } from "@/lib/collectors/ats";
 import { isSalesRole } from "@/lib/jobs/process";
+import { OPEN_FEEDS } from "@/lib/collectors/open-feeds";
 
 export interface FeedJob { company: string; raw: RawJob }
 
@@ -84,6 +85,7 @@ export async function fetchAggregators(): Promise<{ jobs: FeedJob[]; report: Fee
     run("remotive", async () => parseRemotive(await getJson("https://remotive.com/api/remote-jobs?category=sales-business&limit=200"))),
     run("arbeitnow", async () => parseArbeitnow(await getJson("https://www.arbeitnow.com/api/job-board-api"))),
   ];
+  for (const f of OPEN_FEEDS) tasks.push(run(f.feed, f.load));
   if (adzunaConfigured()) {
     const id = encodeURIComponent(process.env.ADZUNA_APP_ID ?? ""), key = encodeURIComponent(process.env.ADZUNA_APP_KEY ?? "");
     for (const c of ADZUNA_COUNTRIES) {

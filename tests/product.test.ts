@@ -1061,3 +1061,33 @@ test("the AI reads the posting for India eligibility and fit, with the rules as 
   const boom = await aiReadPosting({ ...base, location: "Austin, Texas" }, null, (async () => { throw new Error("down"); }) as never, true);
   assert.deepEqual([boom.byAi, boom.india.verdict], [false, "no"]);
 });
+
+import { parseRemoteOk, parseHimalayas, parseWeWorkRemotely } from "@/lib/collectors/open-feeds";
+import { countryFor } from "@/lib/collectors/jsearch";
+
+test("open feeds: Remote OK skips the legal notice and keeps the link back", () => {
+  const jobs = parseRemoteOk([{ legal: "terms" }, { id: "1", position: "SDR", company: "Acme", url: "https://remoteok.com/remote-jobs/1", date: "2026-11-09T08:00:00+00:00", location: "" }]);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].raw.url, "https://remoteok.com/remote-jobs/1");
+});
+
+test("open feeds: Himalayas reads the application link and places", () => {
+  const jobs = parseHimalayas({ jobs: [{ title: "SDR", companyName: "Acme", applicationLink: "https://himalayas.app/x", guid: "g", pubDate: "1794312498", locationRestrictions: ["India"] }] });
+  assert.equal(jobs[0].raw.location, "Remote · India");
+  assert.ok(jobs[0].raw.posted_at);
+});
+
+test("open feeds: We Work Remotely splits company and role from the title", () => {
+  const xml = "<item><title>Acme: Sales Development Rep</title><link>https://weworkremotely.com/remote-jobs/acme-sdr</link><guid>g1</guid><region>Anywhere in the World</region><pubDate>Mon, 09 Nov 2026 14:53:28 +0000</pubDate><description>&lt;p&gt;Hi&lt;/p&gt;</description></item>";
+  const jobs = parseWeWorkRemotely(xml);
+  assert.equal(jobs[0].company, "Acme");
+  assert.equal(jobs[0].raw.title, "Sales Development Rep");
+  assert.equal(jobs[0].raw.description, "<p>Hi</p>");
+});
+
+test("jsearch: a Gulf or India place picks that country", () => {
+  assert.equal(countryFor("sales jobs at Careem in Dubai"), "ae");
+  assert.equal(countryFor("sales jobs at Noon in Riyadh"), "sa");
+  assert.equal(countryFor("sales jobs at Razorpay in Bengaluru"), "in");
+  assert.equal(countryFor("sales jobs at Stripe"), null);
+});
