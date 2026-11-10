@@ -11,6 +11,8 @@ import { shortDateTime } from "@/lib/format";
 import RolesFeed, { type JobReaction } from "./RolesFeed";
 import RunNowButton from "./RunNowButton";
 import PasteJob from "./PasteJob";
+import WebSearch from "./WebSearch";
+import ScopeSwitch from "@/components/ScopeSwitch";
 import ScoreNowButton from "./ScoreNowButton";
 import TelegramButton from "./TelegramButton";
 import { isTelegramConfigured } from "@/lib/telegram";
@@ -146,7 +148,7 @@ export default async function RolesPage() {
         </div>
       )}
 
-      <RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets} />
+      <ScopeSwitch mineLabel="My roles" mine={<RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets} />} web={<WebSearch kind="jobs" />} />
     </section>
   );
 }

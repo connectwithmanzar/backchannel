@@ -1,0 +1,64 @@
+// Open-web search through Tavily, a licensed search API. We only ask it for links and short snippets.
+// It never opens LinkedIn, and LinkedIn results are dropped, in line with the no-LinkedIn rule.
+const ENDPOINT = "https://api.tavily.com/search";
+
+export const BLOCKED_HOSTS = ["linkedin.com"];
+
+export interface WebResult { title: string; url: string; host: string; snippet: string }
+
+export interface JobSearchInput { role?: string; company?: string; location?: string; level?: string; tools?: string; workType?: string; visa?: boolean }
+export interface CompanySearchInput { industry?: string; location?: string; size?: string; stage?: string; hiring?: boolean }
+
+export function webSearchConfigured(): boolean {
+  return (process.env.TAVILY_API_KEY ?? "").length > 10;
+}
+
+const clean = (s: string | undefined) => (s ?? "").replace(/[^\p{L}\p{N}\s.,&+#/-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+const join = (...parts: (string | undefined | false)[]) => parts.map((p) => (p ? clean(p) : "")).filter(Boolean).join(" ");
+
+export function buildJobQuery(i: JobSearchInput): string {
+  const q = join(i.role || "sales development representative", i.level, i.company && `at ${i.company}`, i.location && `in ${i.location}`,
+    i.workType && i.workType !== "any" && i.workType, i.tools, i.visa && "visa sponsorship");
+  return `${q} job opening apply`;
+}
+
+export function buildCompanyQuery(i: CompanySearchInput): string {
+  return `${join(i.industry || "B2B SaaS", "companies", i.location && `in ${i.location}`, i.size, i.stage)}${i.hiring ? " hiring sales" : ""}`;
+}
+
+export function hostOf(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
+}
+
+export function parseResults(json: unknown): WebResult[] {
+  const rows = (json as { results?: { title?: string; url?: string; content?: string }[] } | null)?.results;
+  if (!Array.isArray(rows)) return [];
+  const seen = new Set<string>();
+  return rows.flatMap((r) => {
+    if (typeof r?.url !== "string" || !/^https:\/\//.test(r.url)) return [];
+    const host = hostOf(r.url);
+    if (!host || BLOCKED_HOSTS.some((b) => host === b || host.endsWith(`.${b}`)) || seen.has(r.url)) return [];
+    seen.add(r.url);
+    return [{ title: (r.title ?? host).slice(0, 160), url: r.url, host, snippet: (r.content ?? "").slice(0, 600) }];
+  });
+}
+
+export class WebSearchError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+
+export async function searchWeb(query: string, opts: { days?: number; max?: number } = {}): Promise<WebResult[]> {
+  const body: Record<string, unknown> = {
+    query, max_results: opts.max ?? 10, search_depth: "basic", exclude_domains: BLOCKED_HOSTS,
+    ...(opts.days ? { time_range: opts.days <= 7 ? "week" : "month" } : {}),
+  };
+  const res = await fetch(ENDPOINT, {
+    method: "POST", signal: AbortSignal.timeout(15_000),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.TAVILY_API_KEY ?? ""}` },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 429) throw new WebSearchError("The web search limit was reached. Try again later.", 429);
+  if (res.status === 401 || res.status === 403) throw new WebSearchError("The web search key was refused. Check TAVILY_API_KEY.", 502);
+  if (!res.ok) throw new WebSearchError(`Web search returned an error (${res.status}).`, 502);
+  return parseResults(await res.json());
+}

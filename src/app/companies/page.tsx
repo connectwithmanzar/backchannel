@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import ScopeSwitch from "@/components/ScopeSwitch";
+import WebSearch from "../roles/WebSearch";
 import CompanyCard, { type CompanyData } from "./CompanyCard";
 import CurateButton from "./CurateButton";
 import { isExcludedCompany } from "@/data/companies";
@@ -107,6 +109,8 @@ export default async function CompaniesPage({
         {user && <CurateButton />}
       </div>
 
+      <div className="mt-6">
+      <ScopeSwitch mineLabel="My companies" mine={<>
       {/* Filter tabs */}
       <div className="mt-6 flex flex-wrap gap-1 border-b border-line pb-1">
         {tabs.map((t) => {
@@ -147,6 +151,8 @@ export default async function CompaniesPage({
           ))}
         </div>
       )}
+      </>} web={<WebSearch kind="companies" />} />
+      </div>
     </section>
   );
 }

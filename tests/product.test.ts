@@ -16,6 +16,7 @@ import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddr
 import { formatInr, formatPay, formatUsdThreshold, convert } from "../src/lib/currency";
 import { seniorityOf, matchesQuery, matchesLocation, postedWithin } from "../src/lib/role-filters";
 import { parseLocations, searchCacheKey } from "../src/lib/contacts/apollo";
+import { buildJobQuery, buildCompanyQuery, parseResults } from "../src/lib/websearch";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -586,4 +587,22 @@ test("people search can be limited to places, and each filter set is saved separ
   assert.doesNotMatch(decodeURIComponent(buildSearchUrl("acme.com")), /person_locations/);
   assert.notEqual(searchCacheKey("acme.com", ["Dubai"], "both"), searchCacheKey("acme.com", [], "both"));
   assert.equal(searchCacheKey("acme.com", ["Dubai", "Pune"], "hiring"), searchCacheKey("acme.com", ["pune", "dubai"], "hiring"));
+});
+
+test("open-web search builds clean queries and drops LinkedIn and unsafe links", () => {
+  const q = buildJobQuery({ role: "SDR", company: "Acme", location: "Dubai", workType: "remote", visa: true });
+  assert.match(q, /SDR/); assert.match(q, /at Acme/); assert.match(q, /in Dubai/); assert.match(q, /visa sponsorship/);
+  assert.doesNotMatch(buildJobQuery({ workType: "any" }), /\bany\b/);
+  assert.doesNotMatch(buildJobQuery({ role: "SDR; DROP TABLE" }), /;/);
+  assert.match(buildCompanyQuery({ industry: "fintech", location: "UAE", hiring: true }), /fintech companies in UAE hiring sales/);
+  const out = parseResults({ results: [
+    { title: "SDR at Acme", url: "https://jobs.acme.com/1", content: "Outbound role" },
+    { title: "dup", url: "https://jobs.acme.com/1", content: "" },
+    { title: "li", url: "https://www.linkedin.com/jobs/view/1", content: "x" },
+    { title: "li2", url: "https://in.linkedin.com/jobs/2", content: "x" },
+    { title: "plain http", url: "http://example.com/a", content: "x" },
+    { title: "js", url: "javascript:alert(1)", content: "x" },
+  ] });
+  assert.deepEqual(out.map((r) => r.host), ["jobs.acme.com"]);
+  assert.deepEqual(parseResults(null), []);
 });
