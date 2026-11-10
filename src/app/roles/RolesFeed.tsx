@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import type { ScoredJob } from "@/lib/score";
 import { formatPay, formatUsdThreshold, type PayDisplay } from "@/lib/currency";
-import { matchesLocation, matchesQuery, postedWithin, seniorityOf } from "@/lib/role-filters";
+import { countryOf, matchesLocation, matchesQuery, openToIndia, postedWithin, seniorityOf, sourceLabel } from "@/lib/role-filters";
 
 const MARKETS: Record<string, string> = {
   india: "India",
@@ -81,6 +81,8 @@ export default function RolesFeed({
   const [workType, setWorkType] = useState("any");
   const [seniority, setSeniority] = useState("any");
   const [visaOnly, setVisaOnly] = useState(false);
+  const [countries, setCountries] = useState<Set<string>>(new Set());
+  const [indiaOnly, setIndiaOnly] = useState(false);
   const [display, setDisplay] = useState<PayDisplay>("INR");
   const [payOnly, setPayOnly] = useState(false);
   const [minUsd, setMinUsd] = useState(0);
@@ -132,6 +134,11 @@ export default function RolesFeed({
     if (res.ok) window.location.reload();
   }
 
+  const countryCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const j of jobs) m.set(countryOf(j.location), (m.get(countryOf(j.location)) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [jobs]);
   const rows = useMemo(() => {
     const r = jobs.filter((j) => {
       const rxn = reactions[j.id]?.reaction;
@@ -142,6 +149,8 @@ export default function RolesFeed({
         (workType === "any" || j.remoteType === workType) &&
         (seniority === "any" || seniorityOf(j.title) === seniority) &&
         (!visaOnly || j.visaSponsorship === "yes") &&
+        (!countries.size || countries.has(countryOf(j.location))) &&
+        (!indiaOnly || openToIndia(j.location, j.remoteType)) &&
         postedWithin(j.postedAt, posted) &&
         matchesQuery(j, query) &&
         matchesLocation(j, locationQ) &&
@@ -159,7 +168,7 @@ export default function RolesFeed({
         return b.score - a.score;
       });
     return r;
-  }, [jobs, markets, families, query, locationQ, posted, workType, seniority, visaOnly, payOnly, minUsd, sort, showSkipped, reactions]);
+  }, [jobs, markets, families, countries, indiaOnly, query, locationQ, posted, workType, seniority, visaOnly, payOnly, minUsd, sort, showSkipped, reactions]);
 
   const skippedCount = Object.values(reactions).filter((r) => r.reaction === "skipped").length;
 
@@ -177,6 +186,18 @@ export default function RolesFeed({
           <input type="text" value={locationQ} onChange={(e) => setLocationQ(e.target.value)} placeholder="e.g. Bengaluru, Dubai"
             className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" />
         </label>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted">Country</span>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={indiaOnly} onChange={(e) => setIndiaOnly(e.target.checked)} className="accent-accent" />
+            Open to India (in India, or remote with no country limit)
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {countryCounts.map(([c, n]) => (
+              <Chip key={c} on={countries.has(c)} onClick={() => toggle(countries, setCountries, c)}>{c} <span className="num opacity-60">{n}</span></Chip>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-col gap-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted">Market</span>
           <div className="flex flex-wrap gap-1.5">
@@ -289,7 +310,7 @@ export default function RolesFeed({
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 sm:col-span-2">
                     <span className="rounded-md bg-signal-soft px-2 py-0.5 text-xs font-semibold capitalize text-signal">
-                      Careers · {j.board}
+                      {sourceLabel(j.board)}
                     </span>
                     <span className="rounded-md bg-sunk px-2 py-0.5 text-xs">{j.roleFamily}</span>
                     <span className="rounded-md bg-sunk px-2 py-0.5 text-xs capitalize">{j.remoteType}</span>

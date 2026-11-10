@@ -17,6 +17,7 @@ const GROUPS: Group[] = [
   { id: "pipeline", label: "Pipeline", links: [
     { href: "/autopilot", label: "Applications" }, { href: "/outreach", label: "Outreach" },
     { href: "/referrals", label: "Referrals" }, { href: "/offers", label: "Offers" },
+    { href: "/pipeline", label: "Funnel" },
   ] },
   { id: "more", label: "More", links: [
     { href: "/profile", label: "My profile" }, { href: "/pay", label: "Pay benchmark" },

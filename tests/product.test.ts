@@ -14,12 +14,13 @@ import { companyQuality, signalsFromRows } from "../src/lib/companyQuality";
 import type { Job } from "../src/lib/collector/types";
 import { rampLimit, effectiveDailyLimit, bouncePaused, isBounceMessage, fromAddress, isDelayNotice, isAutoReply } from "../src/lib/outreach/limits";
 import { formatInr, formatPay, formatUsdThreshold, convert } from "../src/lib/currency";
-import { seniorityOf, matchesQuery, matchesLocation, postedWithin } from "../src/lib/role-filters";
+import { seniorityOf, matchesQuery, matchesLocation, postedWithin, countryOf, openToIndia, sourceLabel } from "../src/lib/role-filters";
 import { parseLocations, searchCacheKey } from "../src/lib/contacts/apollo";
 import { buildJobQuery, buildCompanyQuery, parseResults, cleanSnippet } from "../src/lib/websearch";
 import { parseCompanyList, chunk } from "../src/lib/company-import";
 import { buildQueue, todoCount } from "../src/lib/outreach/queue";
 import { parseRemotive, parseArbeitnow, parseAdzuna } from "../src/lib/collectors/aggregators";
+import { buildPipeline } from "../src/lib/pipeline";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -672,4 +673,50 @@ test("free job feeds are read into one shape and bad rows are dropped", () => {
   assert.equal(z[1].raw.pay_verified, undefined);         // a predicted range is never shown as published pay
   assert.deepEqual(parseRemotive(null), []);
   assert.deepEqual(parseAdzuna({}), []);
+});
+
+test("country filter, open-to-India check and plain source labels", () => {
+  assert.equal(countryOf("Bengaluru, Karnataka"), "India");
+  assert.equal(countryOf("Dubai, UAE"), "UAE");
+  assert.equal(countryOf("Remote · Worldwide"), "Remote");
+  assert.equal(countryOf("Berlin, Germany"), "Germany");
+  assert.equal(countryOf("Springfield"), "Other");
+  assert.equal(openToIndia("Pune, India", "onsite"), true);
+  assert.equal(openToIndia("Remote · Worldwide", "remote"), true);
+  assert.equal(openToIndia("Remote · APAC", "remote"), true);
+  assert.equal(openToIndia("Remote, USA", "remote"), false);          // remote but tied to another country
+  assert.equal(openToIndia("London, UK", "onsite"), false);
+  assert.equal(openToIndia("Remote", "remote"), true);
+  assert.equal(sourceLabel("greenhouse"), "Company careers page");
+  assert.equal(sourceLabel("adzuna"), "Job feed · Adzuna");
+  assert.equal(sourceLabel("mystery"), "Source · mystery");
+});
+
+test("pipeline counts people once, ignores skipped applications and flags leaks", () => {
+  const steps = [
+    ...Array.from({ length: 22 }, (_, i) => ({ contact_id: `c${i}`, channel: "email", status: "sent" })),
+    { contact_id: "c0", channel: "email", status: "sent" },          // a second email to the same person
+    { contact_id: "c0", channel: "linkedin_task", status: "task_done" },
+    { contact_id: "c99", channel: "linkedin_task", status: "task_done" },
+    { contact_id: "c1", channel: "email", status: "replied" },
+  ];
+  const p = buildPipeline({
+    saved: 12,
+    apps: [{ stage: "applied", status: "submitted", board: "greenhouse" }, { stage: "interview", status: "submitted", board: "greenhouse" }, { stage: "applied", status: "skipped", board: "adzuna" }, { stage: "offer", status: "submitted", board: null }],
+    steps, referralInterviews: 1,
+  });
+  const n = (k: string) => p.stages.find((s) => s.key === k)?.count;
+  assert.equal(n("applied"), 3);                                      // the skipped one does not count
+  assert.equal(n("contacted"), 23);                                   // 22 emailed + one LinkedIn-only person, each once
+  assert.equal(n("replied"), 1);
+  assert.equal(n("interviews"), 3);                                   // interview + offer applications + one referral interview
+  assert.equal(n("offers"), 1);
+  assert.equal(p.replyRate, 4.5);                                     // 1 reply out of 22 people emailed
+  assert.ok(p.hints.some((h) => /Under 3%/.test(h)) === false);
+  assert.equal(p.bySource.find((s) => s.source === "Company careers page")?.interviews, 1);
+  const empty = buildPipeline({ saved: 0, apps: [], steps: [], referralInterviews: 0 });
+  assert.equal(empty.replyRate, null);
+  assert.match(empty.hints[0], /Nothing tracked yet/);
+  const leak = buildPipeline({ saved: 0, apps: [], steps: Array.from({ length: 25 }, (_, i) => ({ contact_id: `x${i}`, channel: "email", status: "sent" })), referralInterviews: 0 });
+  assert.ok(leak.hints.some((h) => /Under 3%/.test(h)));
 });
