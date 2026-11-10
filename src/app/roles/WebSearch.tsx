@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { btn, btnPrimary, Card, input } from "@/components/ui";
-import { parseAtsUrl, prettifySlug } from "@/lib/websearch";
+import { boardName, parseAtsUrl } from "@/lib/websearch";
 
 interface Result { title: string; url: string; host: string; snippet: string }
 type Kind = "jobs" | "companies";
@@ -49,14 +49,14 @@ export default function WebSearch({ kind }: { kind: Kind }) {
     const ats = parseAtsUrl(r.url);
     if (!ats) return;
     setBusy("w" + r.url); setMsg(null);
-    const res = await fetch("/api/sources/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ companies: [{ name: prettifySlug(ats.slug), domain: null }] }) });
+    const res = await fetch("/api/sources/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ companies: [{ name: boardName(ats), domain: null }] }) });
     const data = await res.json().catch(() => ({}));
     setBusy("");
     const o = data.outcomes?.[0];
     setMsg(!res.ok ? { ok: false, text: data.error ?? "Couldn't add that company." }
-      : o?.status === "added" ? { ok: true, text: `Now watching ${prettifySlug(ats.slug)}: ${data.sales_roles} sales roles found.` }
-      : o?.status === "already_there" ? { ok: true, text: `${prettifySlug(ats.slug)} is already watched.` }
-      : { ok: false, text: `Couldn't read ${prettifySlug(ats.slug)}'s job board.` });
+      : o?.status === "added" ? { ok: true, text: `Now watching ${boardName(ats)}: ${data.sales_roles} sales roles found.` }
+      : o?.status === "already_there" ? { ok: true, text: `${boardName(ats)} is already watched.` }
+      : { ok: false, text: `Couldn't read ${boardName(ats)}'s job board.` });
   }
 
   async function addJob(r: Result) {

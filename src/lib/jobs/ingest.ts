@@ -94,7 +94,7 @@ export async function runIngestion(opts: { companyId?: string; companyIds?: stri
   await syncSeeds();
 
   let q = svc.from("companies").select("id, name, domain, ats_type, ats_slug").eq("enabled", true)
-    .in("ats_type", ["greenhouse", "lever", "ashby", "smartrecruiters"]).not("ats_slug", "is", null);
+    .in("ats_type", ["greenhouse", "lever", "ashby", "smartrecruiters", "workday"]).not("ats_slug", "is", null);
   if (opts.companyId) q = q.eq("id", opts.companyId);
   if (opts.companyIds) q = q.in("id", opts.companyIds);
   const { data, error } = await q;

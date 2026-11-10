@@ -1,7 +1,9 @@
 // Fetchers for each ATS's public job-board API. They throw on errors so the
 // collector can report exactly which company boards are broken.
 
-export type AtsType = "greenhouse" | "lever" | "ashby" | "smartrecruiters";
+import { fetchWorkday } from "@/lib/collectors/workday";
+
+export type AtsType = "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "workday";
 
 export interface RawJob {
   external_id: string;
@@ -118,6 +120,7 @@ export function parseSmartRecruiters(data: any, slug: string): RawJob[] {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export async function fetchBoard(ats: AtsType, slug: string): Promise<RawJob[]> {
+  if (ats === "workday") return fetchWorkday(slug);
   const s = encodeURIComponent(slug);
   switch (ats) {
     case "greenhouse":

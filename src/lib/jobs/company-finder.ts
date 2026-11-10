@@ -23,7 +23,7 @@ export function findBoardsInHtml(html: string): { boards: Found[]; workday: stri
     const u = raw.replace(/^http:/, "https:").replace(/&amp;/g, "&");
     const f = parseAtsUrl(u);
     if (f && !boards.has(`${f.ats}/${f.slug.toLowerCase()}`)) boards.set(`${f.ats}/${f.slug.toLowerCase()}`, f);
-    if (!workday && /^https:\/\/[a-z0-9-]+\.wd\d+\.myworkdayjobs\.com\//i.test(u)) workday = u.split(/[?#]/)[0];
+    if (!workday && f?.ats === "workday") workday = u.split(/[?#]/)[0];
   }
   return { boards: [...boards.values()], workday };
 }
@@ -55,7 +55,7 @@ export async function probeCareersSite(domain: string): Promise<{ boards: Found[
 }
 
 const NOT_A_HOMEPAGE = ["linkedin.com", "facebook.com", "twitter.com", "x.com", "instagram.com", "youtube.com", "wikipedia.org", "crunchbase.com", "glassdoor.com", "glassdoor.co.in", "indeed.com", "zoominfo.com", "g2.com", "bloomberg.com", "reddit.com", "medium.com", "naukri.com", "ambitionbox.com", "pitchbook.com", "apollo.io", "rocketreach.co", "owler.com", "tracxn.com"];
-const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+export const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /** The company's own website from a web search: the first result whose name looks like the company. */
 export function pickHomepage(name: string, results: WebResult[]): string | null {

@@ -1,6 +1,6 @@
 import { serviceClient } from "@/lib/supabase/service";
 import { isExcludedCompany } from "@/data/companies";
-import { JOB_HOSTS, parseAtsUrl, prettifySlug, searchWeb, webSearchConfigured } from "@/lib/websearch";
+import { JOB_HOSTS, boardName, parseAtsUrl, searchWeb, webSearchConfigured } from "@/lib/websearch";
 import { runIngestion } from "@/lib/jobs/ingest";
 
 export const DISCOVERY_ROLES = [
@@ -16,7 +16,7 @@ export function todaysQueries(perRun: number, now = Date.now()): string[] {
   return Array.from({ length: Math.min(perRun, grid.length) }, (_, i) => grid[(start + i) % grid.length]);
 }
 
-export interface Found { ats: "greenhouse" | "lever" | "ashby" | "smartrecruiters"; slug: string }
+export interface Found { ats: "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "workday"; slug: string }
 
 /** Unique company boards behind a set of job-page links, skipping boards we already watch. */
 export function newBoards(urls: string[], known: Set<string>): Found[] {
@@ -43,15 +43,15 @@ export async function discoverCompanies(opts: { maxSearches?: number; maxNew?: n
   const queries = todaysQueries(opts.maxSearches ?? 25);
   const urls: string[] = [];
   let searches = 0, failures = 0;
-  const ATS_HOSTS = JOB_HOSTS.filter((h) => /greenhouse|lever|ashbyhq|smartrecruiters/.test(h));
+  const ATS_HOSTS = JOB_HOSTS.filter((h) => /greenhouse|lever|ashbyhq|smartrecruiters|myworkdayjobs/.test(h));
   for (const q of queries) {
     try { urls.push(...(await searchWeb(q, { max: 20, kind: "jobs", includeDomains: ATS_HOSTS })).map((r) => r.url)); searches++; }
     catch { if (++failures >= 3) break; }
   }
-  const boards = newBoards(urls, known).filter((b) => !isExcludedCompany(prettifySlug(b.slug), b.slug)).slice(0, opts.maxNew ?? 60);
+  const boards = newBoards(urls, known).filter((b) => !isExcludedCompany(boardName(b), b.slug)).slice(0, opts.maxNew ?? 60);
   const ids: string[] = [];
   for (const b of boards) {
-    const { data, error } = await svc.from("companies").insert({ name: prettifySlug(b.slug), ats_type: b.ats, ats_slug: b.slug, enabled: true }).select("id").single();
+    const { data, error } = await svc.from("companies").insert({ name: boardName(b), ats_type: b.ats, ats_slug: b.slug, enabled: true }).select("id").single();
     if (!error && data) ids.push(data.id);
   }
   const run = ids.length ? await runIngestion({ companyIds: ids, repair: false }) : null;

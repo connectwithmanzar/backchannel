@@ -24,6 +24,9 @@ import { buildPipeline } from "../src/lib/pipeline";
 import { roleFamily as ingestFamily } from "../src/lib/jobs/process";
 import { newBoards, todaysQueries } from "../src/lib/jobs/discover";
 import { isSafeHost, findBoardsInHtml, pickHomepage, careerPageCandidates } from "../src/lib/jobs/company-finder";
+import { parseWorkdayUrl, splitWorkdaySlug, parsePostedOn, parseWorkdayList } from "../src/lib/collectors/workday-url";
+import { fetchWorkday } from "../src/lib/collectors/workday";
+import { boardName } from "../src/lib/websearch";
 import { isWarmAuthorized } from "../src/lib/warm";
 import { applyFeedback } from "../src/lib/feedback";
 import { rateLimitShared } from "../src/lib/rate-limit";
@@ -767,11 +770,54 @@ test("the company finder only fetches public websites and reads job systems out 
   const html = `<a href="https://boards.greenhouse.io/acme/jobs/1">x</a><iframe src="https://jobs.lever.co/acme-labs/?a=1&amp;b=2"></iframe>
     <a href="https://acme.wd5.myworkdayjobs.com/en-US/External?q=1">w</a><a href="https://example.com/blog">b</a><a href="https://boards.greenhouse.io/acme/jobs/2">dup</a>`;
   const f = findBoardsInHtml(html);
-  assert.deepEqual(f.boards, [{ ats: "greenhouse", slug: "acme" }, { ats: "lever", slug: "acme-labs" }]);
+  assert.deepEqual(f.boards, [{ ats: "greenhouse", slug: "acme" }, { ats: "lever", slug: "acme-labs" }, { ats: "workday", slug: "acme.wd5.myworkdayjobs.com|External" }]);
   assert.equal(f.workday, "https://acme.wd5.myworkdayjobs.com/en-US/External");
   assert.deepEqual(findBoardsInHtml("<p>nothing</p>"), { boards: [], workday: null });
   const r = (host: string) => ({ title: host, url: `https://${host}/`, host, snippet: "" });
   assert.equal(pickHomepage("Freshworks", [r("linkedin.com"), r("en.wikipedia.org"), r("freshworks.com")]), "freshworks.com");
   assert.equal(pickHomepage("Freshworks", [r("glassdoor.com"), r("randomblog.io")]), null);
   assert.equal(pickHomepage("AB", [r("ab.com")]), null);                       // too short to match safely
+});
+
+test("Workday boards are recognised from links, read safely, and only sales roles are kept", async () => {
+  assert.deepEqual(parseWorkdayUrl("https://acme.wd5.myworkdayjobs.com/en-US/External/job/Dubai/SDR_R1"), { host: "acme.wd5.myworkdayjobs.com", site: "External" });
+  assert.deepEqual(parseWorkdayUrl("https://acme.wd1.myworkdayjobs.com/Careers"), { host: "acme.wd1.myworkdayjobs.com", site: "Careers" });
+  assert.equal(parseWorkdayUrl("https://evil.com/acme.wd5.myworkdayjobs.com/External"), null);
+  assert.equal(parseWorkdayUrl("http://acme.wd5.myworkdayjobs.com/External"), null);
+  assert.deepEqual(splitWorkdaySlug("acme.wd5.myworkdayjobs.com|External"), { host: "acme.wd5.myworkdayjobs.com", tenant: "acme", site: "External" });
+  assert.equal(splitWorkdaySlug("127.0.0.1|External"), null);                       // only real Workday hosts are ever called
+  assert.equal(splitWorkdaySlug("acme.wd5.myworkdayjobs.com.evil.com|External"), null);
+  assert.equal(boardName({ ats: "workday", slug: "acme-corp.wd5.myworkdayjobs.com|External" }), "Acme Corp");
+  const now = Date.parse("2026-11-10T00:00:00Z");
+  assert.equal(parsePostedOn("Posted Today", now), "2026-11-10T00:00:00.000Z");
+  assert.equal(parsePostedOn("Posted 3 Days Ago", now), "2026-11-07T00:00:00.000Z");
+  assert.equal(parsePostedOn("Posted 30+ Days Ago", now), "2026-10-11T00:00:00.000Z");
+  assert.equal(parsePostedOn("", now), null);
+  assert.equal(parseWorkdayList({ jobPostings: [{ title: "SDR", externalPath: "/job/x", locationsText: "Dubai" }, { title: "bad" }, { externalPath: "/job/y" }] }, now).length, 1);
+
+  const calls: string[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    const u = String(url); calls.push(u);
+    if (u.endsWith("/jobs")) {
+      const term = JSON.parse(String(init?.body)).searchText;
+      const postings = term === "sales" ? [
+        { title: "Sales Development Representative", externalPath: "/job/Dubai/SDR_R1", locationsText: "Dubai", postedOn: "Posted 2 Days Ago" },
+        { title: "Software Engineer", externalPath: "/job/Pune/SWE_R2", locationsText: "Pune", postedOn: "Posted Today" },
+      ] : [];
+      return new Response(JSON.stringify({ total: postings.length, jobPostings: postings }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ jobPostingInfo: { jobDescription: "<p>Outbound role</p>", startDate: "2026-11-08", remoteType: "Remote" } }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const jobs = await fetchWorkday("acme.wd5.myworkdayjobs.com|External");
+    assert.equal(jobs.length, 1);                                                    // the engineer is never kept or fetched
+    assert.equal(jobs[0].title, "Sales Development Representative");
+    assert.equal(jobs[0].url, "https://acme.wd5.myworkdayjobs.com/en-US/External/job/Dubai/SDR_R1");
+    assert.equal(jobs[0].remote, true);
+    assert.equal(jobs[0].posted_at, "2026-11-08T00:00:00.000Z");
+    assert.ok(!calls.some((c) => c.includes("SWE_R2")));
+    assert.ok(calls.every((c) => c.startsWith("https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/External")));
+    await assert.rejects(() => fetchWorkday("evil.com|External"), /not a valid Workday board/);
+  } finally { globalThis.fetch = realFetch; }
 });

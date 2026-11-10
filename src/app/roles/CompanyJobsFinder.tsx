@@ -57,7 +57,7 @@ export default function CompanyJobsFinder() {
       {out?.status === "results" && (
         <div className="text-sm">
           <p className="font-semibold">No job board to watch automatically, but these pages mention {out.name}:</p>
-          {out.workday && <p className="mt-1 text-muted">They use Workday, which Backchannel can&apos;t read yet. <a href={out.workday} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">Open their Workday jobs</a>.</p>}
+          {out.workday && <p className="mt-1 text-muted">They use Workday, but no open sales roles were found there right now. <a href={out.workday} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">Open their Workday jobs</a>.</p>}
           <ul className="mt-2 flex flex-col divide-y divide-line">
             {out.results.map((r) => (
               <li key={r.url} className="flex flex-col gap-1 py-2">
@@ -72,7 +72,7 @@ export default function CompanyJobsFinder() {
       {out?.status === "none" && (
         <p className="text-sm text-muted">
           I couldn&apos;t find open sales roles for {out.name} automatically.
-          {out.workday ? <> They use Workday: <a href={out.workday} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">open their jobs</a>.</> : out.careersUrl ? <> Try <a href={out.careersUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">their careers page</a> and paste any role you like with &quot;Add a job you found&quot;.</> : " Add their website above and try again."}
+          {out.workday ? <> They use Workday, but no open sales roles were found there right now: <a href={out.workday} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">open their jobs</a>.</> : out.careersUrl ? <> Try <a href={out.careersUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">their careers page</a> and paste any role you like with &quot;Add a job you found&quot;.</> : " Add their website above and try again."}
         </p>
       )}
     </Card>
