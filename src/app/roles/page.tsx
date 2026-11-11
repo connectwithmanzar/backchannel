@@ -57,11 +57,15 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
   const focusJobs = await getFocusJobs([...watched], sp.q);
   const seenIds = new Set<string>();
   const merged = [...focusJobs, ...sharedJobs, ...(ownJobs ?? [])].filter((r) => (seenIds.has(r.id) ? false : (seenIds.add(r.id), true)));
+  // Order: your watched companies, then the jobs you sent from JobRadar or pasted yourself (all of them), then the newest others.
   const focusIds = new Set(focusJobs.map((r) => r.id));
+  const ownIds = new Set((ownJobs ?? []).map((r) => r.id));
+  const byNewest = (x: { last_checked_at?: string | null }, y: { last_checked_at?: string | null }) => (y.last_checked_at ?? "").localeCompare(x.last_checked_at ?? "");
   const rows = [
     ...merged.filter((r) => focusIds.has(r.id)),
-    ...merged.filter((r) => !focusIds.has(r.id)).sort((a, b) => (b.last_checked_at ?? "").localeCompare(a.last_checked_at ?? "")),
-  ].slice(0, 650);
+    ...merged.filter((r) => !focusIds.has(r.id) && ownIds.has(r.id)).sort(byNewest),
+    ...merged.filter((r) => !focusIds.has(r.id) && !ownIds.has(r.id)).sort(byNewest),
+  ].slice(0, 1000);
 
   const profile = buildSearchProfile(profileRow);
 
