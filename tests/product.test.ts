@@ -705,7 +705,7 @@ test("country filter, open-to-India check and plain source labels", () => {
   assert.equal(openToIndia("Remote", "remote"), true);
   assert.equal(sourceLabel("greenhouse"), "Company careers page");
   assert.equal(sourceLabel("adzuna"), "Job feed · Adzuna");
-  assert.equal(sourceLabel("mystery"), "Source · mystery");
+  assert.equal(sourceLabel("mystery"), "Other source");
 });
 
 test("pipeline counts people once, ignores skipped applications and flags leaks", () => {

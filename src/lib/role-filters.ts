@@ -66,8 +66,16 @@ export function openToIndia(location: string, remoteType: string): boolean {
 }
 
 const SOURCE_NAMES: Record<string, string> = {
-  greenhouse: "Company careers page", lever: "Company careers page", ashby: "Company careers page", smartrecruiters: "Company careers page",
+  greenhouse: "Company careers page", lever: "Company careers page", ashby: "Company careers page", smartrecruiters: "Company careers page", workday: "Company careers page",
+  jsearch: "Job listings", linkedin: "LinkedIn", indeed: "Indeed", naukri: "Naukri", glassdoor: "Glassdoor", bayt: "Bayt",
   remotive: "Job feed · Remotive", arbeitnow: "Job feed · Arbeitnow", adzuna: "Job feed · Adzuna", pasted: "Added by you",
 };
 /** Where a role came from, in plain words. */
-export const sourceLabel = (board: string) => SOURCE_NAMES[board.toLowerCase()] ?? `Source · ${board}`;
+export const sourceLabel = (board: string): string => {
+  const b = (board ?? "").toLowerCase();
+  if (SOURCE_NAMES[b]) return SOURCE_NAMES[b];
+  // Jobs sent from JobRadar are stored as "jobradar:<site>".
+  const radar = b.match(/^jobradar:(.+)$/);
+  if (radar) return `JobRadar · ${SOURCE_NAMES[radar[1]] ?? radar[1].replace(/^./, (c) => c.toUpperCase())}`;
+  return "Other source";
+};

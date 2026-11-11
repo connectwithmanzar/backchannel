@@ -20,6 +20,7 @@ import TelegramButton from "./TelegramButton";
 import { isTelegramConfigured } from "@/lib/telegram";
 import { isOwner } from "@/lib/owner";
 import { effectiveTier, type Tier } from "@/lib/company-rating";
+import { formatCompanyName } from "@/lib/company-name";
 import { COMPANY_SEEDS, isExcludedCompany } from "@/data/companies";
 
 export const dynamic = "force-dynamic";
@@ -86,7 +87,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
   const signals = signalsFromRows(visibleRows);
   const jobs: Job[] = visibleRows.map((row) => ({
     id: row.id,
-    company: (row.companies as unknown as { name: string } | null)?.name ?? row.company_name ?? "Unknown",
+    company: formatCompanyName((row.companies as unknown as { name: string } | null)?.name ?? row.company_name) || "Unknown",
     companyDomain: (row.companies as unknown as { domain: string | null } | null)?.domain ?? undefined,
     title: row.title,
     location: row.location ?? "",

@@ -6,6 +6,7 @@ import { weeklyFunnel } from "@/lib/funnel";
 import FitRing from "@/components/FitRing";
 import { buildSearchProfile } from "@/lib/score";
 import { toMarket } from "@/lib/jobs/market";
+import { formatCompanyName } from "@/lib/company-name";
 import { greeting, firstName } from "@/lib/format";
 import { plural } from "@/lib/format";
 
@@ -150,7 +151,7 @@ export default async function TodayPage() {
             <Card key={m.jobs.id} className="flex flex-wrap gap-4 sm:p-5">
               <div className="flex min-w-0 flex-1 basis-72 flex-col gap-2">
                 <h3 className="text-[17px] font-semibold">{m.jobs.title}</h3>
-                <div className="text-sm text-muted">{m.jobs.companies?.name ?? m.jobs.company_name} · {m.jobs.location || "Location not stated"}</div>
+                <div className="text-sm text-muted">{formatCompanyName(m.jobs.companies?.name ?? m.jobs.company_name)} · {m.jobs.location || "Location not stated"}</div>
                 {m.explanation && <p className="line-clamp-2 text-sm">{m.explanation}</p>}
                 <div className="mt-1 flex flex-wrap gap-2">
                   <Link href={`/roles/${m.jobs.id}`} className={btnPrimary}>See why it fits</Link>

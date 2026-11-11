@@ -361,7 +361,7 @@ export default function RolesFeed({
                       {sourceLabel(j.board)}
                     </span>
                     <span className="rounded-md bg-sunk px-2 py-0.5 text-xs">{j.roleFamily}</span>
-                    <span className="rounded-md bg-sunk px-2 py-0.5 text-xs capitalize">{j.remoteType}</span>
+                    <span className="rounded-md bg-sunk px-2 py-0.5 text-xs">{j.remoteType === "unknown" ? "Work mode not stated" : j.remoteType === "onsite" ? "On-site" : j.remoteType[0].toUpperCase() + j.remoteType.slice(1)}</span>
                     {j.visaSponsorship !== "unknown" && (
                       <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
                         j.visaSponsorship === "yes" ? "bg-good-soft text-good" : "bg-warn-soft text-warn"
