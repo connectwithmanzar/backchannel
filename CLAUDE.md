@@ -3,6 +3,18 @@
 ## Who you're working with
 The owner (Manzar) does not code. Explain every step in plain language, give click-by-click instructions for anything he must do himself (accounts, keys, settings), and run commands for him rather than asking him to. Keep changes small and show what changed.
 
+## One workspace, two apps
+This folder holds both of the owner's job-search apps. Work on either or both here.
+| App | Folder | Runs | Stack |
+|---|---|---|---|
+| Backchannel | everything except `jobradar/` | Online (Vercel + Supabase) | Next.js 16, TypeScript |
+| JobRadar | `jobradar/` | On the owner's Mac (Dock app, daily 8:00 run) | Python 3.12, Streamlit, JobSpy |
+
+- They talk through owner-only endpoints `/api/jobs/jobradar-import` and `/api/jobradar/*` (key: JOBRADAR_SECRET). Change both sides together and keep `src/lib/jobs/jobradar.ts` `JOBRADAR_SITES` in step with JobRadar's sites.
+- JobRadar's live copy is `~/JobRadar` (installed from `jobradar/` by `jobradar/Install JobRadar.command`); its data lives in `~/JobRadar/data` and is never committed. After changing `jobradar/`, tell the owner to rerun the installer.
+- JobRadar test (offline, no network): `uv run --python 3.12 --with-requirements jobradar/requirements.txt python jobradar/tests/smoke_test.py`
+- JobRadar details and tabs: `jobradar/README.md`. Feature plan: the "JobRadar + Backchannel: Feature Plan" doc.
+
 ## What this is
 A personal job-search engine for SDR/BDR, GTM Engineer and AE roles. Test phase: one user (the owner) for 90 days. If it lands him a great job, it opens to the public later. Build single-user now, multi-user-ready (user_id + row-level security on every personal table).
 

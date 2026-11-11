@@ -1,5 +1,7 @@
 # Backchannel
 
+This project also holds **JobRadar** (`jobradar/`), the job-search app that runs on your Mac and feeds Backchannel. See `jobradar/README.md`.
+
 Your personal sales job-search engine (test phase: one user).
 Full plan: `docs/backchannel-build-brief.md`. Design reference: `docs/backchannel-prototype.html`.
 

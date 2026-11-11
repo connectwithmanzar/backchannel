@@ -43,3 +43,8 @@ next-env.d.ts
 # collected data
 data/jobs.json
 data/collect-report.json
+
+# JobRadar (Python app on the owner's Mac): never commit its data (keys, LinkedIn connections, history)
+/jobradar/data/
+__pycache__/
+*.pyc
