@@ -19,6 +19,7 @@ import ScoreNowButton from "./ScoreNowButton";
 import TelegramButton from "./TelegramButton";
 import { isTelegramConfigured } from "@/lib/telegram";
 import { isOwner } from "@/lib/owner";
+import { effectiveTier, type Tier } from "@/lib/company-rating";
 import { COMPANY_SEEDS, isExcludedCompany } from "@/data/companies";
 
 export const dynamic = "force-dynamic";
@@ -60,10 +61,19 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
     ? (((await supabase.from("watchlist").select("company_id").eq("user_id", user.id).eq("watching", true)).data ?? []) as Watch[])
     : ((watchRes.data ?? []) as Watch[]);
   const watched = new Set(watchRows.map((w) => w.company_id));
-  const tierOf = new Map(watchRows.filter((w) => w.tier === "A" || w.tier === "B").map((w) => [w.company_id, w.tier as "A" | "B"]));
-  const priorityIds = visibleRows.filter((row) => row.company_id && watched.has(row.company_id)).map((row) => row.id);
-  const tierById: Record<string, "A" | "B"> = {};
-  for (const row of visibleRows) { const t = row.company_id ? tierOf.get(row.company_id) : undefined; if (t) tierById[row.id] = t; }
+  // Ratings you saved decide a suggested tier (migration 0018). Until it is run, only the tiers you set count.
+  const ratingRes = user && watched.size ? await supabase.from("company_research").select("company_id, glassdoor_rating, ambitionbox_rating").eq("user_id", user.id) : null;
+  const ratingBy = new Map((ratingRes?.error ? [] : ratingRes?.data ?? []).map((r) => [r.company_id as string, r]));
+  const tierOf = new Map<string, { tier: Tier | null; suggested: boolean }>();
+  for (const w of watchRows) tierOf.set(w.company_id, effectiveTier(w.tier, ratingBy.get(w.company_id)));
+  // Tier D means skip, so those companies never show under Priority.
+  const priorityIds = visibleRows.filter((row) => row.company_id && watched.has(row.company_id) && tierOf.get(row.company_id)?.tier !== "D").map((row) => row.id);
+  const tierById: Record<string, Tier> = {};
+  const suggestedIds: string[] = [];
+  for (const row of visibleRows) {
+    const t = row.company_id ? tierOf.get(row.company_id) : undefined;
+    if (t?.tier) { tierById[row.id] = t.tier; if (t.suggested) suggestedIds.push(row.id); }
+  }
 
   const signals = signalsFromRows(visibleRows);
   const jobs: Job[] = visibleRows.map((row) => ({
@@ -172,7 +182,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
         </div>
       )}
 
-      <ScopeSwitch mineLabel="My roles" mine={<RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets} initialQuery={(sp.q ?? "").slice(0, 100)} initialSaved={sp.saved === "1"} priorityIds={priorityIds} tierById={tierById} />} web={<WebSearch kind="jobs" />} />
+      <ScopeSwitch mineLabel="My roles" mine={<RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets} initialQuery={(sp.q ?? "").slice(0, 100)} initialSaved={sp.saved === "1"} priorityIds={priorityIds} tierById={tierById} suggestedIds={suggestedIds} />} web={<WebSearch kind="jobs" />} />
     </section>
   );
 }

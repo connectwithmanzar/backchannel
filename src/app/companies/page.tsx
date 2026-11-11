@@ -3,6 +3,8 @@ import { isOwner } from "@/lib/owner";
 import { isExcludedCompany } from "@/data/companies";
 import { Card } from "@/components/ui";
 import { roleCounts, suggestCompanies, tierRank, type CompanyRow, type CompanyStatus, type CompanyTier } from "@/lib/company-list";
+import { effectiveTier, isTier } from "@/lib/company-rating";
+import { sanitizeResearch, type Research } from "@/lib/company-research";
 import CompanyJobsFinder from "../roles/CompanyJobsFinder";
 import ImportCompanies from "../sources/ImportCompanies";
 import DiscoverButton from "../sources/DiscoverButton";
@@ -40,6 +42,9 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Pr
       : (((await db.from("watchlist").select("company_id, watching").eq("user_id", uid)).data ?? []) as Wl[]);
   }
   const byCompany = new Map(watch.map((w) => [w.company_id, w]));
+  // What you saved about each company arrives with migration 0018. Until it is run, there is none.
+  const researchRes = await db.from("company_research").select("*").eq("user_id", uid);
+  const researchBy = new Map<string, Research>(researchRes.error ? [] : (researchRes.data ?? []).map((r) => [r.company_id as string, { ...sanitizeResearch(r), researched_at: (r.researched_at as string | null) ?? null }]));
   const counts = roleCounts(jobs ?? []);
 
   const rows: CompanyRow[] = ((companies ?? []) as Co[])
@@ -53,11 +58,12 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Pr
         country: c.country ?? null, size: c.size ?? null, sector: c.sector ?? null, linkedinUrl: c.linkedin_url ?? null,
         companyType: c.company_type ?? null, hiring: (c.hiring_signal ?? null) as CompanyRow["hiring"], linkedinOpenings: c.linkedin_openings ?? null,
         status: (w?.status ?? null) as CompanyStatus, note: w?.note ?? "", watching: w?.watching ?? false,
-        tier: (w?.tier === "A" || w?.tier === "B" ? w.tier : null) as CompanyTier,
+        tier: (isTier(w?.tier) ? w?.tier : null) as CompanyTier,
+        research: researchBy.get(c.id) ?? null,
       };
     })
     // Companies with open roles first, then by how many.
-    .sort((a, b) => tierRank(b.tier) - tierRank(a.tier) || b.roles - a.roles || a.name.localeCompare(b.name));
+    .sort((a, b) => tierRank(effectiveTier(b.tier, b.research).tier) - tierRank(effectiveTier(a.tier, a.research).tier) || b.roles - a.roles || a.name.localeCompare(b.name));
   const suggestions = suggestCompanies(rows);
   const owner = isOwner(user?.email);
   // How far the board search has got. The board_checked_at column arrives with migration 0015.

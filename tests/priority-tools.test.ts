@@ -7,10 +7,12 @@ import { CV_FAMILIES, familyById } from "../src/lib/cv-versions";
 
 const row = (o: Partial<CompanyRow>): CompanyRow => ({ id: "x", name: "X", domain: null, atsType: "lever", hasBoard: true, enabled: true, error: null, lastCheckedAt: null, roles: 0, inIndia: 0, newThisWeek: 0, country: null, size: null, sector: null, linkedinUrl: null, companyType: null, hiring: null, linkedinOpenings: null, status: null, note: "", watching: false, ...o });
 
-test("tier A sorts before B before untiered", () => {
+test("tiers sort A, B, C, then no tier, with D last", () => {
   assert.ok(tierRank("A") > tierRank("B"));
-  assert.ok(tierRank("B") > tierRank(null));
-  assert.equal(tierRank(undefined), 0);
+  assert.ok(tierRank("B") > tierRank("C"));
+  assert.ok(tierRank("C") > tierRank(null));
+  assert.ok(tierRank(null) > tierRank("D"));
+  assert.equal(tierRank(undefined), tierRank(null));
 });
 
 test("tier filter keeps only that tier", () => {

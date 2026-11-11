@@ -1,4 +1,6 @@
 import { countryOf } from "@/lib/role-filters";
+import { tierRank as rankTier, type Tier } from "@/lib/company-rating";
+import type { Research } from "@/lib/company-research";
 
 export type CompanyStatus = "interested" | "applied" | "not_for_me" | null;
 export type CompanyFilter = "all" | "india" | "hiring" | "gulf" | "interested" | "applied" | "attention";
@@ -13,13 +15,15 @@ export interface CompanyRow {
   status: CompanyStatus; note: string; watching: boolean;
   /** Your target-list tier (migration 0017). Missing or null means you only watch it. */
   tier?: CompanyTier;
+  /** What you know about the company (migration 0018). */
+  research?: Research | null;
 }
 
-export type CompanyTier = "A" | "B" | null;
-export type TierFilter = "any" | "A" | "B";
+export type CompanyTier = Tier | null;
+export type TierFilter = "any" | Tier;
 
-/** Tier A sorts before B before the rest. */
-export const tierRank = (t: CompanyTier | undefined): number => (t === "A" ? 2 : t === "B" ? 1 : 0);
+/** A sorts first, then B, C, no tier, and D last. */
+export const tierRank = rankTier;
 
 export function filterByTier(rows: CompanyRow[], tier: TierFilter): CompanyRow[] {
   return tier === "any" ? rows : rows.filter((c) => c.tier === tier);

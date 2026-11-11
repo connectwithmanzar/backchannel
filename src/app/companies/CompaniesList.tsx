@@ -2,6 +2,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, Pill, btn, btnPrimary, input } from "@/components/ui";
+import ResearchPanel from "./ResearchPanel";
+import { TIERS, TIER_MEANING, effectiveTier } from "@/lib/company-rating";
+import { WORK_MODE_LABEL, type Research } from "@/lib/company-research";
 import { filterByTier, filterCompanies, filterCounts, needsAttention, type CompanyFilter, type CompanyRow, type CompanyStatus, type CompanyTier, type TierFilter } from "@/lib/company-list";
 
 const FILTERS: { id: CompanyFilter; label: string }[] = [
@@ -24,6 +27,7 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
   const [tierFilter, setTierFilter] = useState<TierFilter>("any");
   const [limit, setLimit] = useState(PAGE);
   const [notesOpen, setNotesOpen] = useState<string | null>(null);
+  const [researchOpen, setResearchOpen] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -73,7 +77,7 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
       </div>
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by tier">
         <span className="text-xs font-semibold text-muted">Tier</span>
-        {(["any", "A", "B"] as const).map((t) => (
+        {(["any", ...TIERS] as const).map((t) => (
           <button key={t} type="button" aria-pressed={tierFilter === t} onClick={() => { setTierFilter(t); setLimit(PAGE); }}
             className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${tierFilter === t ? "bg-fg text-bg" : "bg-surface text-muted ring-1 ring-line hover:text-fg"}`}>
             {t === "any" ? "Any" : `Tier ${t}`} <span className="num opacity-70">· {t === "any" ? rows.length : rows.filter((r) => r.tier === t).length}</span>
@@ -100,8 +104,8 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
                     </p>
                   </div>
                   <div className="flex gap-1.5" role="group" aria-label={`Your tier for ${c.name}`}>
-                    {(["A", "B"] as const).map((t) => (
-                      <button key={t} type="button" aria-pressed={c.tier === t} onClick={() => setTier(c.id, c.tier === t ? null : t)}
+                    {TIERS.map((t) => (
+                      <button key={t} type="button" title={TIER_MEANING[t]} aria-pressed={c.tier === t} onClick={() => setTier(c.id, c.tier === t ? null : t)}
                         className={`rounded-full px-3 py-1 text-xs font-bold ${c.tier === t ? "bg-fg text-bg" : "bg-sunk text-muted hover:text-fg"}`}>Tier {t}</button>
                     ))}
                   </div>
@@ -121,14 +125,29 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
                   {c.size && <Pill>{c.size} people</Pill>}
                   {c.sector && <Pill>{c.sector}</Pill>}
                   {c.note && <Pill>Has a note</Pill>}
+                  {(() => {
+                    const e = effectiveTier(c.tier, c.research);
+                    return e.tier ? <Pill tone={e.tier === "A" ? "good" : e.tier === "D" ? "warn" : "neutral"}>{e.suggested ? `Suggested Tier ${e.tier}` : `Tier ${e.tier}`}</Pill> : <Pill>Not rated</Pill>;
+                  })()}
                 </div>
+                {c.research && (c.research.work_mode || c.research.hq || c.research.pay_note || c.research.perks.length > 0) && (
+                  <p className="mt-2 text-sm text-muted">
+                    {[c.research.website, c.research.hq, c.research.work_mode ? WORK_MODE_LABEL[c.research.work_mode] : null, c.research.pay_note, c.research.perks.slice(0, 3).join(", ")].filter(Boolean).join(" · ")}
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link href={`/roles?q=${encodeURIComponent(c.name)}`} className={c.roles ? btnPrimary : btn}>View roles</Link>
                   <Link href={`/referrals?company=${encodeURIComponent(c.name)}&domain=${encodeURIComponent(c.domain ?? "")}`} className={btn}>Find people</Link>
+                  <button type="button" className={btn} aria-expanded={researchOpen === c.id} onClick={() => setResearchOpen(researchOpen === c.id ? null : c.id)}>{researchOpen === c.id ? "Close research" : "Research"}</button>
                   <button type="button" className={btn} aria-expanded={open} onClick={() => { setNotesOpen(open ? null : c.id); setDraft((d) => ({ ...d, [c.id]: d[c.id] ?? c.note })); }}>{open ? "Close notes" : "Notes"}</button>
                   {c.linkedinUrl && <a className={btn} href={c.linkedinUrl} target="_blank" rel="noopener noreferrer">LinkedIn ↗</a>}
                   {!c.hasBoard && c.domain && <a className={btn} href={`https://${c.domain}/careers`} target="_blank" rel="noopener noreferrer">Careers page ↗</a>}
                 </div>
+                {researchOpen === c.id && (
+                  <ResearchPanel companyId={c.id} name={c.name} tier={c.tier ?? null}
+                    onSaved={(r: Research) => setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, research: r } : x)))}
+                    onUseTier={(t) => setTier(c.id, t)} />
+                )}
                 {open && (
                   <div className="mt-3 flex flex-col gap-2">
                     <textarea rows={3} aria-label={`Notes on ${c.name}`} className={input} value={draft[c.id] ?? ""} onChange={(e) => setDraft((d) => ({ ...d, [c.id]: e.target.value }))} placeholder="Private notes: who you know there, what to ask, what to avoid." />

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import type { ScoredJob } from "@/lib/score";
 import Link from "next/link";
 import FitRing from "@/components/FitRing";
+import { tierRank, type Tier } from "@/lib/company-rating";
 import { formatPay, formatUsdThreshold, type PayDisplay } from "@/lib/currency";
 import { countryOf, matchesLocation, matchesQuery, openToIndia, postedWithin, seniorityOf, sourceLabel } from "@/lib/role-filters";
 
@@ -70,8 +71,10 @@ export default function RolesFeed({
   initialSaved = false,
   priorityIds = [],
   tierById = {},
+  suggestedIds = [],
 }: {
-  tierById?: Record<string, "A" | "B">;
+  suggestedIds?: string[];
+  tierById?: Record<string, Tier>;
   priorityIds?: string[];
   initialSaved?: boolean;
   initialQuery?: string;
@@ -91,6 +94,7 @@ export default function RolesFeed({
   const [indiaOnly, setIndiaOnly] = useState(false);
   const [savedOnly, setSavedOnly] = useState(initialSaved);
   const prioritySet = useMemo(() => new Set(priorityIds), [priorityIds]);
+  const suggestedSet = useMemo(() => new Set(suggestedIds), [suggestedIds]);
   // Roles at the companies you watch come first; a search or the saved view starts on "All".
   const [view, setView] = useState<"priority" | "all">(priorityIds.length > 0 && !initialSaved && !initialQuery ? "priority" : "all");
   const [display, setDisplay] = useState<PayDisplay>("INR");
@@ -179,8 +183,8 @@ export default function RolesFeed({
         const ab = reactions[a.id]?.reaction === "bookmarked" ? 1 : 0;
         const bb = reactions[b.id]?.reaction === "bookmarked" ? 1 : 0;
         if (bb !== ab) return bb - ab;
-        const at = tierById[a.id] === "A" ? 2 : tierById[a.id] === "B" ? 1 : 0;
-        const bt = tierById[b.id] === "A" ? 2 : tierById[b.id] === "B" ? 1 : 0;
+        const at = tierRank(tierById[a.id]);
+        const bt = tierRank(tierById[b.id]);
         if (bt !== at) return bt - at;
         const ap = prioritySet.has(a.id) ? 1 : 0;
         const bp = prioritySet.has(b.id) ? 1 : 0;
@@ -348,7 +352,7 @@ export default function RolesFeed({
                       <span className="rounded-md bg-good-soft px-2 py-0.5 text-xs font-semibold text-good">Open to India</span>
                     )}
                     {tierById[j.id] && (
-                      <span className="rounded-md bg-fg px-2 py-0.5 text-xs font-bold text-bg">Tier {tierById[j.id]}</span>
+                      <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${tierById[j.id] === "D" ? "bg-warn-soft text-warn" : "bg-fg text-bg"}`}>Tier {tierById[j.id]}{suggestedSet.has(j.id) ? " (suggested)" : ""}</span>
                     )}
                     <span className="rounded-md bg-signal-soft px-2 py-0.5 text-xs font-semibold text-signal">
                       {sourceLabel(j.board)}

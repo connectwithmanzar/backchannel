@@ -30,3 +30,5 @@ adds daily backups.
 - 0016_jobradar.sql: PENDING. LinkedIn connections (imported by JobRadar) and past employers / college for referral search links. Without it, JobRadar's referral import shows a message and role pages skip the connections list.
 
 - 0017_priority_tools.sql: PENDING. Company tiers (A and B), your career-gap line, the story bank and CV versions. Until it is run, the app still works: tiers, stories, CV versions and the gap line show a message asking you to run it, and watched companies still show under Priority on Jobs.
+
+- 0018_company_research.sql: PENDING. Tiers C and D (A 3.5+, B 3.0-3.4, C 2.5-2.9, D below 2.5 from the review rating) and the company research table (website, HQ, work mode, pay, perks, ratings, sources). Needs 0017 first. Until it is run, Research shows a message asking you to run it, and tiers A and B still work.
