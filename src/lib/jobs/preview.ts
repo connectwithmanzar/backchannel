@@ -16,7 +16,7 @@ export function previewScore(i: PreviewInput, profileRow: ProfileRow) {
   const n = normalise(raw, i.company || "Unknown");
   const job: Job = {
     id: "preview", company: i.company || "Unknown", title: n.title, location: i.location, remoteType: n.remote_type as RemoteType,
-    market: toMarket(n.market, n.remote_type), sourceType: "careers", board: "pasted", url: i.url, lastCheckedAt: new Date().toISOString(),
+    market: toMarket(n.market, n.remote_type, n.location), sourceType: "careers", board: "pasted", url: i.url, lastCheckedAt: new Date().toISOString(),
     currency: n.currency ?? undefined, payMin: n.ote_min ?? n.base_min ?? undefined, payMax: n.ote_max ?? n.base_max ?? undefined,
     payKind: n.ote_min != null || n.ote_max != null ? "ote" : "base", payBandStatus: n.pay_band_status === "verified" ? "verified" : "unknown",
     visaSponsorship: n.visa_sponsorship, roleFamily: toRoleFamily(n.title), description: n.description,

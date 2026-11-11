@@ -13,6 +13,7 @@ const MARKETS: Record<string, string> = {
   emea: "EMEA",
   us: "US",
   global: "Global / remote",
+  other: "Other countries",
 };
 const PAGE_SIZE = 40;
 const FAMILIES = ["SDR/BDR", "GTM Engineer", "Account Executive", "Sales leadership", "Account management", "Partnerships", "Sales ops & CS"];

@@ -35,7 +35,7 @@ export default async function TodayPage() {
   // Strong matches only count where you want to work. Until your scorecard has markets, that is India, remote in India, and global remote.
   const profileMarkets = buildSearchProfile(profile).markets;
   const wantedMarkets = new Set<string>(profileMarkets.length ? profileMarkets : ["india", "remote-in", "global"]);
-  const highFit = sc.filter((s) => (s.score ?? 0) >= 75 && s.reaction !== "skipped" && wantedMarkets.has(toMarket(s.jobs.market, s.jobs.remote_type)));
+  const highFit = sc.filter((s) => (s.score ?? 0) >= 75 && s.reaction !== "skipped" && wantedMarkets.has(toMarket(s.jobs.market, s.jobs.remote_type, s.jobs.location)));
   const wf = weeklyFunnel(events ?? []);
   const a = apps ?? [];
   const o = steps ?? [];

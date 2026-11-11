@@ -91,7 +91,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
     title: row.title,
     location: row.location ?? "",
     remoteType: (row.remote_type ?? "unknown") as RemoteType,
-    market: toMarket(row.market, row.remote_type),
+    market: toMarket(row.market, row.remote_type, row.location),
     sourceType: "careers",
     board: row.board ?? "",
     url: row.url ?? "",

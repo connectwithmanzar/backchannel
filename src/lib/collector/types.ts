@@ -21,7 +21,7 @@ export interface RawJob {
   remoteFlag?: boolean;
 }
 
-export type Market = "india" | "remote-in" | "emea" | "us" | "global";
+export type Market = "india" | "remote-in" | "emea" | "us" | "global" | "other";
 export type RemoteType = "remote" | "hybrid" | "onsite" | "unknown";
 
 /** A cleaned job, ready to store and score. */

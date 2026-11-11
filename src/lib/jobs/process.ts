@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import type { RawJob } from "@/lib/collectors/ats";
 import { htmlToText } from "@/lib/collector/fetchers";
+import { detectMarket } from "./location";
 
 // ── Which titles count as the sales roles we target ─────────────────────────
 export type Family = "SDR/BDR" | "GTM Engineer" | "Account Executive" | "Sales leadership" | "Account management" | "Partnerships" | "Sales ops & CS";
@@ -38,32 +39,8 @@ export function detectRemoteType(location: string, remoteFlag?: boolean, descrip
 }
 
 // ── Market (country label) ──────────────────────────────────────────────────
-const MARKET_MAP: [RegExp, string][] = [
-  [/\b(india|mumbai|bangalore|bengaluru|delhi|new delhi|gurgaon|gurugram|noida|hyderabad|pune|chennai|kolkata|ahmedabad)\b/i, "India"],
-  [/\b(uk|u\.k\.|united kingdom|england|scotland|london|manchester|edinburgh|bristol|leeds|cambridge, uk)\b/i, "UK"],
-  [/\b(ireland|dublin|cork)\b/i, "Ireland"],
-  [/\b(germany|deutschland|berlin|munich|münchen|hamburg|frankfurt|cologne|köln|dach)\b/i, "Germany"],
-  [/\b(netherlands|nederland|amsterdam|rotterdam|utrecht|eindhoven|benelux)\b/i, "Netherlands"],
-  [/\b(france|paris|lyon|bordeaux)\b/i, "France"],
-  [/\b(spain|madrid|barcelona)\b/i, "Spain"],
-  [/\b(sweden|stockholm|denmark|copenhagen|norway|oslo|finland|helsinki|nordics)\b/i, "Nordics"],
-  [/\b(poland|warsaw|krakow|czech|prague|romania|bucharest|portugal|lisbon|italy|milan|switzerland|zurich|austria|vienna|belgium|brussels|estonia|tallinn)\b/i, "Europe"],
-  [/\b(emea|europe)\b/i, "Europe"],
-  [/\b(uae|dubai|abu dhabi|saudi|riyadh|qatar|doha)\b/i, "UAE"],
-  [/\b(israel|tel aviv)\b/i, "Israel"],
-  [/\b(singapore)\b/i, "Singapore"],
-  [/\b(australia|sydney|melbourne|brisbane|new zealand|auckland)\b/i, "Australia"],
-  [/\b(canada|toronto|vancouver|montreal)\b/i, "Canada"],
-  [/\b(us|u\.s\.|usa|united states|new york|nyc|san francisco|bay area|austin|chicago|boston|seattle|denver|atlanta|los angeles|miami|dallas|north america|amer)\b/i, "US"],
-  [/,\s?(A[LKZR]|C[AOT]|D[EC]|FL|GA|HI|I[DLNA]|K[SY]|LA|M[EDAINSOT]|N[EVHJMYCD]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[TA]|W[AVIY])\b/, "US"],
-  [/\b(apac|asia)\b/i, "APAC"],
-];
-
-export function detectMarket(location: string): string {
-  for (const [re, market] of MARKET_MAP) if (re.test(location)) return market;
-  if (/remote|anywhere|global|worldwide/i.test(location)) return "Remote";
-  return location.trim() ? "Other" : "Unknown";
-}
+// The place rules live in ./location so screens can use them too.
+export { detectMarket };
 
 // ── Visa ────────────────────────────────────────────────────────────────────
 export function detectVisa(description: string): "yes" | "no" | "unknown" {
