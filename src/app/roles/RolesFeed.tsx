@@ -68,7 +68,9 @@ export default function RolesFeed({
   defaultMarkets = [],
   initialQuery = "",
   initialSaved = false,
+  priorityIds = [],
 }: {
+  priorityIds?: string[];
   initialSaved?: boolean;
   initialQuery?: string;
   jobs: ScoredJob[];
@@ -86,6 +88,9 @@ export default function RolesFeed({
   const [countries, setCountries] = useState<Set<string>>(new Set());
   const [indiaOnly, setIndiaOnly] = useState(false);
   const [savedOnly, setSavedOnly] = useState(initialSaved);
+  const prioritySet = useMemo(() => new Set(priorityIds), [priorityIds]);
+  // Roles at the companies you watch come first; a search or the saved view starts on "All".
+  const [view, setView] = useState<"priority" | "all">(priorityIds.length > 0 && !initialSaved && !initialQuery ? "priority" : "all");
   const [display, setDisplay] = useState<PayDisplay>("INR");
   const [payOnly, setPayOnly] = useState(false);
   const [minUsd, setMinUsd] = useState(0);
@@ -152,6 +157,7 @@ export default function RolesFeed({
         // Jobs you saved or added yourself are never hidden by the market or role-type filters.
         (isMine(j) || ((!markets.size || markets.has(j.market)) && (!families.size || families.has(j.roleFamily)))) &&
         (!savedOnly || isMine(j)) &&
+        (view === "all" || prioritySet.has(j.id) || isMine(j)) &&
         (workType === "any" || j.remoteType === workType) &&
         (seniority === "any" || seniorityOf(j.title) === seniority) &&
         (!visaOnly || j.visaSponsorship === "yes") &&
@@ -171,10 +177,13 @@ export default function RolesFeed({
         const ab = reactions[a.id]?.reaction === "bookmarked" ? 1 : 0;
         const bb = reactions[b.id]?.reaction === "bookmarked" ? 1 : 0;
         if (bb !== ab) return bb - ab;
+        const ap = prioritySet.has(a.id) ? 1 : 0;
+        const bp = prioritySet.has(b.id) ? 1 : 0;
+        if (bp !== ap) return bp - ap;
         return b.score - a.score;
       });
     return r;
-  }, [jobs, isMine, markets, families, countries, indiaOnly, savedOnly, query, locationQ, posted, workType, seniority, visaOnly, payOnly, minUsd, sort, showSkipped, reactions]);
+  }, [jobs, prioritySet, view, isMine, markets, families, countries, indiaOnly, savedOnly, query, locationQ, posted, workType, seniority, visaOnly, payOnly, minUsd, sort, showSkipped, reactions]);
 
   const skippedCount = Object.values(reactions).filter((r) => r.reaction === "skipped").length;
 
@@ -266,6 +275,19 @@ export default function RolesFeed({
 
       {/* Feed */}
       <div className="min-w-0">
+        {priorityIds.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="Which roles to show">
+            <button type="button" aria-pressed={view === "priority"} onClick={() => setView("priority")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${view === "priority" ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
+              Priority <span className="num opacity-70">{priorityIds.length}</span>
+            </button>
+            <button type="button" aria-pressed={view === "all"} onClick={() => setView("all")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${view === "all" ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
+              All matches <span className="num opacity-70">{jobs.length}</span>
+            </button>
+            <span className="text-sm text-muted">{view === "priority" ? "Roles at the companies you watch." : "Everything, with your watched companies first."}</span>
+          </div>
+        )}
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3 text-sm text-muted">
           <span className="num">{rows.length} of {jobs.length} roles</span>
           <label>Pay in{" "}

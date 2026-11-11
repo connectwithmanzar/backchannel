@@ -30,13 +30,16 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
   const [supabase, user] = await Promise.all([createClient(), getSessionUser()]);
 
   // Independent queries run together instead of one after another.
-  const [{ data: profileRow }, sharedJobs, { data: ownJobs }, { data: scoreRows }] = await Promise.all([
+  const [{ data: profileRow }, sharedJobs, { data: ownJobs }, { data: scoreRows }, { data: watchRows }] = await Promise.all([
     supabase.from("profiles").select("name, tools, markets, target_titles, min_ote_usd, min_ote_by_market").maybeSingle(),
     // Shared jobs come from a 5-minute cache; the jobs you pasted yourself are read fresh (row-level security shows only yours).
     getSharedJobs(),
     supabase.from("jobs").select(JOB_COLUMNS).eq("is_active", true).not("added_by", "is", null),
     user
       ? supabase.from("job_scores").select("job_id, score, parts, explanation, model, reaction").eq("user_id", user.id)
+      : Promise.resolve({ data: null }),
+    user
+      ? supabase.from("watchlist").select("company_id").eq("user_id", user.id).eq("watching", true)
       : Promise.resolve({ data: null }),
   ]);
   const rows = [...sharedJobs, ...(ownJobs ?? [])]
@@ -49,6 +52,10 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
   const visibleRows = (rows ?? []).filter(
     (row) => !isExcludedCompany((row.companies as unknown as { name: string } | null)?.name, row.url)
   );
+
+  // Roles at the companies you watch (your target list) come first on the Jobs page.
+  const watched = new Set((watchRows ?? []).map((w) => w.company_id));
+  const priorityIds = visibleRows.filter((row) => row.company_id && watched.has(row.company_id)).map((row) => row.id);
 
   const signals = signalsFromRows(visibleRows);
   const jobs: Job[] = visibleRows.map((row) => ({
@@ -135,7 +142,13 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
         </details>
       )}
 
-      <PasteJob /><AlertImport />
+      <details className="mt-4 rounded-card border border-line bg-surface">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">+ Add a job, or find a company&apos;s roles</summary>
+        <div className="border-t border-line px-4 pb-4">
+          <PasteJob /><AlertImport />
+          <CompanyJobsFinder />
+        </div>
+      </details>
 
       {jobs.length === 0 && (
         <div className="mt-4 rounded-card bg-signal-soft px-4 py-3 text-sm text-signal">
@@ -151,8 +164,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
         </div>
       )}
 
-      <CompanyJobsFinder />
-      <ScopeSwitch mineLabel="My roles" mine={<RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets} initialQuery={(sp.q ?? "").slice(0, 100)} initialSaved={sp.saved === "1"} />} web={<WebSearch kind="jobs" />} />
+      <ScopeSwitch mineLabel="My roles" mine={<RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets} initialQuery={(sp.q ?? "").slice(0, 100)} initialSaved={sp.saved === "1"} priorityIds={priorityIds} />} web={<WebSearch kind="jobs" />} />
     </section>
   );
 }
