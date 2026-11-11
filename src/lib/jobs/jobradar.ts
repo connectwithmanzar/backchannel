@@ -1,9 +1,9 @@
 // JobRadar is the owner's own job-search app. It runs on his Mac and reads LinkedIn, Naukri, Indeed,
-// Glassdoor and Bayt. Test phase only: jobs it sends are private to the owner (added_by = owner,
+// Glassdoor and Bayt (JobSpy), plus Instahyre, NaukriGulf, Foundit and GulfTalent (via Apify). Test phase only: jobs it sends are private to the owner (added_by = owner,
 // source "jobradar:<site>") and are dropped before any public launch. Backchannel's servers never
 // fetch those sites themselves; they only receive what the owner sends.
 
-export const JOBRADAR_SITES = ["linkedin", "indeed", "naukri", "glassdoor", "bayt"] as const;
+export const JOBRADAR_SITES = ["linkedin", "indeed", "naukri", "glassdoor", "bayt", "instahyre", "naukrigulf", "foundit", "gulftalent"] as const;
 export type JobRadarSite = (typeof JOBRADAR_SITES)[number];
 
 export interface JobRadarListing {
@@ -51,4 +51,7 @@ export function uniqueCompanies(listings: Pick<JobRadarListing, "company">[], ma
   return out;
 }
 
-export const SITE_NAMES: Record<JobRadarSite, string> = { linkedin: "LinkedIn", indeed: "Indeed", naukri: "Naukri", glassdoor: "Glassdoor", bayt: "Bayt" };
+export const SITE_NAMES: Record<JobRadarSite, string> = {
+  linkedin: "LinkedIn", indeed: "Indeed", naukri: "Naukri", glassdoor: "Glassdoor", bayt: "Bayt",
+  instahyre: "Instahyre", naukrigulf: "NaukriGulf", foundit: "Foundit", gulftalent: "GulfTalent",
+};
