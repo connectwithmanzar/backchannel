@@ -44,3 +44,9 @@ Vercel deploys automatically in about 2 minutes.
 6. **Autopilot → Settings**: fill your saved answers (visa, salary, notice period). Turn on "Prepare automatically every morning" if you want.
 
 From then on, every morning: new roles are collected (06:00 IST), scored, applications prepared, follow-up emails sent, and a Telegram alert goes out (07:15 IST).
+
+## Connect JobRadar (optional)
+JobRadar (the job-search app on your Mac) can send jobs into Backchannel.
+1. Vercel → backchannel → Settings → Environment Variables → add `JOBRADAR_SECRET` with a long random value (for example, make one at https://www.uuidgenerator.net). Save, then Deployments → ⋯ → Redeploy.
+2. In JobRadar, open **Backchannel connection** in the sidebar. Paste `https://backchannel-eight.vercel.app` and the same secret, then click Save.
+3. Search, tick the jobs you like, and click **Send to Backchannel**. They show up on Roles as your own jobs, tagged JobRadar.

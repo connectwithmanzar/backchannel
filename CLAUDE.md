@@ -26,6 +26,7 @@ Full product built: Today dashboard, Roles (collection from Greenhouse/Lever/Ash
 ## Hard rules (from the brief)
 1. No LinkedIn automation, login, scraping or stored LinkedIn credentials. LinkedIn steps are copy-ready tasks only.
 2. Only public ATS feeds and licensed data providers. No scraping sites that forbid it.
+   - Test-phase exception (owner decision, 11 Nov 2026): JobRadar, the owner's own app on his Mac (JobSpy), can send jobs from LinkedIn/Naukri/Indeed/Glassdoor/Bayt to `/api/jobs/jobradar-import`. They are saved private to the owner with `source` starting `jobradar:`. Backchannel's servers never fetch those sites. Before any public launch: remove the endpoint and delete `jobs where source like 'jobradar:%'`.
 3. Never invent facts about the user in CVs, answers or emails.
 4. Visa, work authorisation, salary, notice period and diversity questions always stop and ask the user.
 5. Stealth: never contact or surface people at the user's current employer (blocklist).
