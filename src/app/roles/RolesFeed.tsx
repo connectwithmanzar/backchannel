@@ -95,6 +95,8 @@ export default function RolesFeed({
   const [savedOnly, setSavedOnly] = useState(initialSaved);
   const prioritySet = useMemo(() => new Set(priorityIds), [priorityIds]);
   const suggestedSet = useMemo(() => new Set(suggestedIds), [suggestedIds]);
+  // The Priority count follows your market choice, so the number matches what the list can show.
+  const priorityCount = useMemo(() => jobs.filter((j) => prioritySet.has(j.id) && (!markets.size || markets.has(j.market))).length, [jobs, prioritySet, markets]);
   // Roles at the companies you watch come first; a search or the saved view starts on "All".
   const [view, setView] = useState<"priority" | "all">(priorityIds.length > 0 && !initialSaved && !initialQuery ? "priority" : "all");
   const [display, setDisplay] = useState<PayDisplay>("INR");
@@ -288,7 +290,7 @@ export default function RolesFeed({
           <div className="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="Which roles to show">
             <button type="button" aria-pressed={view === "priority"} onClick={() => setView("priority")}
               className={`rounded-full px-4 py-2 text-sm font-semibold ${view === "priority" ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
-              Priority <span className="num opacity-70">{priorityIds.length}</span>
+              Priority <span className="num opacity-70">{priorityCount}</span>
             </button>
             <button type="button" aria-pressed={view === "all"} onClick={() => setView("all")}
               className={`rounded-full px-4 py-2 text-sm font-semibold ${view === "all" ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>

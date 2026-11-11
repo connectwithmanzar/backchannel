@@ -191,7 +191,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
         </div>
       )}
 
-      <ScopeSwitch mineLabel="My roles" mine={<RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets} initialQuery={(sp.q ?? "").slice(0, 100)} initialSaved={sp.saved === "1"} priorityIds={priorityIds} tierById={tierById} suggestedIds={suggestedIds} />} web={<WebSearch kind="jobs" />} />
+      <ScopeSwitch mineLabel="My roles" mine={<RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets.length ? profile.markets : ["india", "remote-in", "global"]} initialQuery={(sp.q ?? "").slice(0, 100)} initialSaved={sp.saved === "1"} priorityIds={priorityIds} tierById={tierById} suggestedIds={suggestedIds} />} web={<WebSearch kind="jobs" />} />
     </section>
   );
 }
