@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
         const job = jobRes.data as { title: string; url: string } | null;
         const facts = p ? Object.entries(p).filter(([, v]) => v && (!Array.isArray(v) || v.length)).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n") : "";
         const msg = await aiText(
-          `Write a short referral request from a sales professional to someone they know. Warm, specific, easy to say yes to. Use only the facts given; never invent shared history. No em-dashes. Max ${r.channel === "linkedin" || r.channel === "whatsapp" ? 600 : 900} characters. End by offering to send a short blurb and CV they can forward.`,
+          `Write a short referral request from a sales professional to someone they know. Warm, specific, easy to say yes to. Use only the facts given; never invent shared history. No em-dashes. Max ${r.channel === "linkedin" || r.channel === "whatsapp" ? 600 : 900} characters. End by offering to send a short blurb and CV they can forward. If it fits naturally, mention in one short clause that many companies pay a referral bonus when a referred hire works out.`,
           `Sender facts:\n${facts}\nRecipient: ${r.referrer_name}${r.referrer_relation ? ` (${r.referrer_relation})` : ""} at ${r.company_name}\nRole: ${job?.title ?? r.role_title ?? "a sales role there"}${job?.url ? ` (${job.url})` : ""}\nChannel: ${r.channel}`,
           { maxTokens: 500 }
         );

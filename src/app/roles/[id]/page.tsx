@@ -8,6 +8,8 @@ import Description from "@/components/Description";
 import { openToIndia, sourceLabel } from "@/lib/role-filters";
 import RoleActions from "./RoleActions";
 import CompanyActions from "./CompanyActions";
+import WhoToAsk from "./WhoToAsk";
+import { matchConnections, referralSearchLinks, companyKey, type Connection } from "@/lib/jobs/referral-paths";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,19 @@ export default async function RolePage({ params }: { params: Promise<{ id: strin
   const indiaOk = openToIndia(job.location ?? "", job.remote_type ?? "unknown");
   const stageIdx = app ? STAGES.findIndex(([k]) => k === (app.stage ?? "applied")) : -1;
   const changes = (app?.cv_changes ?? []) as string[];
+
+  // Referral engine: your connections here (from JobRadar's LinkedIn import) and one-click LinkedIn searches.
+  // Both queries fail quietly until migration 0016 has been run.
+  const firstWord = companyKey(company).split(" ")[0] ?? "";
+  const [{ data: conns }, { data: prof }] = await Promise.all([
+    firstWord.length >= 2
+      ? db.from("connections").select("full_name, company, position, linkedin_url, connected_on").eq("user_id", uid).like("company_key", `${firstWord}%`).limit(200)
+      : Promise.resolve({ data: [] as Connection[] }),
+    db.from("profiles").select("*").eq("user_id", uid).maybeSingle(),
+  ]);
+  const people = matchConnections((conns ?? []) as Connection[], company);
+  const pr = (prof ?? {}) as { past_employers?: string[] | null; college?: string | null };
+  const searchLinks = referralSearchLinks(company, job.title, pr.past_employers ?? [], pr.college ?? null);
 
   return (
     <section className="py-6">
@@ -116,7 +131,8 @@ export default async function RolePage({ params }: { params: Promise<{ id: strin
         <aside className="flex min-w-[280px] flex-[1_1_300px] flex-col gap-4">
           <Card>
             <h2 className="mb-2 text-[17px] font-semibold">Who to ask about this role</h2>
-            <p className="mb-3 text-sm text-muted">Find the hiring side or a recruiter at {company}. You message them yourself; nothing touches your LinkedIn.</p>
+            <p className="mb-3 text-sm text-muted">People you know at {company}, best first, and searches to find more. You message them yourself; nothing touches your LinkedIn.</p>
+            <div className="mb-3"><WhoToAsk company={company} roleTitle={job.title} jobId={id} people={people} links={searchLinks} /></div>
             <Link href={`/referrals?company=${encodeURIComponent(company)}&domain=${encodeURIComponent(domain)}&job=${encodeURIComponent(id)}`} className={btn}>Find people at {company}</Link>
           </Card>
           <Card>

@@ -26,3 +26,5 @@ adds daily backups.
 - `HEARTBEAT_OUTREACH_URL` and `HEARTBEAT_DAILY_URL`: a monitor address (for example a Healthchecks.io check) pinged after each successful run.
 
 - 0013_company_status.sql: PENDING. Adds status and notes per company (Interested, Applied, Not for me) and a per-person outcome (call booked, referral, interview) for the Pipeline board. Everything else works without it.
+
+- 0016_jobradar.sql: PENDING. LinkedIn connections (imported by JobRadar) and past employers / college for referral search links. Without it, JobRadar's referral import shows a message and role pages skip the connections list.

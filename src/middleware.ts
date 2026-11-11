@@ -8,7 +8,8 @@ import { isWarmAuthorized } from "@/lib/warm";
 const CRON_PATHS = new Set(["/api/collect-jobs", "/api/notify", "/api/daily", "/api/outreach-tick", "/api/warm", "/api/discover", "/api/jobs/jobradar-import"]);
 
 export async function middleware(request: NextRequest) {
-  if (CRON_PATHS.has(request.nextUrl.pathname)) {
+  // JobRadar (the owner's Mac app) checks JOBRADAR_SECRET itself on every /api/jobradar/* route and fails closed.
+  if (CRON_PATHS.has(request.nextUrl.pathname) || request.nextUrl.pathname.startsWith("/api/jobradar/")) {
     return NextResponse.next({ request });
   }
   // The warm-up visits pages without signing in. It must carry the secret key, and it only ever reads what a signed-out visitor could.
