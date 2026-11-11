@@ -3,28 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-
-type NavLink = { href: string; label: string };
-type Group = { id: string; label: string; links: NavLink[] };
-
-const PRIMARY: NavLink[] = [
-  { href: "/today", label: "Today" },
-  { href: "/roles", label: "Matches" },
-  { href: "/companies", label: "Companies" },
-  { href: "/outreach", label: "Outreach" },
-  { href: "/pipeline", label: "Pipeline" },
-];
-
-const GROUPS: Group[] = [
-  { id: "more", label: "More", links: [
-    { href: "/autopilot", label: "Applications" }, { href: "/referrals", label: "Referrals" },
-    { href: "/offers", label: "Offers" }, { href: "/profile", label: "My profile" },
-    { href: "/pay", label: "Pay benchmark" }, { href: "/sources", label: "Company sources" },
-    { href: "/extension", label: "Chrome extension" },
-  ] },
-];
-
-const isOn = (path: string, href: string) => path === href || path.startsWith(`${href}/`);
+import { TABS, MORE_LINKS, subLinksFor, isOn, tabIsActive } from "@/lib/nav-config";
 
 export default function Nav({ email }: { email: string }) {
   const path = usePathname();
@@ -52,16 +31,26 @@ export default function Nav({ email }: { email: string }) {
     router.refresh();
   }
 
-  const groupActive = (g: Group) => g.links.some((l) => isOn(path, l.href));
+  const moreActive = MORE_LINKS.some((l) => isOn(path, l.href));
+  const onProfile = isOn(path, "/profile");
+  const initial = (email.trim()[0] ?? "?").toUpperCase();
+  const subLinks = subLinksFor(path);
 
-  function Menu({ g, where }: { g: Group; where: "top" | "bottom" }) {
+  const avatar = (
+    <Link href="/profile" aria-label="Your profile" aria-current={onProfile ? "page" : undefined}
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${onProfile ? "bg-accent text-accent-ink" : "bg-fg text-bg hover:opacity-90"}`}>
+      {initial}
+    </Link>
+  );
+
+  function MoreMenu({ where }: { where: "top" | "bottom" }) {
     return (
-      <ul id={`menu-${where}-${g.id}`}
+      <ul id={`menu-${where}-more`}
         className={where === "top"
           ? "absolute left-0 top-full z-30 mt-1 min-w-48 rounded-xl border border-line bg-surface p-1 shadow-lg"
           : "fixed inset-x-3 z-30 rounded-2xl border border-line bg-surface p-1 shadow-2xl"}
         style={where === "bottom" ? { bottom: "calc(env(safe-area-inset-bottom, 0px) + 68px)" } : undefined}>
-        {g.links.map((l) => (
+        {MORE_LINKS.map((l) => (
           <li key={l.href}>
             <Link href={l.href} aria-current={isOn(path, l.href) ? "page" : undefined}
               className={`block rounded-lg px-3 py-2.5 text-sm font-medium md:py-2 ${isOn(path, l.href) ? "bg-accent-soft text-fg" : "text-muted hover:bg-sunk hover:text-fg"}`}>
@@ -86,50 +75,62 @@ export default function Nav({ email }: { email: string }) {
           </Link>
 
           <nav aria-label="Main" className="ml-2 hidden flex-1 items-center gap-1 md:flex">
-            {PRIMARY.map((l) => (
-              <Link key={l.href} href={l.href} aria-current={isOn(path, l.href) ? "page" : undefined}
-                className={`rounded-xl px-3.5 py-2 text-sm font-medium ${isOn(path, l.href) ? "bg-accent-soft font-semibold text-accent" : "text-muted hover:bg-sunk hover:text-fg"}`}>
-                {l.label}
+            {TABS.map((t) => (
+              <Link key={t.href} href={t.href} aria-current={tabIsActive(path, t) ? "page" : undefined}
+                className={`rounded-xl px-3.5 py-2 text-sm font-medium ${tabIsActive(path, t) ? "bg-accent-soft font-semibold text-accent" : "text-muted hover:bg-sunk hover:text-fg"}`}>
+                {t.label}
               </Link>
             ))}
-            {GROUPS.map((g) => (
-              <div key={g.id} className="relative">
-                <button type="button" aria-expanded={open === `top-${g.id}`} aria-controls={`menu-top-${g.id}`}
-                  onClick={() => setOpen(open === `top-${g.id}` ? null : `top-${g.id}`)}
-                  className={`flex items-center gap-1 rounded-xl px-3.5 py-2 text-sm font-medium ${groupActive(g) ? "bg-accent-soft font-semibold text-accent" : "text-muted hover:bg-sunk hover:text-fg"}`}>
-                  {g.label}
-                  <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                </button>
-                {open === `top-${g.id}` && <Menu g={g} where="top" />}
-              </div>
-            ))}
+            <div className="relative">
+              <button type="button" aria-expanded={open === "top-more"} aria-controls="menu-top-more"
+                onClick={() => setOpen(open === "top-more" ? null : "top-more")}
+                className={`flex items-center gap-1 rounded-xl px-3.5 py-2 text-sm font-medium ${moreActive ? "bg-accent-soft font-semibold text-accent" : "text-muted hover:bg-sunk hover:text-fg"}`}>
+                More
+                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+              {open === "top-more" && <MoreMenu where="top" />}
+            </div>
           </nav>
 
-          {email && <span className="ml-auto hidden truncate text-sm text-muted md:block" title="Signed in as">{email}</span>}
-          <button onClick={signOut} className="ml-auto rounded-full px-3 py-1.5 text-sm font-medium text-muted hover:text-fg md:ml-0">
-            Sign out
-          </button>
+          <div className="ml-auto flex items-center gap-2 md:ml-0">
+            {email && <span className="hidden max-w-48 truncate text-sm text-muted lg:block" title="Signed in as">{email}</span>}
+            {avatar}
+            <button onClick={signOut} className="rounded-full px-3 py-1.5 text-sm font-medium text-muted hover:text-fg">
+              Sign out
+            </button>
+          </div>
         </div>
+
+        {subLinks.length > 0 && (
+          <nav aria-label="Section" className="border-t border-line bg-bg">
+            <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-1.5">
+              {subLinks.map((l) => (
+                <Link key={l.href} href={l.href} aria-current={isOn(path, l.href) ? "page" : undefined}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium ${isOn(path, l.href) ? "bg-fg font-semibold text-bg" : "text-muted hover:bg-sunk hover:text-fg"}`}>
+                  {l.label}
+                </Link>
+              ))}
+            </div>
+          </nav>
+        )}
       </header>
 
       <nav aria-label="Main (mobile)" className={`fixed inset-x-0 bottom-0 ${open?.startsWith("bottom") ? "z-50" : "z-20"} border-t border-line bg-surface md:hidden`}
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         <div className="mx-auto grid max-w-md grid-cols-6">
-          {PRIMARY.map((l) => (
-            <Link key={l.href} href={l.href} aria-current={isOn(path, l.href) ? "page" : undefined}
-              className={`py-3.5 text-center text-[11px] font-semibold ${isOn(path, l.href) ? "text-accent" : "text-muted"}`}>
-              {l.label}
+          {TABS.map((t) => (
+            <Link key={t.href} href={t.href} aria-current={tabIsActive(path, t) ? "page" : undefined}
+              className={`py-3.5 text-center text-[11px] font-semibold ${tabIsActive(path, t) ? "text-accent" : "text-muted"}`}>
+              {t.label}
             </Link>
           ))}
-          {GROUPS.map((g) => (
-            <button key={g.id} type="button" aria-expanded={open === `bottom-${g.id}`} aria-controls={`menu-bottom-${g.id}`}
-              onClick={() => setOpen(open === `bottom-${g.id}` ? null : `bottom-${g.id}`)}
-              className={`py-3.5 text-center text-[11px] font-semibold ${groupActive(g) || open === `bottom-${g.id}` ? "text-accent" : "text-muted"}`}>
-              {g.label}
-            </button>
-          ))}
+          <button type="button" aria-expanded={open === "bottom-more"} aria-controls="menu-bottom-more"
+            onClick={() => setOpen(open === "bottom-more" ? null : "bottom-more")}
+            className={`py-3.5 text-center text-[11px] font-semibold ${moreActive || open === "bottom-more" ? "text-accent" : "text-muted"}`}>
+            More
+          </button>
         </div>
-        {GROUPS.map((g) => open === `bottom-${g.id}` && <Menu key={g.id} g={g} where="bottom" />)}
+        {open === "bottom-more" && <MoreMenu where="bottom" />}
       </nav>
     </div>
   );

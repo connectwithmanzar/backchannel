@@ -70,7 +70,7 @@ export default function ProfileClient() {
       <div className="mb-1 text-xs font-semibold uppercase tracking-widest text-muted">
         Your sales profile
       </div>
-      <h1 className="font-display text-3xl font-extrabold">My profile</h1>
+      <h1 className="font-display text-3xl font-extrabold">Your profile</h1>
       <p className="mb-6 mt-1 text-sm text-muted">
         Fill your scorecard any way you like. Matches update as soon as you save.
       </p>

@@ -108,10 +108,10 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
   return (
     <section className="py-6">
       <div className="text-xs font-semibold uppercase tracking-wider text-muted">
-        For SDR · BDR · GTM · B2B sales
+        Your matches · SDR · BDR · GTM · sales
       </div>
       <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">
-        Matching public roles
+        Jobs
       </h1>
       <p className="mt-2 max-w-[62ch] text-muted">
         Backchannel collects public sales roles from {seedCount} company careers pages and ranks them against your

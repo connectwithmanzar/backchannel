@@ -91,7 +91,7 @@ export default async function RolePage({ params }: { params: Promise<{ id: strin
               </div>
             </Card>
           ) : (
-            <Card><p className="text-sm text-muted">This role has not been scored yet. It is scored with the next morning run, or press “Score now” on Matches.</p></Card>
+            <Card><p className="text-sm text-muted">This role has not been scored yet. It is scored with the next morning run, or press “Score now” on Jobs.</p></Card>
           )}
 
           {(fits.length > 0 || gaps.length > 0) && (

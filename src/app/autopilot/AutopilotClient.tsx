@@ -43,7 +43,7 @@ export default function AutopilotClient({ apps, suggestions, settings, savedAnsw
 
   return (
     <div className="flex flex-col gap-4">
-      {!hasCv && <p className="rounded-lg bg-signal-soft px-3 py-2 text-sm text-signal">Upload your CV on <Link className="underline" href="/profile">My profile</Link> first. Autopilot only uses facts from your CV.</p>}
+      {!hasCv && <p className="rounded-lg bg-signal-soft px-3 py-2 text-sm text-signal">Upload your CV on <Link className="underline" href="/profile">your profile</Link> first. Autopilot only uses facts from your CV.</p>}
       {!aiReady && <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">AI isn&apos;t connected yet, so applications can&apos;t be prepared. Add an AI key in Vercel (see the setup guide).</p>}
       {msg && <p role="status" className={`rounded-lg px-3 py-2 text-sm ${msg.ok ? "bg-good-soft text-good" : "bg-warn-soft text-warn"}`}>{msg.text}</p>}
 

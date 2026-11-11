@@ -39,7 +39,7 @@ export default function ExtensionPage() {
             <ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm">
               <li>Scores the job on screen against your profile, with the reasons.</li>
               <li>Warns when a role does not look open to candidates in India.</li>
-              <li>Saves it to your Matches, where you can tailor your CV.</li>
+              <li>Saves it to your Jobs, where you can tailor your CV.</li>
               <li>Opens the people-finder for that company.</li>
             </ul>
           </Card>

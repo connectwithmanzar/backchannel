@@ -154,7 +154,7 @@ export default async function TodayPage() {
               <FitRing score={m.score ?? 0} />
             </Card>
           )) : (
-            <Card><p className="text-sm text-muted">No new strong matches yet. Add companies on <Link href="/companies" className="font-semibold text-accent">Companies</Link> or run a search on <Link href="/roles" className="font-semibold text-accent">Matches</Link>, and new roles arrive every morning.</p></Card>
+            <Card><p className="text-sm text-muted">No new strong matches yet. Add companies on <Link href="/companies" className="font-semibold text-accent">Companies</Link> or run a search on <Link href="/roles" className="font-semibold text-accent">Jobs</Link>, and new roles arrive every morning.</p></Card>
           )}
           <Link href="/roles" className={`${btn} self-start`}>See all matches</Link>
         </section>
