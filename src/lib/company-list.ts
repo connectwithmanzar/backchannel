@@ -57,11 +57,13 @@ export function roleCounts(jobs: JobStub[], now = Date.now()): Map<string, { rol
     if (now - Date.parse(j.created_at) <= 7 * 864e5) c.newThisWeek++;
     out.set(j.company_id, c);
   }
+  // When every role of a company appeared in the same week, that is its first collection, not a hiring surge.
+  for (const c of out.values()) if (c.newThisWeek === c.roles) c.newThisWeek = 0;
   return out;
 }
 
-/** A company needs attention when its board cannot be read, it has none, or its last check failed. */
-export const needsAttention = (c: CompanyRow) => c.enabled && (!c.hasBoard || !!c.error);
+/** A company needs attention when its last check failed, or you watch it but it has no readable job board. */
+export const needsAttention = (c: CompanyRow) => c.enabled && (!!c.error || (c.watching && !c.hasBoard));
 
 export function filterCompanies(rows: CompanyRow[], filter: CompanyFilter, query = ""): CompanyRow[] {
   const q = query.trim().toLowerCase();

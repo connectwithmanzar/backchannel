@@ -36,9 +36,10 @@ export default function ChatWidget() {
   return (
     <>
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls="bc-chat"
-        className="fixed z-40 rounded-full bg-accent px-5 py-3 font-semibold text-accent-ink shadow-lg"
+        aria-label={open ? "Close the assistant" : "Ask Backchannel"} title={open ? "Close" : "Ask Backchannel"}
+        className="fixed z-40 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-lg font-bold text-accent-ink shadow-lg"
         style={{ right: "calc(env(safe-area-inset-right,0px) + 20px)", bottom: "calc(env(safe-area-inset-bottom,0px) + var(--tabbar-h, 0px) + 20px)" }}>
-        {open ? "Close" : "Ask Backchannel"}
+        <span aria-hidden="true">{open ? "×" : "?"}</span>
       </button>
       {open && (
         <div id="bc-chat" role="dialog" aria-label="Backchannel assistant"

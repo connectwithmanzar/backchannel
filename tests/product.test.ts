@@ -867,16 +867,17 @@ test("company list counts roles per company and filters by status, India and att
     { company_id: null, location: "Dubai", created_at: "2026-11-09T00:00:00Z" },
   ], now);
   assert.deepEqual(counts.get("a"), { roles: 2, inIndia: 1, newThisWeek: 1 });
-  assert.deepEqual(counts.get("b"), { roles: 1, inIndia: 0, newThisWeek: 1 });
+  assert.deepEqual(counts.get("b"), { roles: 1, inIndia: 0, newThisWeek: 0 });   // all its roles are new this week: first collection, not a surge
   assert.equal(counts.size, 2);                                              // roles with no company are ignored
   const row = (o: Partial<CompanyRow>): CompanyRow => ({ id: "x", name: "X", domain: null, atsType: "lever", hasBoard: true, enabled: true, error: null, lastCheckedAt: null, roles: 0, inIndia: 0, newThisWeek: 0, country: null, size: null, sector: null, linkedinUrl: null, companyType: null, hiring: null, linkedinOpenings: null, status: null, note: "", watching: false, ...o });
-  const rows = [row({ id: "1", name: "Acme", inIndia: 2 }), row({ id: "2", name: "Globex", status: "interested" }), row({ id: "3", name: "Initech", status: "not_for_me" }), row({ id: "4", name: "Hooli", hasBoard: false }), row({ id: "5", name: "Umbrella", error: "timed out", status: "applied" })];
+  const rows = [row({ id: "1", name: "Acme", inIndia: 2 }), row({ id: "2", name: "Globex", status: "interested" }), row({ id: "3", name: "Initech", status: "not_for_me" }), row({ id: "4", name: "Hooli", hasBoard: false, watching: true }), row({ id: "5", name: "Umbrella", error: "timed out", status: "applied" })];
   assert.deepEqual(filterCompanies(rows, "all").map((c) => c.id), ["1", "2", "4", "5"]);   // "not for me" is hidden unless searched
   assert.deepEqual(filterCompanies(rows, "india").map((c) => c.id), ["1"]);
   assert.deepEqual(filterCompanies(rows, "interested").map((c) => c.id), ["2"]);
   assert.deepEqual(filterCompanies(rows, "attention").map((c) => c.id), ["4", "5"]);
   assert.deepEqual(filterCompanies(rows, "all", "init").map((c) => c.id), ["3"]);
-  assert.equal(needsAttention(row({ enabled: false, hasBoard: false })), false);
+  assert.equal(needsAttention(row({ enabled: false, hasBoard: false, watching: true })), false);
+  assert.equal(needsAttention(row({ hasBoard: false })), false);                // an unwatched company without a board is not a problem
   assert.deepEqual(filterCounts(rows), { all: 4, india: 1, hiring: 0, gulf: 0, interested: 1, applied: 1, attention: 2 });
 });
 

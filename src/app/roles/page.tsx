@@ -1,5 +1,5 @@
 import { createClient, getSessionUser } from "@/lib/supabase/server";
-import { getSharedJobs, JOB_COLUMNS } from "@/lib/jobs/shared-cache";
+import { getFocusJobs, getSharedJobs, JOB_COLUMNS } from "@/lib/jobs/shared-cache";
 import { scoreJob, buildSearchProfile } from "@/lib/score";
 import { toRoleFamily } from "@/lib/jobs/scoring";
 import { applyFeedback } from "@/lib/feedback";
@@ -43,9 +43,24 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
       ? supabase.from("watchlist").select("company_id, tier").eq("user_id", user.id).eq("watching", true)
       : Promise.resolve({ data: null, error: null }),
   ]);
-  const rows = [...sharedJobs, ...(ownJobs ?? [])]
-    .sort((a, b) => (b.last_checked_at ?? "").localeCompare(a.last_checked_at ?? ""))
-    .slice(0, 500);
+  // Roles at the companies you watch (your target list) come first on the Jobs page.
+  // Tiers arrive with migration 0017. Until it is run, read the plain watch list instead.
+  type Watch = { company_id: string; tier?: string | null };
+  const watchRows: Watch[] = watchRes.error && user
+    ? (((await supabase.from("watchlist").select("company_id").eq("user_id", user.id).eq("watching", true)).data ?? []) as Watch[])
+    : ((watchRes.data ?? []) as Watch[]);
+  const watched = new Set(watchRows.map((w) => w.company_id));
+
+  // The shared list holds only the newest 500 roles, so the roles at your watched companies, and at any company you
+  // searched for, are loaded on their own and always included.
+  const focusJobs = await getFocusJobs([...watched], sp.q);
+  const seenIds = new Set<string>();
+  const merged = [...focusJobs, ...sharedJobs, ...(ownJobs ?? [])].filter((r) => (seenIds.has(r.id) ? false : (seenIds.add(r.id), true)));
+  const focusIds = new Set(focusJobs.map((r) => r.id));
+  const rows = [
+    ...merged.filter((r) => focusIds.has(r.id)),
+    ...merged.filter((r) => !focusIds.has(r.id)).sort((a, b) => (b.last_checked_at ?? "").localeCompare(a.last_checked_at ?? "")),
+  ].slice(0, 650);
 
   const profile = buildSearchProfile(profileRow);
 
@@ -54,13 +69,6 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
     (row) => !isExcludedCompany((row.companies as unknown as { name: string } | null)?.name, row.url)
   );
 
-  // Roles at the companies you watch (your target list) come first on the Jobs page.
-  // Tiers arrive with migration 0017. Until it is run, read the plain watch list instead.
-  type Watch = { company_id: string; tier?: string | null };
-  const watchRows: Watch[] = watchRes.error && user
-    ? (((await supabase.from("watchlist").select("company_id").eq("user_id", user.id).eq("watching", true)).data ?? []) as Watch[])
-    : ((watchRes.data ?? []) as Watch[]);
-  const watched = new Set(watchRows.map((w) => w.company_id));
   // Ratings you saved decide a suggested tier (migration 0018). Until it is run, only the tiers you set count.
   const ratingRes = user && watched.size ? await supabase.from("company_research").select("company_id, glassdoor_rating, ambitionbox_rating").eq("user_id", user.id) : null;
   const ratingBy = new Map((ratingRes?.error ? [] : ratingRes?.data ?? []).map((r) => [r.company_id as string, r]));
@@ -145,6 +153,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
       {lastChecked && (
         <p className="mt-2 text-sm text-muted num">Roles last collected {shortDateTime(lastChecked)}.</p>
       )}
+      <p className="mt-1 text-sm text-muted">Showing every role at the companies you watch, then the newest others. To see one company&apos;s roles, search its name below.</p>
       {profile.markets.length > 0 && (
         <p className="mt-1 text-sm text-muted">Showing your markets first. Tap a market below to change it.</p>
       )}

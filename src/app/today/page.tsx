@@ -4,6 +4,8 @@ import { serviceClient } from "@/lib/supabase/service";
 import { Card, Pill, btn, btnPrimary } from "@/components/ui";
 import { weeklyFunnel } from "@/lib/funnel";
 import FitRing from "@/components/FitRing";
+import { buildSearchProfile } from "@/lib/score";
+import { toMarket } from "@/lib/jobs/market";
 import { greeting, firstName } from "@/lib/format";
 import { plural } from "@/lib/format";
 
@@ -18,7 +20,7 @@ export default async function TodayPage() {
   const today = new Date().toISOString().slice(0, 10);
 
   const [{ data: scores }, { data: apps }, { data: steps }, { data: refs }, { data: events }, { data: profile }, { data: watch }, { data: gmail }] = await Promise.all([
-    db.from("job_scores").select("score, reaction, explanation, scored_at, jobs!inner(id, title, url, location, market, is_active, created_at, company_name, companies(name))").eq("user_id", uid).eq("jobs.is_active", true).order("score", { ascending: false }).limit(300),
+    db.from("job_scores").select("score, reaction, explanation, scored_at, jobs!inner(id, title, url, location, market, remote_type, is_active, created_at, company_name, companies(name))").eq("user_id", uid).eq("jobs.is_active", true).order("score", { ascending: false }).limit(300),
     db.from("applications").select("id, status, stage, jobs(title)").eq("user_id", uid),
     db.from("outreach").select("id, status, channel, scheduled_for, step_index").eq("user_id", uid),
     db.from("referrals").select("id, stage, follow_up_on").eq("user_id", uid),
@@ -28,9 +30,12 @@ export default async function TodayPage() {
     serviceClient().from("gmail_accounts").select("user_id").eq("user_id", uid).maybeSingle(),
   ]);
 
-  type S = { score: number | null; reaction: string | null; explanation: string | null; jobs: { id: string; title: string; url: string; location: string; market: string | null; company_name: string | null; created_at: string; companies: { name: string } | null } };
+  type S = { score: number | null; reaction: string | null; explanation: string | null; jobs: { id: string; title: string; url: string; location: string; market: string | null; remote_type: string | null; company_name: string | null; created_at: string; companies: { name: string } | null } };
   const sc = (scores ?? []) as unknown as S[];
-  const highFit = sc.filter((s) => (s.score ?? 0) >= 75 && s.reaction !== "skipped");
+  // Strong matches only count where you want to work. Until your scorecard has markets, that is India, remote in India, and global remote.
+  const profileMarkets = buildSearchProfile(profile).markets;
+  const wantedMarkets = new Set<string>(profileMarkets.length ? profileMarkets : ["india", "remote-in", "global"]);
+  const highFit = sc.filter((s) => (s.score ?? 0) >= 75 && s.reaction !== "skipped" && wantedMarkets.has(toMarket(s.jobs.market, s.jobs.remote_type)));
   const wf = weeklyFunnel(events ?? []);
   const a = apps ?? [];
   const o = steps ?? [];
@@ -75,13 +80,14 @@ export default async function TodayPage() {
     : `Reply rate appears after ${MIN_SENDS_FOR_RATE} emails (${wf.thisWeek.sent} sent this week).`;
 
   const matches = [...highFit].filter((x) => !appliedTitles.has(x.jobs.title)).sort((x, y) => (y.score ?? 0) - (x.score ?? 0)).slice(0, 5);
+  const reviewToday = Math.min(toReview, 5); // a list of hundreds is not a plan: today's step is the top five
   const steps3 = [
-    { tag: "Step 1 · Review", count: toReview, text: toReview === 1 ? "strong match to review" : "strong matches to review", sub: "Each shows why it fits.", cta: "Review matches", href: "/roles", tone: "accent" as const },
+    { tag: "Step 1 · Review", count: reviewToday, text: reviewToday === 1 ? "top match to review" : "top matches to review", sub: toReview > reviewToday ? `${toReview} strong matches in total on Jobs.` : "Each shows why it fits.", cta: "Review matches", href: "/roles", tone: "accent" as const },
     { tag: "Step 2 · Reach out", count: drafts + li, text: drafts + li === 1 ? "message needs you" : "messages need you", sub: "Nothing sends without your OK.", cta: "Open queue", href: "/outreach", tone: "accent" as const },
     { tag: "Step 3 · Follow up", count: fu, text: fu === 1 ? "person to chase" : "people to chase", sub: "Reminders only; you decide.", cta: "See follow-ups", href: followUpEmails ? "/outreach" : "/referrals", tone: "signal" as const },
   ];
   const doneToday = (events ?? []).filter((e) => ["applied", "outreach_sent", "referral"].includes(e.type) && new Date(e.occurred_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) === new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })).length;
-  const planTotal = toReview + drafts + li + fu + doneToday;
+  const planTotal = reviewToday + drafts + li + fu + doneToday;
   const dateText = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Kolkata" });
 
   return (

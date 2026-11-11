@@ -14,11 +14,11 @@ export default async function ReferralsPage({ searchParams }: { searchParams: Pr
   const uid = user?.id ?? "";
   const [{ data: refs }, { data: jobs }] = await Promise.all([
     db.from("referrals").select("*").eq("user_id", uid).order("updated_at", { ascending: false }),
-    db.from("job_scores").select("job_id, jobs!inner(title, is_active, companies(name))").eq("user_id", uid).eq("jobs.is_active", true).order("score", { ascending: false }).limit(60),
+    db.from("job_scores").select("job_id, jobs!inner(title, location, is_active, companies(name))").eq("user_id", uid).eq("jobs.is_active", true).order("score", { ascending: false }).limit(60),
   ]);
   const opts: JobOpt[] = (jobs ?? []).map((j) => {
-    const x = j.jobs as unknown as { title: string; companies: { name: string } | null };
-    return { id: j.job_id, title: x.title, company: x.companies?.name ?? "" };
+    const x = j.jobs as unknown as { title: string; location: string | null; companies: { name: string } | null };
+    return { id: j.job_id, title: x.location ? `${x.title} (${x.location.slice(0, 40)})` : x.title, company: x.companies?.name ?? "" };
   });
   return (
     <section className="py-6">
