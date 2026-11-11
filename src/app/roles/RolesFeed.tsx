@@ -69,7 +69,9 @@ export default function RolesFeed({
   initialQuery = "",
   initialSaved = false,
   priorityIds = [],
+  tierById = {},
 }: {
+  tierById?: Record<string, "A" | "B">;
   priorityIds?: string[];
   initialSaved?: boolean;
   initialQuery?: string;
@@ -177,13 +179,16 @@ export default function RolesFeed({
         const ab = reactions[a.id]?.reaction === "bookmarked" ? 1 : 0;
         const bb = reactions[b.id]?.reaction === "bookmarked" ? 1 : 0;
         if (bb !== ab) return bb - ab;
+        const at = tierById[a.id] === "A" ? 2 : tierById[a.id] === "B" ? 1 : 0;
+        const bt = tierById[b.id] === "A" ? 2 : tierById[b.id] === "B" ? 1 : 0;
+        if (bt !== at) return bt - at;
         const ap = prioritySet.has(a.id) ? 1 : 0;
         const bp = prioritySet.has(b.id) ? 1 : 0;
         if (bp !== ap) return bp - ap;
         return b.score - a.score;
       });
     return r;
-  }, [jobs, prioritySet, view, isMine, markets, families, countries, indiaOnly, savedOnly, query, locationQ, posted, workType, seniority, visaOnly, payOnly, minUsd, sort, showSkipped, reactions]);
+  }, [jobs, prioritySet, tierById, view, isMine, markets, families, countries, indiaOnly, savedOnly, query, locationQ, posted, workType, seniority, visaOnly, payOnly, minUsd, sort, showSkipped, reactions]);
 
   const skippedCount = Object.values(reactions).filter((r) => r.reaction === "skipped").length;
 
@@ -342,6 +347,9 @@ export default function RolesFeed({
                     {openToIndia(j.location, j.remoteType) && (
                       <span className="rounded-md bg-good-soft px-2 py-0.5 text-xs font-semibold text-good">Open to India</span>
                     )}
+                    {tierById[j.id] && (
+                      <span className="rounded-md bg-fg px-2 py-0.5 text-xs font-bold text-bg">Tier {tierById[j.id]}</span>
+                    )}
                     <span className="rounded-md bg-signal-soft px-2 py-0.5 text-xs font-semibold text-signal">
                       {sourceLabel(j.board)}
                     </span>
@@ -362,6 +370,15 @@ export default function RolesFeed({
                     )}
                   </div>
                 </button>
+
+                {prioritySet.has(j.id) && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line bg-bg/60 px-4 py-2.5 text-sm">
+                    <span className="font-semibold">Referral first</span>
+                    <span className="text-muted">A person inside beats an application in the pile.</span>
+                    <a href={`/referrals?company=${encodeURIComponent(j.company)}&domain=${encodeURIComponent(j.companyDomain ?? "")}&job=${encodeURIComponent(j.id)}`}
+                      className="font-semibold text-accent underline-offset-2 hover:underline">Ask for a referral →</a>
+                  </div>
+                )}
 
                 {isOpen && (
                   <div className="flex flex-col gap-4 border-t border-line p-4">

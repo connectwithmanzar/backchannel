@@ -30,7 +30,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
   const [supabase, user] = await Promise.all([createClient(), getSessionUser()]);
 
   // Independent queries run together instead of one after another.
-  const [{ data: profileRow }, sharedJobs, { data: ownJobs }, { data: scoreRows }, { data: watchRows }] = await Promise.all([
+  const [{ data: profileRow }, sharedJobs, { data: ownJobs }, { data: scoreRows }, watchRes] = await Promise.all([
     supabase.from("profiles").select("name, tools, markets, target_titles, min_ote_usd, min_ote_by_market").maybeSingle(),
     // Shared jobs come from a 5-minute cache; the jobs you pasted yourself are read fresh (row-level security shows only yours).
     getSharedJobs(),
@@ -39,8 +39,8 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
       ? supabase.from("job_scores").select("job_id, score, parts, explanation, model, reaction").eq("user_id", user.id)
       : Promise.resolve({ data: null }),
     user
-      ? supabase.from("watchlist").select("company_id").eq("user_id", user.id).eq("watching", true)
-      : Promise.resolve({ data: null }),
+      ? supabase.from("watchlist").select("company_id, tier").eq("user_id", user.id).eq("watching", true)
+      : Promise.resolve({ data: null, error: null }),
   ]);
   const rows = [...sharedJobs, ...(ownJobs ?? [])]
     .sort((a, b) => (b.last_checked_at ?? "").localeCompare(a.last_checked_at ?? ""))
@@ -54,8 +54,16 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
   );
 
   // Roles at the companies you watch (your target list) come first on the Jobs page.
-  const watched = new Set((watchRows ?? []).map((w) => w.company_id));
+  // Tiers arrive with migration 0017. Until it is run, read the plain watch list instead.
+  type Watch = { company_id: string; tier?: string | null };
+  const watchRows: Watch[] = watchRes.error && user
+    ? (((await supabase.from("watchlist").select("company_id").eq("user_id", user.id).eq("watching", true)).data ?? []) as Watch[])
+    : ((watchRes.data ?? []) as Watch[]);
+  const watched = new Set(watchRows.map((w) => w.company_id));
+  const tierOf = new Map(watchRows.filter((w) => w.tier === "A" || w.tier === "B").map((w) => [w.company_id, w.tier as "A" | "B"]));
   const priorityIds = visibleRows.filter((row) => row.company_id && watched.has(row.company_id)).map((row) => row.id);
+  const tierById: Record<string, "A" | "B"> = {};
+  for (const row of visibleRows) { const t = row.company_id ? tierOf.get(row.company_id) : undefined; if (t) tierById[row.id] = t; }
 
   const signals = signalsFromRows(visibleRows);
   const jobs: Job[] = visibleRows.map((row) => ({
@@ -164,7 +172,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
         </div>
       )}
 
-      <ScopeSwitch mineLabel="My roles" mine={<RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets} initialQuery={(sp.q ?? "").slice(0, 100)} initialSaved={sp.saved === "1"} priorityIds={priorityIds} />} web={<WebSearch kind="jobs" />} />
+      <ScopeSwitch mineLabel="My roles" mine={<RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets} initialQuery={(sp.q ?? "").slice(0, 100)} initialSaved={sp.saved === "1"} priorityIds={priorityIds} tierById={tierById} />} web={<WebSearch kind="jobs" />} />
     </section>
   );
 }

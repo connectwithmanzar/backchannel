@@ -4,6 +4,8 @@ import ScorecardSection from "./ScorecardSection";
 import CVSection from "./CVSection";
 import PreferencesSection from "./PreferencesSection";
 import BlocklistSection from "./BlocklistSection";
+import CVVersionsSection from "./CVVersionsSection";
+import InterviewKitSection from "./InterviewKitSection";
 
 export type Profile = {
   name?: string;
@@ -36,7 +38,7 @@ export type BlocklistEntry = {
   value: string;
 };
 
-const TABS = ["Scorecard", "Upload CV", "Preferences", "Blocklist"] as const;
+const TABS = ["Scorecard", "Upload CV", "CV versions", "Interview kit", "Preferences", "Blocklist"] as const;
 type Tab = typeof TABS[number];
 
 export default function ProfileClient() {
@@ -134,12 +136,12 @@ export default function ProfileClient() {
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 flex gap-1 rounded-xl border border-line bg-sunk p-1">
+      <div className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-line bg-sunk p-1">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 rounded-lg py-1.5 text-sm font-medium transition-colors ${
+            className={`flex-1 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               tab === t
                 ? "bg-surface text-fg shadow-sm"
                 : "text-muted hover:text-fg"
@@ -164,6 +166,8 @@ export default function ProfileClient() {
           onTabSwitch={() => setTab("Scorecard")}
         />
       )}
+      {tab === "CV versions" && <CVVersionsSection />}
+      {tab === "Interview kit" && <InterviewKitSection />}
       {tab === "Preferences" && (
         <PreferencesSection
           prefs={prefs}

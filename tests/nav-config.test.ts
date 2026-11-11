@@ -7,7 +7,7 @@ test("navigation has five tabs", () => {
 });
 
 test("every page belongs to exactly one tab", () => {
-  const pages = ["/today", "/roles", "/companies", "/sources", "/outreach", "/referrals", "/autopilot", "/pipeline", "/offers", "/pay"];
+  const pages = ["/today", "/roles", "/companies", "/sources", "/outreach", "/referrals", "/autopilot", "/pipeline", "/offers", "/pay", "/practice"];
   for (const p of pages) assert.equal(TABS.filter((t) => tabIsActive(p, t)).length, 1, p);
   assert.deepEqual(MORE_LINKS.map((l) => l.href), ["/side-income", "/extension"]);
 });
@@ -20,5 +20,5 @@ test("a job detail page highlights Jobs only", () => {
 test("the section strip appears only for tabs with several pages", () => {
   assert.deepEqual(subLinksFor("/today"), []);
   assert.deepEqual(subLinksFor("/referrals").map((l) => l.label), ["Messages", "Referrals"]);
-  assert.deepEqual(subLinksFor("/offers").map((l) => l.label), ["To apply", "Pipeline", "Offers", "Pay benchmark"]);
+  assert.deepEqual(subLinksFor("/offers").map((l) => l.label), ["To apply", "Pipeline", "Offers", "Practice", "Pay benchmark"]);
 });

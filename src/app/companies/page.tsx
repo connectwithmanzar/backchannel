@@ -2,18 +2,19 @@ import { createClient } from "@/lib/supabase/server";
 import { isOwner } from "@/lib/owner";
 import { isExcludedCompany } from "@/data/companies";
 import { Card } from "@/components/ui";
-import { roleCounts, type CompanyRow, type CompanyStatus } from "@/lib/company-list";
+import { roleCounts, suggestCompanies, tierRank, type CompanyRow, type CompanyStatus, type CompanyTier } from "@/lib/company-list";
 import CompanyJobsFinder from "../roles/CompanyJobsFinder";
 import ImportCompanies from "../sources/ImportCompanies";
 import DiscoverButton from "../sources/DiscoverButton";
 import ImportStatus from "../sources/ImportStatus";
 import CompaniesList from "./CompaniesList";
+import SuggestedCompanies from "./SuggestedCompanies";
 
 export const dynamic = "force-dynamic";
 
 type Co = { id: string; name: string; domain: string | null; ats_type: string | null; ats_slug: string | null; enabled: boolean; collect_error: string | null; last_collected_at: string | null;
   country?: string | null; size?: string | null; sector?: string | null; linkedin_url?: string | null; company_type?: string | null; hiring_signal?: string | null; linkedin_openings?: number | null };
-type Wl = { company_id: string; watching: boolean; status?: string | null; note?: string | null };
+type Wl = { company_id: string; watching: boolean; status?: string | null; note?: string | null; tier?: string | null };
 
 export default async function CompaniesPage({ searchParams }: { searchParams: Promise<{ find?: string }> }) {
   const sp = await searchParams;
@@ -26,13 +27,18 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Pr
     // The enrichment columns arrive with migration 0014. Until it is run, read the plain list instead.
     db.from("companies").select(`${BASE}, country, size, sector, linkedin_url, company_type, hiring_signal, linkedin_openings`).order("name").limit(1500),
     db.from("jobs").select("company_id, location, created_at").eq("is_active", true).limit(8000),
-    db.from("watchlist").select("company_id, watching, status, note").eq("user_id", uid),
+    db.from("watchlist").select("company_id, watching, status, note, tier").eq("user_id", uid),
   ]);
   const companies = rich.error ? (await db.from("companies").select(BASE).order("name").limit(1500)).data : rich.data;
-  // The status and note columns arrive with migration 0013. Until it is run, read the plain list instead.
-  const watch: Wl[] = withStatus.error
-    ? (((await db.from("watchlist").select("company_id, watching").eq("user_id", uid)).data ?? []) as Wl[])
-    : ((withStatus.data ?? []) as Wl[]);
+  // The status and note columns arrive with migration 0013, tiers with 0017. Until they are run, read what exists instead.
+  let watch: Wl[];
+  if (!withStatus.error) watch = (withStatus.data ?? []) as Wl[];
+  else {
+    const noTier = await db.from("watchlist").select("company_id, watching, status, note").eq("user_id", uid);
+    watch = !noTier.error
+      ? ((noTier.data ?? []) as Wl[])
+      : (((await db.from("watchlist").select("company_id, watching").eq("user_id", uid)).data ?? []) as Wl[]);
+  }
   const byCompany = new Map(watch.map((w) => [w.company_id, w]));
   const counts = roleCounts(jobs ?? []);
 
@@ -47,10 +53,12 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Pr
         country: c.country ?? null, size: c.size ?? null, sector: c.sector ?? null, linkedinUrl: c.linkedin_url ?? null,
         companyType: c.company_type ?? null, hiring: (c.hiring_signal ?? null) as CompanyRow["hiring"], linkedinOpenings: c.linkedin_openings ?? null,
         status: (w?.status ?? null) as CompanyStatus, note: w?.note ?? "", watching: w?.watching ?? false,
+        tier: (w?.tier === "A" || w?.tier === "B" ? w.tier : null) as CompanyTier,
       };
     })
     // Companies with open roles first, then by how many.
-    .sort((a, b) => b.roles - a.roles || a.name.localeCompare(b.name));
+    .sort((a, b) => tierRank(b.tier) - tierRank(a.tier) || b.roles - a.roles || a.name.localeCompare(b.name));
+  const suggestions = suggestCompanies(rows);
   const owner = isOwner(user?.email);
   // How far the board search has got. The board_checked_at column arrives with migration 0015.
   let status = { total: rows.length, withBoard: rows.filter((r) => r.hasBoard).length, unchecked: 0, migrated: false };
@@ -63,10 +71,11 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Pr
     <section className="py-6">
       <header className="mb-6">
         <h1 className="text-3xl font-bold">Companies</h1>
-        <p className="mt-1 max-w-[62ch] text-muted">Every company you add is saved and checked for jobs every morning, so new roles reach you first.</p>
+        <p className="mt-1 max-w-[62ch] text-muted">Your target list. Mark your top companies Tier A and your good ones Tier B: their roles show first on Jobs. Every company you add is checked for jobs every morning.</p>
       </header>
 
       <div className="mb-6"><CompanyJobsFinder initialName={(sp.find ?? "").slice(0, 100)} /></div>
+      <SuggestedCompanies suggestions={suggestions} />
 
       <div className="flex flex-wrap items-start gap-6">
         <div className="min-w-0 flex-[999_1_620px]"><CompaniesList initial={rows} /></div>

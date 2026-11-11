@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, Pill, btn, btnPrimary, input } from "@/components/ui";
-import { filterCompanies, filterCounts, needsAttention, type CompanyFilter, type CompanyRow, type CompanyStatus } from "@/lib/company-list";
+import { filterByTier, filterCompanies, filterCounts, needsAttention, type CompanyFilter, type CompanyRow, type CompanyStatus, type CompanyTier, type TierFilter } from "@/lib/company-list";
 
 const FILTERS: { id: CompanyFilter; label: string }[] = [
   { id: "all", label: "All" }, { id: "india", label: "Hiring in India" }, { id: "hiring", label: "Hiring now" }, { id: "gulf", label: "Gulf" }, { id: "interested", label: "Interested" },
@@ -21,12 +21,13 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
   const [rows, setRows] = useState(initial);
   const [filter, setFilter] = useState<CompanyFilter>("all");
   const [query, setQuery] = useState("");
+  const [tierFilter, setTierFilter] = useState<TierFilter>("any");
   const [limit, setLimit] = useState(PAGE);
   const [notesOpen, setNotesOpen] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const shown = useMemo(() => filterCompanies(rows, filter, query), [rows, filter, query]);
+  const shown = useMemo(() => filterByTier(filterCompanies(rows, filter, query), tierFilter), [rows, filter, query, tierFilter]);
   const counts = useMemo(() => filterCounts(rows), [rows]);
 
   async function save(id: string, patch: { status?: CompanyStatus; note?: string }) {
@@ -41,6 +42,23 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
     } else if (patch.note !== undefined) setMsg({ ok: true, text: "Note saved." });
   }
 
+  async function setTier(id: string, tier: CompanyTier) {
+    setMsg(null);
+    const before = rows;
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, tier, watching: tier ? true : r.watching } : r)));
+    try {
+      const res = await fetch("/api/company-tier", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ company_id: id, tier }) });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setRows(before);
+        setMsg({ ok: false, text: d.error ?? "Couldn't save that." });
+      }
+    } catch {
+      setRows(before);
+      setMsg({ ok: false, text: "Couldn't reach the server." });
+    }
+  }
+
   return (
     <section className="flex min-w-0 flex-col gap-4" aria-label="Your companies">
       <div className="flex flex-wrap items-center gap-2">
@@ -52,6 +70,15 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
           </button>
         ))}
         <input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} placeholder="Search companies" aria-label="Search companies" className={`${input} ml-auto max-w-56`} />
+      </div>
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by tier">
+        <span className="text-xs font-semibold text-muted">Tier</span>
+        {(["any", "A", "B"] as const).map((t) => (
+          <button key={t} type="button" aria-pressed={tierFilter === t} onClick={() => { setTierFilter(t); setLimit(PAGE); }}
+            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${tierFilter === t ? "bg-fg text-bg" : "bg-surface text-muted ring-1 ring-line hover:text-fg"}`}>
+            {t === "any" ? "Any" : `Tier ${t}`} <span className="num opacity-70">· {t === "any" ? rows.length : rows.filter((r) => r.tier === t).length}</span>
+          </button>
+        ))}
       </div>
       {msg && <p role="status" className={`text-sm ${msg.ok ? "text-good" : "text-warn"}`}>{msg.text}</p>}
 
@@ -71,6 +98,12 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
                     <p className={`text-sm ${attention ? "text-signal" : "text-muted"}`}>
                       {c.hasBoard ? `${c.atsType} board · ${ago(c.lastCheckedAt)}${c.error ? ` · last check failed: ${c.error}` : ""}` : "No public job board. Scanned each morning through job-listing search and their careers page."}
                     </p>
+                  </div>
+                  <div className="flex gap-1.5" role="group" aria-label={`Your tier for ${c.name}`}>
+                    {(["A", "B"] as const).map((t) => (
+                      <button key={t} type="button" aria-pressed={c.tier === t} onClick={() => setTier(c.id, c.tier === t ? null : t)}
+                        className={`rounded-full px-3 py-1 text-xs font-bold ${c.tier === t ? "bg-fg text-bg" : "bg-sunk text-muted hover:text-fg"}`}>Tier {t}</button>
+                    ))}
                   </div>
                   <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Your status for ${c.name}`}>
                     {(Object.keys(STATUS_LABEL) as Exclude<CompanyStatus, null>[]).map((s) => (

@@ -15,10 +15,10 @@ export const TABS: Tab[] = [
     sub: [{ href: "/outreach", label: "Messages" }, { href: "/referrals", label: "Referrals" }],
   },
   {
-    href: "/autopilot", label: "Applications", match: ["/autopilot", "/pipeline", "/offers", "/pay"],
+    href: "/autopilot", label: "Applications", match: ["/autopilot", "/pipeline", "/offers", "/pay", "/practice"],
     sub: [
       { href: "/autopilot", label: "To apply" }, { href: "/pipeline", label: "Pipeline" },
-      { href: "/offers", label: "Offers" }, { href: "/pay", label: "Pay benchmark" },
+      { href: "/offers", label: "Offers" }, { href: "/practice", label: "Practice" }, { href: "/pay", label: "Pay benchmark" },
     ],
   },
 ];

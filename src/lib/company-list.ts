@@ -11,6 +11,33 @@ export interface CompanyRow {
   country: string | null; size: string | null; sector: string | null; linkedinUrl: string | null; companyType: string | null;
   hiring: "yes" | "unclear" | "no" | null; linkedinOpenings: number | null;
   status: CompanyStatus; note: string; watching: boolean;
+  /** Your target-list tier (migration 0017). Missing or null means you only watch it. */
+  tier?: CompanyTier;
+}
+
+export type CompanyTier = "A" | "B" | null;
+export type TierFilter = "any" | "A" | "B";
+
+/** Tier A sorts before B before the rest. */
+export const tierRank = (t: CompanyTier | undefined): number => (t === "A" ? 2 : t === "B" ? 1 : 0);
+
+export function filterByTier(rows: CompanyRow[], tier: TierFilter): CompanyRow[] {
+  return tier === "any" ? rows : rows.filter((c) => c.tier === tier);
+}
+
+export interface Suggestion { id: string; name: string; reason: string }
+
+/** Companies you do not watch yet that opened the most new sales roles this week: worth a look for your list. */
+export function suggestCompanies(rows: CompanyRow[], max = 3): Suggestion[] {
+  return rows
+    .filter((c) => !c.watching && !c.tier && c.status !== "not_for_me" && c.newThisWeek > 0)
+    .sort((a, b) => b.newThisWeek - a.newThisWeek || b.inIndia - a.inIndia || a.name.localeCompare(b.name))
+    .slice(0, max)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      reason: `${c.newThisWeek} new sales ${c.newThisWeek === 1 ? "role" : "roles"} this week${c.inIndia ? `, ${c.inIndia} in India` : ""}.`,
+    }));
 }
 
 export interface JobStub { company_id: string | null; location: string | null; created_at: string }
