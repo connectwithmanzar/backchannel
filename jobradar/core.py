@@ -220,6 +220,7 @@ KEYWORD_PACK = [
     "Business Development Executive | Business Development Associate | Business Development Manager",
     "GTM Engineer | Go-To-Market Engineer | GTM Operations | Revenue Operations Specialist | Growth Engineer",
     "SDR Team Lead | Sales Development Manager | BDR Manager | Head of Sales Development",
+    "Associate Account Executive | Account Executive | Sales Manager | Inside Sales Manager",
 ]
 
 
