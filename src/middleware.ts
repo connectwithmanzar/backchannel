@@ -4,7 +4,8 @@ import { isWarmAuthorized } from "@/lib/warm";
 
 // Cron endpoints authenticate themselves with CRON_SECRET (and fail closed without it),
 // so they must not be redirected to /login. Exact paths only — nothing else is opened.
-const CRON_PATHS = new Set(["/api/collect-jobs", "/api/notify", "/api/daily", "/api/outreach-tick", "/api/warm", "/api/discover"]);
+// /api/jobs/jobradar-import checks its own JOBRADAR_SECRET the same way.
+const CRON_PATHS = new Set(["/api/collect-jobs", "/api/notify", "/api/daily", "/api/outreach-tick", "/api/warm", "/api/discover", "/api/jobs/jobradar-import"]);
 
 export async function middleware(request: NextRequest) {
   if (CRON_PATHS.has(request.nextUrl.pathname)) {
