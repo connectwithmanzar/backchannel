@@ -37,10 +37,10 @@ const cleanTerm = (q: string) => q.replace(/[%_\\,()]/g, " ").replace(/\s+/g, " 
 
 /**
  * The shared list above holds only the newest 500 roles, so roles at the companies you watch, or at a company
- * you searched for, can be missing from it. This reads those on their own (not cached, at most 350 rows).
+ * you searched for, can be missing from it. This reads those on their own (at most 350 rows).
  * Same rules as above: service role, so only rows nobody pasted (added_by is null).
  */
-export async function getFocusJobs(companyIds: string[], search?: string): Promise<SharedJob[]> {
+async function loadFocusJobs(companyIds: string[], search?: string): Promise<SharedJob[]> {
   const db = serviceClient();
   const ids = new Set(companyIds);
   const term = cleanTerm(search ?? "");
@@ -54,3 +54,6 @@ export async function getFocusJobs(companyIds: string[], search?: string): Promi
   if (error) { console.error("Loading focus jobs failed:", error.message); return []; }
   return (data ?? []).map((r) => ({ ...r, description: (r.description ?? "").slice(0, CACHED_DESCRIPTION_CHARS) })) as unknown as SharedJob[];
 }
+
+/** The same, kept for 5 minutes per set of companies and search, so the page does not re-read long descriptions on every visit. */
+export const getFocusJobs = unstable_cache(loadFocusJobs, ["focus-jobs-v1"], { revalidate: 300, tags: [SHARED_JOBS_TAG] });
