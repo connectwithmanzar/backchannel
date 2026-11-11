@@ -2,6 +2,7 @@
 
 - Adzuna: official API with a free key; "personal job search" is an allowed use. India only (no Gulf coverage).
 - Working Nomads: public JSON feed of remote jobs; JobRadar keeps sales roles open to India / Asia / anywhere.
+- RemoteOK, We Work Remotely, Himalayas and Remotive: public remote-job feeds, handled the same way (see the end of this file).
 """
 
 from __future__ import annotations
@@ -101,3 +102,145 @@ def working_nomads(kw: str, hours: int) -> tuple[pd.DataFrame, str]:
             "description": _clean_html(j.get("description"))[:12000],
         })
     return pd.DataFrame(rows), ""
+
+
+# ------------------------------------------------- more remote job feeds ---
+# Public feeds meant for reuse: RemoteOK (JSON, asks for a link back, which every job keeps), We Work Remotely (RSS),
+# Himalayas (JSON API) and Remotive (JSON API). Each is downloaded once per search and shared by every keyword group.
+# JobRadar keeps sales roles open to India, Asia or anywhere, like Working Nomads above.
+_feed_lock = threading.Lock()
+_feed_cache: dict[str, dict] = {}
+HEADERS = {"User-Agent": "JobRadar (personal job search; github.com/connectwithmanzar/backchannel)"}
+
+
+def _feed(name: str, loader) -> list[dict]:
+    with _feed_lock:
+        hit = _feed_cache.get(name)
+        if not hit or time.time() - hit["at"] > 900:
+            _feed_cache[name] = {"at": time.time(), "items": loader()}
+        return _feed_cache[name]["items"]
+
+
+def _get(url: str, **params):
+    res = requests.get(url, params=params or None, headers=HEADERS, timeout=TIMEOUT)
+    res.raise_for_status()
+    return res
+
+
+def _open_to_india(loc: str) -> bool:
+    """A remote role is kept when it names no country limit, or names India, Asia or anywhere."""
+    loc = str(loc or "")
+    if REMOTE_NOT_OK.search(loc):
+        return False
+    return not loc.strip() or bool(REMOTE_OK.search(loc))
+
+
+def _group_words(kw: str) -> list[str]:
+    """Words from every alternative of a keyword group, so one pass covers 'SDR | BDR | Inside Sales ...'."""
+    return sorted({w for w in re.findall(r"[a-z]+", str(kw).lower()) if len(w) > 2})
+
+
+def _when(value) -> pd.Timestamp:
+    """A posting time from a date string, or from a Unix timestamp in seconds or milliseconds (Himalayas sends seconds)."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return pd.to_datetime(value, unit="ms" if value > 1e11 else "s", utc=True, errors="coerce")
+    return pd.to_datetime(value, errors="coerce", utc=True)
+
+
+def _remote_rows(items: list[dict], site: str, kw: str, hours: int) -> pd.DataFrame:
+    """items: dicts with title, company, location, url, posted (any date text), description."""
+    words = _group_words(kw)
+    cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=hours or 24 * 30)
+    rows, seen = [], set()
+    for j in items:
+        title, url = str(j.get("title") or "").strip(), str(j.get("url") or "").strip()
+        if not title or not url.startswith("https://") or url in seen:
+            continue
+        if not role_family(title) or (words and not any(w in title.lower() for w in words)):
+            continue
+        if not _open_to_india(j.get("location")):
+            continue
+        posted = _when(j.get("posted"))
+        if pd.notna(posted) and posted < cutoff:
+            continue
+        seen.add(url)
+        loc = str(j.get("location") or "").strip()
+        rows.append({
+            "id": url, "site": site, "job_url": url, "job_url_direct": "", "title": title,
+            "company": str(j.get("company") or "").strip(), "location": f"Remote ({loc})" if loc else "Remote",
+            "date_posted": posted.date() if pd.notna(posted) else None, "is_remote": True,
+            "description": _clean_html(j.get("description"))[:12000],
+        })
+    return pd.DataFrame(rows)
+
+
+def remoteok(kw: str, hours: int) -> tuple[pd.DataFrame, str]:
+    def load() -> list[dict]:
+        data = _get("https://remoteok.com/api").json() or []
+        return [{"title": d.get("position"), "company": d.get("company"), "location": d.get("location"), "url": d.get("url"),
+                 "posted": d.get("date"), "description": d.get("description")} for d in data if isinstance(d, dict) and d.get("position")]
+    try:
+        return _remote_rows(_feed("remoteok", load), "remoteok", kw, hours), ""
+    except Exception as e:
+        return pd.DataFrame(), f"Couldn't reach RemoteOK: {e}"[:120]
+
+
+def weworkremotely(kw: str, hours: int) -> tuple[pd.DataFrame, str]:
+    import xml.etree.ElementTree as ET  # RSS from a public feed; no external entities are used
+
+    def load() -> list[dict]:
+        out: list[dict] = []
+        for feed in ("remote-sales-and-marketing-jobs", "remote-business-and-management-jobs"):
+            try:
+                root = ET.fromstring(_get(f"https://weworkremotely.com/categories/{feed}.rss").content)
+            except Exception:
+                continue
+            for it in root.iter("item"):
+                raw = (it.findtext("title") or "").strip()
+                company, _, title = raw.partition(": ")
+                out.append({"title": title or raw, "company": company if title else "", "location": it.findtext("region") or "",
+                            "url": (it.findtext("link") or "").strip(), "posted": it.findtext("pubDate"), "description": it.findtext("description")})
+        return out
+    try:
+        items = _feed("weworkremotely", load)
+        if not items:
+            return pd.DataFrame(), "We Work Remotely gave nothing back."
+        return _remote_rows(items, "weworkremotely", kw, hours), ""
+    except Exception as e:
+        return pd.DataFrame(), f"Couldn't reach We Work Remotely: {e}"[:120]
+
+
+HIMALAYAS_QUERIES = ["sales development representative", "business development representative", "account executive", "inside sales", "gtm", "sales manager"]
+
+
+def himalayas(kw: str, hours: int) -> tuple[pd.DataFrame, str]:
+    """Himalayas can filter by country, so these are roles open to people in India (remote jobs that list India)."""
+    def load() -> list[dict]:
+        out: list[dict] = []
+        for q in HIMALAYAS_QUERIES:
+            for offset in (0, 20, 40):
+                try:
+                    jobs = (_get("https://himalayas.app/jobs/api/search", q=q, country="India", limit=20, offset=offset).json() or {}).get("jobs", [])
+                except Exception:
+                    break
+                for d in jobs:
+                    out.append({"title": d.get("title"), "company": d.get("companyName"), "location": "India",
+                                "url": d.get("applicationLink") or d.get("guid"), "posted": d.get("pubDate"), "description": d.get("description") or d.get("excerpt")})
+                if len(jobs) < 20:
+                    break
+        return out
+    try:
+        return _remote_rows(_feed("himalayas", load), "himalayas", kw, hours), ""
+    except Exception as e:
+        return pd.DataFrame(), f"Couldn't reach Himalayas: {e}"[:120]
+
+
+def remotive(kw: str, hours: int) -> tuple[pd.DataFrame, str]:
+    def load() -> list[dict]:
+        jobs = (_get("https://remotive.com/api/remote-jobs", category="sales", limit=200).json() or {}).get("jobs", [])
+        return [{"title": d.get("title"), "company": d.get("company_name"), "location": d.get("candidate_required_location"),
+                 "url": d.get("url"), "posted": d.get("publication_date"), "description": d.get("description")} for d in jobs]
+    try:
+        return _remote_rows(_feed("remotive", load), "remotive", kw, hours), ""
+    except Exception as e:
+        return pd.DataFrame(), f"Couldn't reach Remotive: {e}"[:120]

@@ -68,6 +68,7 @@ export function openToIndia(location: string, remoteType: string): boolean {
 const SOURCE_NAMES: Record<string, string> = {
   greenhouse: "Company careers page", lever: "Company careers page", ashby: "Company careers page", smartrecruiters: "Company careers page", workday: "Company careers page",
   jsearch: "Job listings", linkedin: "LinkedIn", indeed: "Indeed", naukri: "Naukri", glassdoor: "Glassdoor", bayt: "Bayt",
+  workingnomads: "Working Nomads", remoteok: "RemoteOK", weworkremotely: "We Work Remotely", himalayas: "Himalayas", google: "Google Jobs",
   remotive: "Job feed · Remotive", arbeitnow: "Job feed · Arbeitnow", adzuna: "Job feed · Adzuna", pasted: "Added by you",
 };
 /** Where a role came from, in plain words. */

@@ -38,8 +38,10 @@ SIGHTINGS_FILE = DATA_DIR / "sightings.csv"
 
 # Which sites work in which market, and how each site wants the location written.
 # The first five are free (JobSpy). Instahyre, NaukriGulf, Foundit and GulfTalent run through Apify (paid).
+# Google Jobs ("google") is wired in below but not listed under any market: JobSpy's Google scraper returned no jobs for any query
+# when tested on 12 Nov 2026. Add "google" to a market's sites to switch it on again.
 MARKETS: dict[str, dict] = {
-    "India": {"indeed": "india", "bayt_country": "India", "sites": ["linkedin", "indeed", "naukri", "glassdoor", "adzuna", "workingnomads", "instahyre", "foundit"]},
+    "India": {"indeed": "india", "bayt_country": "India", "sites": ["linkedin", "indeed", "naukri", "glassdoor", "adzuna", "workingnomads", "remoteok", "weworkremotely", "himalayas", "remotive", "instahyre", "foundit"]},
     "UAE": {"indeed": "united arab emirates", "bayt_country": "UAE", "sites": ["linkedin", "indeed", "bayt", "naukrigulf", "foundit", "gulftalent"]},
     "Saudi Arabia": {"indeed": "saudi arabia", "bayt_country": "Saudi Arabia", "sites": ["linkedin", "indeed", "bayt", "naukrigulf", "foundit", "gulftalent"]},
     "Qatar": {"indeed": "qatar", "bayt_country": "Qatar", "sites": ["linkedin", "indeed", "bayt", "naukrigulf", "foundit", "gulftalent"]},
@@ -48,7 +50,8 @@ MARKETS: dict[str, dict] = {
     "Bahrain": {"indeed": "bahrain", "bayt_country": "Bahrain", "sites": ["linkedin", "indeed", "bayt", "naukrigulf", "foundit", "gulftalent"]},
 }
 SITE_LABELS = {"linkedin": "LinkedIn", "indeed": "Indeed", "naukri": "Naukri", "glassdoor": "Glassdoor", "bayt": "Bayt",
-               "adzuna": "Adzuna", "workingnomads": "Working Nomads (remote)",
+               "adzuna": "Adzuna", "workingnomads": "Working Nomads (remote)", "google": "Google Jobs",
+               "remoteok": "RemoteOK (remote)", "weworkremotely": "We Work Remotely (remote)", "himalayas": "Himalayas (remote)", "remotive": "Remotive (remote)",
                **{k: v["label"] for k, v in apify_sites.SITES.items()}}
 PAID_SITES = set(apify_sites.SITES)
 POSTED_WITHIN = {"Last 1 hour": 1, "Last 4 hours": 4, "Last 8 hours": 8, "Last 24 hours": 24, "Last 3 days": 72, "Last 7 days": 168, "Last 14 days": 336, "Last 30 days": 720}
@@ -152,7 +155,9 @@ def run_search(p: dict, on_progress: Callable[[float, str], None] | None = None)
         the others search the first few alternatives one by one, splitting the result budget."""
         alts = alternatives(kw)
         n = int((p.get("per_site_map") or {}).get(site, p["per_site"]))
-        if site in OR_SITES or len(alts) == 1:
+        if site in FEED_SITES:
+            return single(kw, market, site, n)   # a feed is read once and matched against every alternative in the group
+        if site in OR_SITES or site in FIRST_ONLY_SITES or len(alts) == 1:
             return single(or_query(alts) if site in OR_SITES else alts[0], market, site, n)
         used = alts[:MAX_ALTS_PAID if site in PAID_SITES else MAX_ALTS_FREE]
         frames_, notes = [], []
@@ -171,6 +176,15 @@ def run_search(p: dict, on_progress: Callable[[float, str], None] | None = None)
                 return free_sites.adzuna(kw, city, n, p["posted_hours"], adz["app_id"], adz["app_key"])
             if site == "workingnomads":
                 return free_sites.working_nomads(kw, p["posted_hours"])
+            if site in FEED_SITES:
+                return getattr(free_sites, site)(kw, p["posted_hours"])
+            if site == "google":
+                where = site_location(site, market, city)
+                df = scrape_jobs(
+                    site_name=["google"], google_search_term=google_term(kw, where, p["posted_hours"]), location=where or None,
+                    results_wanted=n, hours_old=p["posted_hours"], country_indeed=MARKETS[market]["indeed"], verbose=0,
+                )
+                return df, str((df.attrs or {}).get("errors", {}).get(site) or "")
             if site in PAID_SITES:
                 return apify_sites.fetch(site, kw, market, city, n, p["posted_hours"], apify["token"], per_call_usd)
             loc = site_location(site, market, city)
@@ -210,6 +224,14 @@ def run_search(p: dict, on_progress: Callable[[float, str], None] | None = None)
 
 
 OR_SITES = {"linkedin", "indeed"}   # these understand: "sales development representative" OR SDR
+FEED_SITES = {"remoteok", "weworkremotely", "himalayas", "remotive"}   # public remote-job feeds: read once, no per-keyword request
+FIRST_ONLY_SITES = {"google"}       # Google Jobs blocks quickly, so each group searches its first title only
+
+
+def google_term(kw: str, where: str, hours: int) -> str:
+    """The sentence Google Jobs understands, for example: sales development representative jobs near India in the last week."""
+    since = "since yesterday" if hours <= 24 else "in the last 3 days" if hours <= 72 else "in the last week" if hours <= 168 else "in the last month"
+    return f"{kw} jobs near {where} {since}".strip() if where else f"{kw} jobs {since}"
 MAX_ALTS_FREE = 4                   # other free sites: first 4 alternatives of a group, searched one by one
 MAX_ALTS_PAID = 2                   # Apify sites: first 2 only, to protect the monthly budget
 
@@ -242,7 +264,7 @@ def count_searches(p: dict) -> dict:
             for s in p.get("sites", []):
                 if s not in MARKETS[m]["sites"]:
                     continue
-                k = 1 if s in OR_SITES or len(alts) == 1 else min(len(alts), MAX_ALTS_PAID if s in PAID_SITES else MAX_ALTS_FREE)
+                k = 1 if s in OR_SITES or s in FEED_SITES or s in FIRST_ONLY_SITES or len(alts) == 1 else min(len(alts), MAX_ALTS_PAID if s in PAID_SITES else MAX_ALTS_FREE)
                 total += k
                 linkedin += k if s == "linkedin" else 0
     return {"total": total, "linkedin": linkedin}

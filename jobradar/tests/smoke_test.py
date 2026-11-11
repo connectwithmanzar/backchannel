@@ -28,8 +28,9 @@ from jobspy.model import JobPost  # noqa: E402
 CALLS: list[tuple[str, str]] = []
 
 
-def fake_scrape(site_name, search_term, location=None, results_wanted=15, **kw):
+def fake_scrape(site_name, search_term=None, location=None, results_wanted=15, **kw):
     site = site_name[0]
+    search_term = search_term or kw.get("google_search_term", "")   # Google Jobs sends its own search sentence
     CALLS.append((site, search_term))
     titles = ["Sales Development Representative", "BDR", "Account Executive", "Head of Sales", "Software Engineer", "Inside Sales Executive"]
     rows = [dict(id=f"{site}{i}", site=site, job_url=f"https://example.com/{site}/{abs(hash(search_term)) % 999}/{location}/{i}",
@@ -73,6 +74,65 @@ check(len(insights.uniqueness(core.load_sightings())) > 0, "uniqueness score com
 check(people.same_company("Careem Networks FZ-LLC", "Careem") and not people.same_company("Meta", "Metabase"), "company matching")
 check(people.excluded("Taboola India") and not people.search_links("Taboola", "SDR", [], None), "current employer is never suggested")
 check(core.count_searches(p)["linkedin"] == 4, "search counter")
+
+
+# --- More sources: Google Jobs and the public remote feeds, with canned replies (no network) ---
+import free_sites  # noqa: E402
+
+
+class FakeRes:
+    def __init__(self, payload=None, content=b""):
+        self._p, self.content = payload, content
+
+    def json(self):
+        return self._p
+
+
+NOW = pd.Timestamp.now(tz="UTC")
+RSS = f"""<?xml version="1.0"?><rss><channel>
+<item><title>Acme: Sales Development Representative</title><region>Anywhere in the World</region><link>https://weworkremotely.com/jobs/1</link><pubDate>{NOW.strftime('%a, %d %b %Y %H:%M:%S +0000')}</pubDate><description>&lt;p&gt;Outbound&lt;/p&gt;</description></item>
+<item><title>Globex: Account Executive</title><region>USA Only</region><link>https://weworkremotely.com/jobs/2</link><pubDate>{NOW.strftime('%a, %d %b %Y %H:%M:%S +0000')}</pubDate><description>x</description></item>
+</channel></rss>""".encode()
+
+
+def fake_get(url, **params):
+    if "remoteok" in url:
+        return FakeRes([{"legal": "link back to RemoteOK"},
+                        {"position": "Business Development Representative", "company": "Initech", "location": "Worldwide", "url": "https://remoteok.com/remote-jobs/1", "date": NOW.isoformat(), "description": "<b>Pipeline</b>"},
+                        {"position": "Software Engineer", "company": "Initech", "location": "Worldwide", "url": "https://remoteok.com/remote-jobs/2", "date": NOW.isoformat()},
+                        {"position": "Account Executive", "company": "Hooli", "location": "US only", "url": "https://remoteok.com/remote-jobs/3", "date": NOW.isoformat()}])
+    if "weworkremotely" in url:
+        return FakeRes(content=RSS)
+    if "himalayas" in url:
+        return FakeRes({"jobs": [] if params.get("offset") or params.get("q") != "sales development representative" or params.get("country") != "India" else [
+            {"title": "Sales Development Representative", "companyName": "Umbrella", "locationRestrictions": ["India", "Singapore"], "applicationLink": "https://himalayas.app/jobs/1", "pubDate": int(NOW.timestamp()), "description": "SDR"},
+            {"title": "Software Engineer", "companyName": "Umbrella", "locationRestrictions": ["India"], "applicationLink": "https://himalayas.app/jobs/2", "pubDate": int(NOW.timestamp())}]})
+    if "remotive" in url:
+        return FakeRes({"jobs": [
+            {"title": "Inside Sales Representative", "company_name": "Wonka", "candidate_required_location": "Worldwide", "url": "https://remotive.com/remote-jobs/1", "publication_date": NOW.isoformat(), "description": "Inbound"},
+            {"title": "Inside Sales Representative", "company_name": "Wonka", "candidate_required_location": "USA Only", "url": "https://remotive.com/remote-jobs/2", "publication_date": NOW.isoformat()}]})
+    raise AssertionError(f"unexpected request: {url}")
+
+
+free_sites._get = fake_get
+group = core.KEYWORD_PACK[0]
+for fn, site, expect in [("remoteok", "remoteok", 1), ("weworkremotely", "weworkremotely", 1), ("himalayas", "himalayas", 1), ("remotive", "remotive", 1)]:
+    df, note = getattr(free_sites, fn)(group, 168)
+    check(len(df) == expect and not note, f"{site}: keeps the sales role open to India, drops US-only and non-sales")
+    check(len(df) == 0 or (df["site"] == site).all() and df["job_url"].str.startswith("https://").all(), f"{site}: rows are in the shape JobRadar expects")
+free_sites._feed_cache.clear()
+
+check("India" in core.google_term("Sales Development Representative", "India", 168) and "last week" in core.google_term("SDR", "India", 168), "Google Jobs search sentence")
+check(core.google_term("SDR", "India", 24).endswith("since yesterday"), "Google Jobs search sentence for the last day")
+core.MARKETS["India"]["sites"].append("google")   # off by default, so the test switches it on
+pj = dict(keywords=core.KEYWORD_PACK[:2], markets=["India"], cities={}, sites=["google", "remoteok", "weworkremotely", "himalayas", "remotive"], posted_hours=168, per_site=30)
+CALLS.clear()
+jobs3, log3, _ = core.run_search(pj)
+check(sum(1 for s, _ in CALLS if s == "google") == 2, "Google Jobs searches one title per group")
+check(core.count_searches(pj) == {"total": 10, "linkedin": 0}, "search counter counts one search per group for each new source")
+check(jobs3 is not None and set(jobs3["site"]) >= {"remoteok", "weworkremotely", "himalayas", "remotive"}, "remote feeds flow through a full search")
+core.MARKETS["India"]["sites"].remove("google")
+check("google" not in core.MARKETS["India"]["sites"] and "google" not in core.MARKETS["UAE"]["sites"], "Google Jobs stays off in the daily search until it works again")
 
 print(f"\n{'All checks passed' if not failures else f'{len(failures)} check(s) failed'}.")
 sys.exit(1 if failures else 0)

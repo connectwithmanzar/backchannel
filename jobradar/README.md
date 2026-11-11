@@ -69,7 +69,7 @@ Several tabs use Backchannel, so keep it connected in the sidebar.
 
 | Market | Free (JobSpy) | Apify (paid) |
 |---|---|---|
-| India | LinkedIn, Indeed, Naukri, Glassdoor, Adzuna, Working Nomads (remote) | Instahyre, Foundit |
+| India | LinkedIn, Indeed, Naukri, Glassdoor, Adzuna, plus remote feeds: Working Nomads, RemoteOK, We Work Remotely, Himalayas, Remotive | Instahyre, Foundit |
 | UAE, Saudi Arabia, Qatar, Kuwait, Oman, Bahrain | LinkedIn, Indeed, Bayt | NaukriGulf, Foundit, GulfTalent |
 
 ## Good to know

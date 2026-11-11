@@ -3,7 +3,7 @@
 // source "jobradar:<site>") and are dropped before any public launch. Backchannel's servers never
 // fetch those sites themselves; they only receive what the owner sends.
 
-export const JOBRADAR_SITES = ["linkedin", "indeed", "naukri", "glassdoor", "bayt", "instahyre", "naukrigulf", "foundit", "gulftalent", "adzuna", "workingnomads"] as const;
+export const JOBRADAR_SITES = ["linkedin", "indeed", "naukri", "glassdoor", "bayt", "instahyre", "naukrigulf", "foundit", "gulftalent", "adzuna", "workingnomads", "remoteok", "weworkremotely", "himalayas", "remotive", "google"] as const;
 export type JobRadarSite = (typeof JOBRADAR_SITES)[number];
 
 export interface JobRadarListing {
@@ -54,5 +54,5 @@ export function uniqueCompanies(listings: Pick<JobRadarListing, "company">[], ma
 export const SITE_NAMES: Record<JobRadarSite, string> = {
   linkedin: "LinkedIn", indeed: "Indeed", naukri: "Naukri", glassdoor: "Glassdoor", bayt: "Bayt",
   instahyre: "Instahyre", naukrigulf: "NaukriGulf", foundit: "Foundit", gulftalent: "GulfTalent",
-  adzuna: "Adzuna", workingnomads: "Working Nomads",
+  adzuna: "Adzuna", workingnomads: "Working Nomads", remoteok: "RemoteOK", weworkremotely: "We Work Remotely", himalayas: "Himalayas", remotive: "Remotive", google: "Google Jobs",
 };
