@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card, btn } from "@/components/ui";
+import { Card, btn, btnPrimary } from "@/components/ui";
 
 export interface SavedJob { id: string; title: string; company: string; location: string; url: string; savedAt: string | null; score: number | null }
 
@@ -37,7 +37,7 @@ export default function SavedList({ initial }: { initial: SavedJob[] }) {
                 </div>
                 {j.score != null && <span className="num rounded-full bg-accent-soft px-3 py-1 text-sm font-bold text-accent" title="How well it fits you">{j.score}% fit</span>}
                 <div className="flex flex-wrap gap-2">
-                  <Link href={`/roles/${j.id}`} className={btn}>Details</Link>
+                  <Link href={`/roles/${j.id}`} className={btnPrimary}>Review and apply</Link>
                   {j.url && <a href={j.url} target="_blank" rel="noopener noreferrer" className={btn}>Open ↗</a>}
                   <button type="button" className={btn} onClick={() => remove(j.id)}>Remove</button>
                 </div>

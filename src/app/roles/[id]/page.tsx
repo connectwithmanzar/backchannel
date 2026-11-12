@@ -7,6 +7,9 @@ import FitRing from "@/components/FitRing";
 import Description from "@/components/Description";
 import { openToIndia, sourceLabel } from "@/lib/role-filters";
 import RoleActions from "./RoleActions";
+import ApplyCard from "@/components/ApplyCard";
+import type { AppRow } from "@/components/ApplyReview";
+import { hasAIKey } from "@/lib/ai";
 import CompanyActions from "./CompanyActions";
 import WhoToAsk from "./WhoToAsk";
 import { matchConnections, referralSearchLinks, companyKey, type Connection } from "@/lib/jobs/referral-paths";
@@ -27,7 +30,7 @@ export default async function RolePage({ params }: { params: Promise<{ id: strin
   if (!job) notFound();
   const [{ data: score }, { data: app }] = await Promise.all([
     db.from("job_scores").select("score, parts, explanation, reaction").eq("user_id", uid).eq("job_id", id).maybeSingle(),
-    db.from("applications").select("id, status, stage, tailored_cv, cv_changes, cover_note").eq("user_id", uid).eq("job_id", id).maybeSingle(),
+    db.from("applications").select("id, job_id, status, stage, tailored_cv, cv_changes, cover_note, questions, receipt, submitted_at, notes").eq("user_id", uid).eq("job_id", id).maybeSingle(),
   ]);
   const company = (job.companies as unknown as { name: string; domain: string | null } | null)?.name ?? job.company_name ?? "Unknown company";
   const domain = (job.companies as unknown as { name: string; domain: string | null } | null)?.domain ?? "";
@@ -38,7 +41,6 @@ export default async function RolePage({ params }: { params: Promise<{ id: strin
   const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
   const indiaOk = openToIndia(job.location ?? "", job.remote_type ?? "unknown");
   const stageIdx = app ? STAGES.findIndex(([k]) => k === (app.stage ?? "applied")) : -1;
-  const changes = (app?.cv_changes ?? []) as string[];
 
   // Referral engine: your connections here (from JobRadar's LinkedIn import) and one-click LinkedIn searches.
   // Both queries fail quietly until migration 0016 has been run.
@@ -50,7 +52,8 @@ export default async function RolePage({ params }: { params: Promise<{ id: strin
     db.from("profiles").select("*").eq("user_id", uid).maybeSingle(),
   ]);
   const people = matchConnections((conns ?? []) as Connection[], company);
-  const pr = (prof ?? {}) as { past_employers?: string[] | null; college?: string | null };
+  const pr = (prof ?? {}) as { past_employers?: string[] | null; college?: string | null; cv_text?: string | null };
+  const application: AppRow | null = app ? ({ ...app, jobs: { title: job.title, url: job.url ?? "", location: job.location ?? "", companies: { name: company } } } as unknown as AppRow) : null;
   const searchLinks = referralSearchLinks(company, job.title, pr.past_employers ?? [], pr.college ?? null);
 
   return (
@@ -68,11 +71,12 @@ export default async function RolePage({ params }: { params: Promise<{ id: strin
             {job.visa_sponsorship === "yes" && <Pill tone="good">Visa sponsorship offered</Pill>}
           </div>
         </div>
-        <RoleActions jobId={id} reaction={score?.reaction ?? null} hasApplication={!!app} url={job.url ?? ""} />
+        <RoleActions jobId={id} reaction={score?.reaction ?? null} url={job.url ?? ""} />
       </Card>
 
       <div className="mt-6 flex flex-wrap items-start gap-6">
         <div className="flex min-w-0 flex-[999_1_620px] flex-col gap-6">
+          <ApplyCard jobId={id} application={application} hasCv={(pr.cv_text ?? "").length > 200} aiReady={hasAIKey()} />
           {score ? (
             <Card className="flex flex-wrap gap-7 sm:p-6">
               <FitRing score={score.score ?? 0} size={110} />
@@ -106,19 +110,6 @@ export default async function RolePage({ params }: { params: Promise<{ id: strin
               </Card>
             </div>
           )}
-
-          <Card className="sm:p-6">
-            <h2 className="mb-1 text-lg font-semibold">Your CV, tailored to this role</h2>
-            {app?.tailored_cv ? (
-              <>
-                <p className="mb-3 text-sm text-muted">Only facts from your CV are used. Review it before you send it anywhere.</p>
-                {changes.length > 0 && <ul className="mb-3 list-disc pl-5 text-sm">{changes.map((c, i) => <li key={i}>{c}</li>)}</ul>}
-                <Link href="/autopilot" className={btn}>Review, edit and download in Applications</Link>
-              </>
-            ) : (
-              <p className="text-sm text-muted">Press “Tailor my CV to this role” above. It rewrites your CV for this posting using only what your CV already says, and lists every change.</p>
-            )}
-          </Card>
 
           {job.description && (
             <Card className="sm:p-6">

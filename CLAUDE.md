@@ -31,6 +31,9 @@ Full product built: Today dashboard, Roles (collection from Greenhouse/Lever/Ash
 ## Copilots (12 Nov 2026)
 Saved job searches under More > Copilots (`/copilots`): titles (max 5), remote and on-site places, level, words to avoid, on/off. Matching and learning live in `src/lib/copilots.ts` (pure, tested in `tests/copilots.test.ts`); data in table `copilots` (migration 0019, run by the owner by hand). Matches skip jobs you skipped and rank like jobs you saved or applied to (`job_scores.reaction`). A Copilot only finds and ranks jobs; it never sends an application (hard rule 7).
 
+## One apply flow (13 Nov 2026)
+Every list (Jobs, Saved jobs, Copilot matches) opens the same job page `/roles/[id]`, whose top card (`src/components/ApplyCard.tsx`) prepares, reviews, submits and tracks the application. The review body is `src/components/ApplyReview.tsx`, shared with Applications (`/autopilot`). It still never submits for you: you open the company's page and confirm. Auto-submit by filling forms in a browser on the owner's Mac (JobRadar) is planned, not built.
+
 ## Commands
 - `npm install`: install dependencies
 - `npm run dev`: run the app at http://localhost:3000

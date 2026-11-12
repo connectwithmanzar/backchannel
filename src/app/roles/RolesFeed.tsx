@@ -448,7 +448,7 @@ export default function RolesFeed({
                     {/* Actions */}
                     <div className="flex flex-wrap gap-2">
                       <Link href={`/roles/${j.id}`} className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accent-ink">
-                        See why it fits
+                        Review and apply
                       </Link>
                       <a href={j.url} target="_blank" rel="noopener noreferrer"
                         className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-semibold hover:border-fg/40">

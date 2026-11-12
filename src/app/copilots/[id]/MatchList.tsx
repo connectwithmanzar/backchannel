@@ -1,6 +1,7 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
-import { Card, Pill, btn } from "@/components/ui";
+import { Card, Pill, btn, btnPrimary } from "@/components/ui";
 
 export type Match = { id: string; title: string; company: string; location: string; url: string; saved: boolean; likeKept: boolean };
 
@@ -47,6 +48,7 @@ export default function MatchList({ initial }: { initial: Match[] }) {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <Link href={`/roles/${m.id}`} className={btnPrimary}>Review and apply</Link>
                   {m.url && <a href={m.url} target="_blank" rel="noopener noreferrer" className={btn}>Open job</a>}
                   {!m.saved && <button type="button" className={btn} disabled={busyId === m.id} onClick={() => react(m, "bookmarked")}>Save</button>}
                   <button type="button" className={btn} disabled={busyId === m.id} onClick={() => react(m, "skipped")}>Skip</button>
