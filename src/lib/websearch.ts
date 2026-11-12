@@ -20,8 +20,8 @@ export const JOB_HOSTS = [
 // The ATS hosts whose job pages carry the company's board name, so one result reveals a whole company's board.
 import { parseWorkdayUrl, splitWorkdaySlug, workdaySlug } from "@/lib/collectors/workday-url";
 
-export type BoardKind = "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "workday";
-const ATS_URL: { ats: Exclude<BoardKind, "workday">; re: RegExp }[] = [
+export type BoardKind = "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "workday" | "other";
+const ATS_URL: { ats: Exclude<BoardKind, "workday" | "other">; re: RegExp }[] = [
   { ats: "greenhouse", re: /^https:\/\/(?:boards|job-boards)\.greenhouse\.io\/(?:embed\/job_app\?for=)?([a-z0-9][a-z0-9_-]*)/i },
   { ats: "lever", re: /^https:\/\/jobs\.lever\.co\/([a-z0-9][a-z0-9_.-]*)/i },
   { ats: "ashby", re: /^https:\/\/jobs\.ashbyhq\.com\/([a-z0-9][a-z0-9_.%-]*)/i },
@@ -36,11 +36,17 @@ export function parseAtsUrl(url: string): { ats: BoardKind; slug: string } | nul
     const m = url.match(re);
     if (m && !["embed", "jobs", "job", "careers"].includes(m[1].toLowerCase())) return { ats, slug: decodeURIComponent(m[1]) };
   }
+  // Workable and Recruitee are stored as "other" with the system named in the slug.
+  const wk = url.match(/^https:\/\/apply\.workable\.com\/(?!api\b|j\b)([a-z0-9][a-z0-9_-]*)/i);
+  if (wk) return { ats: "other", slug: `workable:${wk[1]}` };
+  const rc = url.match(/^https:\/\/([a-z0-9][a-z0-9-]*)\.recruitee\.com\b/i);
+  if (rc && !["www", "api", "app"].includes(rc[1].toLowerCase())) return { ats: "other", slug: `recruitee:${rc[1]}` };
   return null;
 }
 
 /** A readable company name for a board: the Workday tenant, or the board name on other systems. */
 export function boardName(b: { ats: BoardKind; slug: string }): string {
+  if (b.ats === "other") return prettifySlug(b.slug.replace(/^[a-z]+:/, ""));
   if (b.ats === "workday") { const w = splitWorkdaySlug(b.slug); return w ? prettifySlug(w.tenant) : prettifySlug(b.slug); }
   return prettifySlug(b.slug);
 }

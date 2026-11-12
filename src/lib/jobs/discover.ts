@@ -19,7 +19,7 @@ export function todaysQueries(perRun: number, now = Date.now()): string[] {
   return Array.from({ length: Math.min(perRun, grid.length) }, (_, i) => grid[(start + i) % grid.length]);
 }
 
-export interface Found { ats: "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "workday"; slug: string }
+export interface Found { ats: "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "workday" | "other"; slug: string }
 
 /** Unique company boards behind a set of job-page links, skipping boards we already watch. */
 export function newBoards(urls: string[], known: Set<string>): Found[] {

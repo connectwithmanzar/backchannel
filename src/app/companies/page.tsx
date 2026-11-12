@@ -54,7 +54,7 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Pr
       const w = byCompany.get(c.id);
       const k = counts.get(c.id) ?? { roles: 0, inIndia: 0, newThisWeek: 0 };
       return {
-        id: c.id, name: formatCompanyName(c.name), domain: c.domain, atsType: c.ats_type, hasBoard: !!c.ats_slug, enabled: c.enabled,
+        id: c.id, name: formatCompanyName(c.name), domain: c.domain, atsType: c.ats_type === "other" && c.ats_slug?.includes(":") ? c.ats_slug.split(":")[0] : c.ats_type, hasBoard: !!c.ats_slug, enabled: c.enabled,
         error: c.collect_error, lastCheckedAt: c.last_collected_at, ...k,
         country: c.country ?? null, size: c.size ?? null, sector: c.sector ?? null, linkedinUrl: c.linkedin_url ?? null,
         companyType: c.company_type ?? null, hiring: (c.hiring_signal ?? null) as CompanyRow["hiring"], linkedinOpenings: c.linkedin_openings ?? null,

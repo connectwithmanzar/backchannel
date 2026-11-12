@@ -134,5 +134,15 @@ check(jobs3 is not None and set(jobs3["site"]) >= {"remoteok", "weworkremotely",
 core.MARKETS["India"]["sites"].remove("google")
 check("google" not in core.MARKETS["India"]["sites"] and "google" not in core.MARKETS["UAE"]["sites"], "Google Jobs stays off in the daily search until it works again")
 
+
+# --- Weekly great-company search must survive a company that matches nothing (it crashed the 12 Nov 8:00 run) ---
+try:
+    nothing, nlog = core.name_search(["Zzz Nonexistent Corp"], ["India"])
+    check(nothing is None and len(nlog) > 0, "great-company search copes with a company that matches no jobs")
+except Exception as e:  # noqa: BLE001
+    check(False, f"great-company search copes with a company that matches no jobs ({e!r})")
+found, _ = core.name_search(["Careem"], ["India", "UAE"])
+check(found is not None and len(found) > 0, "great-company search still finds a matching company's sales roles")
+
 print(f"\n{'All checks passed' if not failures else f'{len(failures)} check(s) failed'}.")
 sys.exit(1 if failures else 0)

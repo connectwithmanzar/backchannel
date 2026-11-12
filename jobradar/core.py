@@ -341,13 +341,18 @@ def name_search(companies: list[str], markets: list[str], per_company: int = 20)
             except Exception as e:
                 log.append({"site": SITE_LABELS[site], "market": "", "keyword": company, "jobs": 0, "note": str(e)[:120]})
                 continue
+            # Each filter only runs on a frame that still has rows: an empty yes/no list would otherwise be read by
+            # pandas as "pick no columns", and the next step would fail with KeyError: 'location'.
             if len(df):
-                df = df[df["company"].map(lambda c: people.same_company(c, company))]
-                df = df[df["title"].map(lambda t: insights.role_family(t) != "")]
+                df = df[df["company"].map(lambda c: people.same_company(c, company)).astype(bool)]
+            if len(df):
+                df = df[df["title"].map(lambda t: insights.role_family(t) != "").astype(bool)]
+            if len(df):
+                df = df.copy()
                 df["market"] = df["location"].map(market_of)
                 if site == "naukri":
                     df.loc[df["market"] == "", "market"] = "India"
-                df = df[df["market"].isin(markets)]
+                df = df[df["market"].isin(markets)].copy()
                 df["keyword"] = f"great company: {company}"
             log.append({"site": SITE_LABELS[site], "market": "", "keyword": company, "jobs": len(df), "note": ""})
             if len(df):

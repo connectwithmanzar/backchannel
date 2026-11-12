@@ -67,7 +67,7 @@ export default function SourcesClient({ rows, owner }: { rows: SourceRow[]; owne
             {shown.map((r) => (
               <tr key={r.id} className="border-t border-line align-top">
                 <td className="px-3 py-2 font-semibold">{r.name}<div className="text-xs font-normal text-muted">{r.domain}</div></td>
-                <td className="px-3 py-2 whitespace-nowrap"><span className="capitalize">{r.ats_type}</span> · <span className="font-mono text-xs">{r.ats_slug}</span></td>
+                <td className="px-3 py-2 whitespace-nowrap"><span className="capitalize">{r.ats_type === "other" ? r.ats_slug.split(":")[0] : r.ats_type}</span> · <span className="font-mono text-xs">{r.ats_type === "other" ? r.ats_slug.split(":").slice(1).join(":") : r.ats_slug}</span></td>
                 <td className="px-3 py-2 num">{r.open_sales_roles ?? "—"}</td>
                 <td className="px-3 py-2">
                   {!r.enabled ? <span className="text-muted">Turned off</span>

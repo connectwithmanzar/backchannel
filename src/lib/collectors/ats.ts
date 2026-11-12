@@ -3,7 +3,9 @@
 
 import { fetchWorkday } from "@/lib/collectors/workday";
 
-export type AtsType = "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "workday";
+// "other" holds boards the database list does not name: the slug then starts with the system, like "workable:acme".
+export type AtsType = "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "workday" | "other";
+export type OtherBoard = "workable" | "recruitee";
 
 export interface RawJob {
   external_id: string;
@@ -12,7 +14,7 @@ export interface RawJob {
   url: string;
   description: string;
   posted_at: string | null;
-  board: AtsType | "remotive" | "arbeitnow" | "adzuna" | "jsearch" | "remoteok" | "weworkremotely" | "himalayas";
+  board: AtsType | OtherBoard | "remotive" | "arbeitnow" | "adzuna" | "jsearch" | "remoteok" | "weworkremotely" | "himalayas";
   remote?: boolean;
   currency?: string;
   base_min?: number;
@@ -117,10 +119,57 @@ export function parseSmartRecruiters(data: any, slug: string): RawJob[] {
     remote: j.location?.remote === true,
   }));
 }
+
+const OTHER_BOARDS: readonly OtherBoard[] = ["workable", "recruitee"];
+
+/** "workable:acme" → { kind: "workable", slug: "acme" }, or null for anything else. */
+export function splitOtherSlug(value: string): { kind: OtherBoard; slug: string } | null {
+  const i = value.indexOf(":");
+  const kind = value.slice(0, i) as OtherBoard;
+  return i > 0 && OTHER_BOARDS.includes(kind) && value.slice(i + 1) ? { kind, slug: value.slice(i + 1) } : null;
+}
+
+const place = (...parts: unknown[]) => parts.filter((p) => typeof p === "string" && p.trim()).join(", ");
+
+/** Workable's public widget: { jobs: [{ title, shortcode, url, telecommuting, city, state, country, published_on }] }. */
+export function parseWorkable(data: any, slug: string): RawJob[] {
+  return (data?.jobs ?? []).filter((j: any) => j?.title).map((j: any) => ({
+    external_id: String(j.shortcode ?? j.code ?? j.url),
+    title: String(j.title),
+    location: place(j.city, j.state, j.country) || (j.telecommuting ? "Remote" : ""),
+    url: String(j.url ?? j.shortlink ?? `https://apply.workable.com/${slug}/j/${j.shortcode}/`),
+    description: String(j.description ?? ""),
+    posted_at: j.published_on ?? j.created_at ?? null,
+    board: "workable" as const,
+    remote: j.telecommuting === true,
+  }));
+}
+
+/** Recruitee's public offers: { offers: [{ id, title, careers_url, city, country, remote, created_at }] }. */
+export function parseRecruitee(data: any): RawJob[] {
+  return (data?.offers ?? []).filter((j: any) => j?.title && j?.careers_url).map((j: any) => ({
+    external_id: String(j.id ?? j.slug),
+    title: String(j.title),
+    location: place(j.city, j.country) || String(j.location ?? "") || (j.remote ? "Remote" : ""),
+    url: String(j.careers_url),
+    description: String(j.description ?? ""),
+    posted_at: j.created_at ?? j.published_at ?? null,
+    board: "recruitee" as const,
+    remote: j.remote === true,
+  }));
+}
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export async function fetchBoard(ats: AtsType, slug: string): Promise<RawJob[]> {
   if (ats === "workday") return fetchWorkday(slug);
+  if (ats === "other") {
+    const o = splitOtherSlug(slug);
+    if (!o) throw new BoardNotFound("unknown board type");
+    const id = encodeURIComponent(o.slug);
+    return o.kind === "workable"
+      ? parseWorkable(await getJson(`https://apply.workable.com/api/v1/widget/accounts/${id}?details=true`), o.slug)
+      : parseRecruitee(await getJson(`https://${id}.recruitee.com/api/offers/`));
+  }
   const s = encodeURIComponent(slug);
   switch (ats) {
     case "greenhouse":
@@ -132,6 +181,7 @@ export async function fetchBoard(ats: AtsType, slug: string): Promise<RawJob[]> 
     case "smartrecruiters":
       return parseSmartRecruiters(await getJson(`https://api.smartrecruiters.com/v1/companies/${s}/postings?limit=100`), slug);
   }
+  throw new BoardNotFound(`unknown board type: ${ats}`);
 }
 
 /** Slug guesses for a company name/domain, e.g. "Apollo.io" → apolloio, apollo-io, apollo. */
@@ -154,8 +204,12 @@ export async function discoverBoard(
   name: string,
   domain?: string | null
 ): Promise<{ ats: AtsType; slug: string; jobs: number } | null> {
-  const atsList: AtsType[] = ["greenhouse", "ashby", "lever", "smartrecruiters"];
-  const tries = slugCandidates(name, domain).flatMap((slug) => atsList.map((ats) => ({ ats, slug })));
+  // The four main systems first; Workable and Recruitee (common with startups) are tried with the same guesses.
+  const systems: { ats: AtsType; prefix: string }[] = [
+    { ats: "greenhouse", prefix: "" }, { ats: "ashby", prefix: "" }, { ats: "lever", prefix: "" }, { ats: "smartrecruiters", prefix: "" },
+    { ats: "other", prefix: "workable:" }, { ats: "other", prefix: "recruitee:" },
+  ];
+  const tries = slugCandidates(name, domain).flatMap((slug) => systems.map((s) => ({ ats: s.ats, slug: s.prefix + slug })));
   const found = await Promise.all(
     tries.map(async ({ ats, slug }) => {
       try {
