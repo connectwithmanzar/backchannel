@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, btn } from "@/components/ui";
 
@@ -9,6 +9,8 @@ const savedOn = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(
 
 export default function SavedList({ initial }: { initial: SavedJob[] }) {
   const [jobs, setJobs] = useState(initial);
+  // A new job saved above refreshes the page data; take it in instead of keeping the first copy.
+  useEffect(() => { setJobs(initial); }, [initial]);
   const [error, setError] = useState("");
 
   async function remove(id: string) {
