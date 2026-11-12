@@ -1,26 +1,52 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classifyRelevance, isRelevantRole, RELEVANT_TITLE_OR } from "../src/lib/relevance";
+import { classifyRelevance, isRelevantRole, RELEVANT_TITLE_OR, RELEVANT_TITLE_PATTERNS } from "../src/lib/relevance";
 
-const yes = (title: string, company = "Acme Software", description = "") => assert.equal(isRelevantRole(title, company, description), true, title);
-const no = (title: string, company = "Acme Software", description = "") => assert.equal(isRelevantRole(title, company, description), false, `${title} should not count`);
+const yes = (title: string, company = "Acme", description = "") => assert.equal(isRelevantRole(title, company, description), true, title);
+const no = (title: string, company = "Acme", description = "") => assert.equal(isRelevantRole(title, company, description), false, `${title} should not count`);
 
-test("SDR, BDR and lead generation roles count", () => {
-  for (const t of ["Sales Development Representative", "SDR", "Business Development Representative", "BDR - Outbound", "Business Development Executive", "Lead Generation Specialist",
-    "Inside Sales Representative", "Market Development Representative", "Associate Business Development Representative", "Outbound Sales Representative", "Account Development Representative"]) yes(t);
+test("SDR and BDR roles count at every level, including senior", () => {
+  for (const t of ["Sales Development Representative", "SDR", "Senior SDR", "Senior Sales Development Representative", "Senior Business Development Representative", "Sr. BDR",
+    "Business Development Representative", "BDR - Outbound", "Business Development Executive", "Associate Business Development Representative", "Lead Generation Specialist",
+    "Lead Generation Executive", "Market Development Representative", "Outbound Sales Representative", "Account Development Representative"]) yes(t);
 });
 
-test("GTM and revenue operations roles count", () => {
-  for (const t of ["GTM Engineer", "Go-to-Market Operations Analyst", "GTM Operations Specialist", "Revenue Operations Specialist", "Growth Engineer", "Sales Operations Analyst"]) yes(t);
+test("any GTM or revenue operations role counts, except heads, VPs and directors", () => {
+  for (const t of ["GTM Engineer", "GTM Manager", "GTM Lead", "Go-to-Market Operations Analyst", "GTM Operations Specialist", "Revenue Operations Specialist", "Revenue Operations Manager", "Growth Engineer", "Sales Operations Analyst"]) yes(t);
+  for (const t of ["Head of GTM", "VP, Go-to-Market", "Director of Revenue Operations"]) no(t);
 });
 
-test("associate and mid-level Account Executives count, senior and enterprise ones do not", () => {
-  for (const t of ["Account Executive", "Associate Account Executive", "Account Executive, Commercial", "Mid-Market Account Executive", "Account Executive - SMB", "Corporate Account Executive"]) yes(t);
-  for (const t of ["Senior Account Executive", "Senior Account Executive - Inside Sales", "Sr. Account Executive", "Enterprise Account Executive", "Strategic Account Executive", "Principal Account Executive", "Global Account Executive"]) no(t);
+test("inside sales associates and executives count", () => {
+  for (const t of ["Inside Sales Executive", "Inside Sales Associate", "Inside Sales Representative", "Associate, Inside Sales", "Senior Inside Sales Executive"]) yes(t);
+  no("Inside Sales Manager");
 });
 
-test("heads, directors, VPs and managers do not count", () => {
-  for (const t of ["Head of Sales", "Head of Sales Development", "VP Sales", "Director of Business Development", "Sales Development Manager", "BDR Team Lead", "Business Development Manager", "Revenue Operations Manager", "Chief Revenue Officer"]) no(t);
+test("B2B sales that is not leadership counts: account executives of any level", () => {
+  for (const t of ["Account Executive", "Associate Account Executive", "Senior Account Executive", "Enterprise Account Executive", "Strategic Account Executive", "Mid-Market Account Executive", "Account Executive - SMB", "Senior Account Executive - Inside Sales"]) yes(t);
+});
+
+test("a plain sales title counts only when something shows it is B2B", () => {
+  yes("B2B Sales Executive");
+  yes("Corporate Sales Executive");
+  yes("Enterprise Sales Representative");
+  yes("Sales Executive", "Acme Software");
+  yes("Sales Representative", "Acme", "We sell workflow software to IT teams.");
+  no("Sales Executive", "Acme Traders");
+  no("Sales Associate", "Acme");
+});
+
+test("SaaS sales counts", () => {
+  for (const t of ["SaaS Sales Executive", "Sales Executive - SaaS", "Sales Representative, SaaS", "Business Development Associate - SaaS"]) yes(t);
+});
+
+test("advertising sales counts", () => {
+  for (const t of ["Advertising Sales Executive", "Ad Sales Specialist", "Media Sales Executive", "Programmatic Sales Specialist", "Advertiser Sales Associate", "Sales Executive, Advertising"]) yes(t);
+  no("Ad Sales Manager");
+  no("Head of Advertising Sales");
+});
+
+test("heads, directors, VPs, managers and team leads do not count", () => {
+  for (const t of ["Head of Sales", "Head of Sales Development", "VP Sales", "Director of Business Development", "Sales Development Manager", "BDR Team Lead", "Business Development Manager", "Sales Manager", "Chief Revenue Officer", "Regional Sales Manager"]) no(t);
 });
 
 test("'lead generation' is not mistaken for a team lead", () => {
@@ -40,22 +66,28 @@ test("a description that says B2C and never B2B rules a role out; B2B wins", () 
   yes("Business Development Executive", "Acme", "B2B SaaS. We also have a B2C product.");
 });
 
-test("titles that are not sales development, GTM or AE are out", () => {
-  for (const t of ["Software Engineer", "Customer Success Manager", "Account Manager", "Solutions Engineer", "Marketing Manager", "Recruiter", "Sales Manager", ""]) no(t);
+test("pre-sales, support and other non-selling titles are out", () => {
+  for (const t of ["Software Engineer", "Customer Success Manager", "Account Manager", "Solutions Engineer", "Sales Engineer", "Marketing Manager", "Recruiter", "Sales Enablement Manager", ""]) no(t);
 });
 
-test("each result says why", () => {
+test("each result says what kind of role it is, and why when it is out", () => {
   assert.equal(classifyRelevance("Sales Development Representative").kind, "SDR/BDR");
   assert.equal(classifyRelevance("GTM Engineer").kind, "GTM");
   assert.equal(classifyRelevance("Account Executive").kind, "Account Executive");
+  assert.equal(classifyRelevance("Inside Sales Executive").kind, "Inside sales");
+  assert.equal(classifyRelevance("SaaS Sales Executive").kind, "SaaS sales");
+  assert.equal(classifyRelevance("Media Sales Executive").kind, "Ad sales");
+  assert.equal(classifyRelevance("B2B Sales Executive").kind, "B2B sales");
   assert.match(classifyRelevance("Sales Development Manager").reason, /leadership/);
-  assert.match(classifyRelevance("Head of Sales").reason, /not an SDR/);
-  assert.match(classifyRelevance("Senior Account Executive").reason, /senior/);
+  assert.match(classifyRelevance("Head of Sales").reason, /not one of your kinds/);
   assert.match(classifyRelevance("Business Development Executive - Home Loans").reason, /consumer/);
+  assert.match(classifyRelevance("Sales Engineer").reason, /not a selling role/);
 });
 
 test("the database search filter covers every title pattern", () => {
   assert.match(RELEVANT_TITLE_OR, /title\.ilike\.%sdr%/);
   assert.match(RELEVANT_TITLE_OR, /title\.ilike\.%account executive%/);
-  assert.equal(RELEVANT_TITLE_OR.split(",").length, 18);
+  assert.match(RELEVANT_TITLE_OR, /title\.ilike\.%saas%/);
+  assert.match(RELEVANT_TITLE_OR, /title\.ilike\.%advertis%/);
+  assert.equal(RELEVANT_TITLE_OR.split(",").length, RELEVANT_TITLE_PATTERNS.length);
 });

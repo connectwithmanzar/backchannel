@@ -152,14 +152,14 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
   return (
     <section className="py-6">
       <div className="text-xs font-semibold uppercase tracking-wider text-muted">
-        SDR · BDR · GTM · Associate AE · B2B
+        SDR · BDR · GTM · Inside sales · AE · SaaS · Ad sales
       </div>
       <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">
         Jobs
       </h1>
       <p className="mt-2 max-w-[62ch] text-muted">
         Roles that match what you are looking for, from company career pages and JobRadar, ranked against your profile.
-        &ldquo;Relevant to me&rdquo; hides heads of sales, managers, senior AEs and consumer sales; switch to All roles to see everything.
+        &ldquo;Relevant to me&rdquo; hides heads of sales, managers and consumer sales; switch to All kinds of role to see everything.
       </p>
       {lastChecked && (
         <p className="mt-2 text-sm text-muted num">Roles last collected {shortDateTime(lastChecked)}.</p>
