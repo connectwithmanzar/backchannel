@@ -87,17 +87,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 5. Real listings from a licensed Google-for-Jobs feed, when its key is set.
+  // 5. Real listings from a licensed Google-for-Jobs feed, when its key is set. A failure here must not stop the search:
+  // the note is kept and the next route is still tried.
+  let listingsNote = "";
   if (jsearchConfigured()) {
     // The free plan has a hard limit of 200 requests a month: 100 for your searches, 80 for the daily scan, 20 spare.
     if (!(await rateLimitShared(`jsearch:${user.id}`, 100, 30 * 864e5))) {
-      return NextResponse.json({ ok: true, status: "none", name, domain, workday, careersUrl: domain ? `https://${domain}/careers` : null, note: "You've used this month's job-listing searches." });
+      listingsNote = "You've used this month's job-listing searches.";
+    } else {
+      try {
+        const cards = await searchJSearch(`sales jobs at ${name}${place ? ` in ${place}` : ""}`);
+        const { shown, hidden } = listingsForCompany(cards, name);
+        if (shown.length) return NextResponse.json({ ok: true, status: "listings", name, listings: shown.slice(0, 25), hidden });
+      } catch (e) { listingsNote = (e as Error).message; }
     }
-    try {
-      const cards = await searchJSearch(`sales jobs at ${name}${place ? ` in ${place}` : ""}`);
-      const { shown, hidden } = listingsForCompany(cards, name);
-      if (shown.length) return NextResponse.json({ ok: true, status: "listings", name, listings: shown.slice(0, 25), hidden });
-    } catch (e) { return NextResponse.json({ ok: true, status: "none", name, domain, workday, careersUrl: domain ? `https://${domain}/careers` : null, note: (e as Error).message }); }
   }
 
   // 6. Individual posting pages on their site and the main job boards (category and landing pages are dropped).
@@ -105,5 +108,5 @@ export async function POST(req: NextRequest) {
     const results = await searchCompanyRoles(name, domain).catch(() => []);
     if (results.length) return NextResponse.json({ ok: true, status: "results", name, domain, workday, results });
   }
-  return NextResponse.json({ ok: true, status: "none", name, domain, workday, careersUrl: domain ? `https://${domain}/careers` : null });
+  return NextResponse.json({ ok: true, status: "none", name, domain, workday, careersUrl: domain ? `https://${domain}/careers` : null, ...(listingsNote ? { note: listingsNote } : {}) });
 }

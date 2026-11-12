@@ -11,12 +11,12 @@ async function readJson(res: Response): Promise<{ error?: string; [k: string]: u
 }
 
 /** Paste a job link (any board) or the job text. Fetch fills the fields, you check them, Save puts it in Saved jobs. */
-export default function PasteJob({ startOpen = false }: { startOpen?: boolean }) {
+export default function PasteJob({ startOpen = false, initialCompany = "" }: { startOpen?: boolean; initialCompany?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(startOpen);
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
-  const [company, setCompany] = useState("");
+  const [company, setCompany] = useState(initialCompany);
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [busy, setBusy] = useState<"fetch" | "save" | null>(null);

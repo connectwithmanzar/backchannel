@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { btn, btnPrimary, Card, input } from "@/components/ui";
+import PasteJob from "./PasteJob";
 
 type Role = { title: string; location: string; url: string };
 type Result = { title: string; url: string; host: string; snippet: string };
@@ -103,10 +104,14 @@ export default function CompanyJobsFinder({ initialName = "" }: { initialName?: 
         </div>
       )}
       {out?.status === "none" && (
-        <p className="text-sm text-muted">
-          {out.note ? `${out.note} ` : ""}I couldn&apos;t find open sales roles for {out.name} automatically.
-          {out.workday ? <> They use Workday, but no open sales roles were found there right now: <a href={out.workday} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">open their jobs</a>.</> : out.careersUrl ? <> Try <a href={out.careersUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">their careers page</a> and paste any role you like with &quot;Add a job you found&quot;.</> : " Add their website above and try again."}
-        </p>
+        <div className="text-sm">
+          <p className="text-muted">
+            I couldn&apos;t find open sales roles for {out.name} automatically.
+            {out.workday ? <> They use Workday, but no open sales roles were found there right now: <a href={out.workday} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">open their jobs</a>.</> : out.careersUrl ? <> You can look at <a href={out.careersUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">their careers page</a>.</> : " Add their website above and try again."}
+          </p>
+          <p className="mt-2 font-semibold">Found a role yourself, on LinkedIn or anywhere else? Paste its link here and save it.</p>
+          <PasteJob startOpen initialCompany={out.name} />
+        </div>
       )}
     </Card>
   );
