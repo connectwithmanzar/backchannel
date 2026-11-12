@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cleanCopilotInput, matchesCopilot, titleMatches, titleSeniority, keptWords, keptScore, describeWhere, type CopilotInput } from "../src/lib/copilots";
+import { cleanCopilotInput, expandTitle, matchesCopilot, titleMatches, titleSeniority, keptWords, keptScore, describeWhere, type CopilotInput } from "../src/lib/copilots";
 
 const base: CopilotInput = { name: "", titles: ["sales development"], remote: true, remoteRegions: [], onsite: false, places: [], seniority: [], excludeWords: [] };
 
@@ -69,4 +69,13 @@ test("jobs like the ones you kept score higher", () => {
 test("the card line says where a Copilot looks", () => {
   assert.equal(describeWhere({ remote: true, remoteRegions: [], onsite: false, places: [] }), "Remote anywhere");
   assert.equal(describeWhere({ remote: true, remoteRegions: ["India"], onsite: true, places: ["Pune", "Delhi"] }), "Remote India · On-site Pune, Delhi");
+});
+
+test("common short forms count: sales development finds SDR, and short words must match whole", () => {
+  assert.ok(expandTitle("sales development").includes("sdr"));
+  assert.ok(expandTitle("SDR").includes("sales development") || expandTitle("SDR").some((a) => a.includes("sales development")));
+  assert.equal(titleMatches("sales development", "Senior SDR"), true);
+  assert.equal(titleMatches("account executive", "Enterprise AE"), true);
+  assert.equal(titleMatches("account executive", "Aerospace Engineer"), false);
+  assert.equal(titleMatches("gtm", "Gtmx Analyst"), false);
 });

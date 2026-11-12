@@ -20,7 +20,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
         />
       </head>
       <body className="font-sans text-[15px] leading-relaxed antialiased">

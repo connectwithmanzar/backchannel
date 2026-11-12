@@ -85,12 +85,37 @@ export function tokens(text: string): string[] {
   return text.toLowerCase().split(/[^a-z0-9+#]+/).filter((t) => t.length > 1 && !STOP_WORDS.has(t));
 }
 
-/** True when every word of the wanted title starts a word in the job title ("sales development" fits "Sales Development Representative"). */
-export function titleMatches(wanted: string, jobTitle: string): boolean {
+// Titles people write both ways. Each pair is a full phrase and its common short form.
+const TITLE_ALIASES: [string, string][] = [
+  ["sales development", "sdr"],
+  ["business development", "bdr"],
+  ["account executive", "ae"],
+  ["go to market", "gtm"],
+  ["customer success manager", "csm"],
+];
+
+/** The wanted title plus its other common spellings, for example "sales development" also gives "sdr". */
+export function expandTitle(wanted: string): string[] {
+  const text = wanted.toLowerCase().trim();
+  const out = new Set<string>([wanted]);
+  for (const [phrase, short] of TITLE_ALIASES) {
+    if (text.includes(phrase)) out.add(text.replace(phrase, short));
+    if (tokens(text).includes(short)) out.add(text.replace(new RegExp(`\\b${short}\\b`), phrase));
+  }
+  return [...out];
+}
+
+/** Words of the wanted title must start words in the job title; short words (3 letters or fewer, like "sdr") must match whole. */
+function titleMatchesExactly(wanted: string, jobTitle: string): boolean {
   const need = tokens(wanted);
   if (need.length === 0) return false;
   const have = tokens(jobTitle);
-  return need.every((n) => have.some((h) => h === n || h.startsWith(n)));
+  return need.every((n) => have.some((h) => h === n || (n.length > 3 && h.startsWith(n))));
+}
+
+/** True when the job title fits the wanted title or one of its common short forms ("sales development" fits "Senior SDR"). */
+export function titleMatches(wanted: string, jobTitle: string): boolean {
+  return expandTitle(wanted).some((alt) => titleMatchesExactly(alt, jobTitle));
 }
 
 /** Reads the level from the words in a job title. Titles with no level word count as mid level. */

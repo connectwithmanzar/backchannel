@@ -53,7 +53,7 @@ export default function SourcesClient({ rows, owner }: { rows: SourceRow[]; owne
       <div className="flex flex-wrap gap-1.5">
         {(["all", "working", "broken", "off"] as const).map((f) => (
           <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)}
-            className={`rounded-full border px-3 py-1 text-[13px] capitalize ${filter === f ? "border-fg bg-fg text-bg" : "border-line bg-surface"}`}>
+            className={`rounded-full border px-3 py-1 text-[13px] capitalize ${filter === f ? "border-accent bg-accent text-accent-ink" : "border-line bg-surface"}`}>
             {f === "off" ? "Turned off" : f} <span className="num">{counts[f]}</span>
           </button>
         ))}

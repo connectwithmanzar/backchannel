@@ -29,8 +29,8 @@ export default function CompanyRoles({ roles, companyName }: { roles: CompanyRol
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-lg font-semibold">Open roles at {companyName}</h2>
         <div className="flex gap-2" role="group" aria-label="Which roles to show">
-          <button type="button" aria-pressed={relevantOnly} onClick={() => setRelevantOnly(true)} className={`${pill} ${relevantOnly ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>Relevant to me <span className="num opacity-70">{relevantCount}</span></button>
-          <button type="button" aria-pressed={!relevantOnly} onClick={() => setRelevantOnly(false)} className={`${pill} ${!relevantOnly ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>All roles <span className="num opacity-70">{roles.length}</span></button>
+          <button type="button" aria-pressed={relevantOnly} onClick={() => setRelevantOnly(true)} className={`${pill} ${relevantOnly ? "bg-accent text-accent-ink" : "border border-line bg-surface hover:border-fg/40"}`}>Relevant to me <span className="num opacity-70">{relevantCount}</span></button>
+          <button type="button" aria-pressed={!relevantOnly} onClick={() => setRelevantOnly(false)} className={`${pill} ${!relevantOnly ? "bg-accent text-accent-ink" : "border border-line bg-surface hover:border-fg/40"}`}>All roles <span className="num opacity-70">{roles.length}</span></button>
         </div>
       </div>
       {error && <p role="alert" className="mt-2 text-sm text-warn">{error}</p>}

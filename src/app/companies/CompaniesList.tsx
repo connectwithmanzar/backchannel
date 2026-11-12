@@ -79,7 +79,7 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
         <span className="text-xs font-semibold text-muted">Tier</span>
         {(["any", ...TIERS] as const).map((t) => (
           <button key={t} type="button" aria-pressed={tierFilter === t} onClick={() => { setTierFilter(t); setLimit(PAGE); }}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${tierFilter === t ? "bg-fg text-bg" : "bg-surface text-muted ring-1 ring-line hover:text-fg"}`}>
+            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${tierFilter === t ? "bg-accent text-accent-ink" : "bg-surface text-muted ring-1 ring-line hover:text-fg"}`}>
             {t === "any" ? "Any" : `Tier ${t}`} <span className="num opacity-70">· {t === "any" ? rows.length : rows.filter((r) => r.tier === t).length}</span>
           </button>
         ))}
@@ -106,7 +106,7 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
                   <div className="flex gap-1.5" role="group" aria-label={`Your tier for ${c.name}`}>
                     {TIERS.map((t) => (
                       <button key={t} type="button" title={TIER_MEANING[t]} aria-pressed={c.tier === t} onClick={() => setTier(c.id, c.tier === t ? null : t)}
-                        className={`rounded-full px-3 py-1 text-xs font-bold max-md:min-h-11 max-md:px-4 ${c.tier === t ? "bg-fg text-bg" : "bg-sunk text-muted hover:text-fg"}`}>Tier {t}</button>
+                        className={`rounded-full px-3 py-1 text-xs font-bold max-md:min-h-11 max-md:px-4 ${c.tier === t ? "bg-accent text-accent-ink" : "bg-sunk text-muted hover:text-fg"}`}>Tier {t}</button>
                     ))}
                   </div>
                   <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Your status for ${c.name}`}>

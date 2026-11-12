@@ -2,12 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SECTIONS, TABS, MORE_LINKS, subLinksFor, tabIsActive, moreIsActive } from "../src/lib/nav-config";
 
-test("the main menu is Jobs, Companies and Saved jobs", () => {
-  assert.deepEqual(TABS.map((t) => t.label), ["Jobs", "Companies", "Saved jobs"]);
+test("the main menu is Copilots, Jobs, Companies and Saved jobs", () => {
+  assert.deepEqual(TABS.map((t) => t.label), ["Copilots", "Jobs", "Companies", "Saved jobs"]);
 });
 
 test("everything else is under More, together with the rarely used pages", () => {
-  assert.deepEqual(MORE_LINKS.map((l) => l.label), ["Today", "People", "Copilots", "Applications", "Side income", "Chrome extension"]);
+  assert.deepEqual(MORE_LINKS.map((l) => l.label), ["Today", "People", "Applications", "Side income", "Chrome extension"]);
 });
 
 test("every page belongs to exactly one section", () => {
@@ -16,14 +16,14 @@ test("every page belongs to exactly one section", () => {
 });
 
 test("a job or company detail page highlights its own tab", () => {
-  assert.equal(tabIsActive("/roles/abc", TABS[0]), true);
-  assert.equal(tabIsActive("/companies/abc", TABS[1]), true);
-  assert.equal(tabIsActive("/roles/abc", TABS[1]), false);
+  assert.equal(tabIsActive("/roles/abc", TABS[1]), true);
+  assert.equal(tabIsActive("/companies/abc", TABS[2]), true);
+  assert.equal(tabIsActive("/roles/abc", TABS[2]), false);
 });
 
 test("More lights up on pages that live under it, not on main tabs", () => {
-  for (const p of ["/today", "/outreach", "/referrals", "/copilots", "/offers", "/pay", "/practice", "/side-income", "/extension"]) assert.equal(moreIsActive(p), true, p);
-  for (const p of ["/roles", "/companies", "/sources", "/saved", "/profile"]) assert.equal(moreIsActive(p), false, p);
+  for (const p of ["/today", "/outreach", "/referrals", "/offers", "/pay", "/practice", "/side-income", "/extension"]) assert.equal(moreIsActive(p), true, p);
+  for (const p of ["/copilots", "/roles", "/companies", "/sources", "/saved", "/profile"]) assert.equal(moreIsActive(p), false, p);
 });
 
 test("the section strip appears only for sections with several pages", () => {

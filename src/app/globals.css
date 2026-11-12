@@ -2,22 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens: warm neutral ground, one deep green accent. Contrast checked against the surfaces they sit on. */
+/* Design tokens: a soft lavender ground, white cards and one purple accent (the JobCopilot look). Contrast checked against the surfaces they sit on. */
 :root {
-  --bg: #f6f5f1; --surface: #ffffff; --sunk: #eeece6; --line: #e4e2db;
-  --fg: #15171a; --muted: #5b6068; --accent: #0f6b5c; --accent-ink: #ffffff; --accent-soft: #e3f1ee;
+  --bg: #e9eefb; --surface: #ffffff; --sunk: #f1f3fb; --line: #e2e6f3;
+  --fg: #1f2433; --muted: #596077; --accent: #5b3bc5; --accent-ink: #ffffff; --accent-soft: #ece8fb;
   --signal: #8a4a06; --signal-soft: #fff1de; --good: #0b5246; --good-soft: #e3f1ee; --warn: #9b2c1c; --warn-soft: #fbe6e1;
+  --page-top: #f1f5f9; --page-bottom: #e0e7ff;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1412; --surface: #171e1b; --sunk: #1f2724; --line: #2b3531;
-    --fg: #e8eeeb; --muted: #9aa7a1; --accent: #4fc3a8; --accent-ink: #06201a; --accent-soft: #17302a;
+    --bg: #14152a; --surface: #1c1e33; --sunk: #25283f; --line: #34385a;
+    --fg: #eceefa; --muted: #a3a9c4; --accent: #a994ff; --accent-ink: #181433; --accent-soft: #2b2652;
     --signal: #f2b65a; --signal-soft: #3a2a10; --good: #5fd39a; --good-soft: #143326; --warn: #ff9a7d; --warn-soft: #3d1f16;
+    --page-top: #14152a; --page-bottom: #191b34;
     color-scheme: dark;
   }
 }
-body { background: var(--bg); color: var(--fg); }
-h1, h2, h3 { font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif; text-wrap: balance; letter-spacing: -0.01em; }
+body { background: var(--bg); background: linear-gradient(to top, var(--page-bottom), var(--page-top)) fixed; color: var(--fg); min-height: 100vh; }
+h1, h2, h3 { font-family: "Red Hat Display", "Avenir Next", "Segoe UI", sans-serif; text-wrap: balance; letter-spacing: -0.01em; }
 .num { font-variant-numeric: tabular-nums; }
 
 /* Height of the phone bottom tab bar, so floating buttons sit above it. */

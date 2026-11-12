@@ -4,7 +4,7 @@ import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { Empty, PageHeader, Pill, btn } from "@/components/ui";
 import { formatCompanyName } from "@/lib/company-name";
 import { loadCopilot, loadReactions, keptWordSet } from "@/lib/copilot-data";
-import { describeWhere, keptScore, matchesCopilot, tokens } from "@/lib/copilots";
+import { describeWhere, expandTitle, keptScore, matchesCopilot, tokens } from "@/lib/copilots";
 import MatchList, { type Match } from "./MatchList";
 
 export const dynamic = "force-dynamic";
@@ -24,10 +24,13 @@ export default async function CopilotMatchesPage({ params }: { params: Promise<{
   const copilot = uid ? await loadCopilot(db, uid, id) : null;
   if (!copilot) notFound();
 
-  // Narrow the database read to jobs whose title holds a word of a wanted title; the exact rules run below.
-  const words = [...new Set(copilot.titles.flatMap((t) => tokens(t)).map((w) => w.replace(/[^a-z0-9]/g, "")).filter((w) => w.length > 1))];
+  // Narrow the database read to titles holding every word of a wanted title (or of its short form); the exact rules run below.
+  const clauses = [...new Set(copilot.titles.flatMap((t) => expandTitle(t)))]
+    .map((alt) => tokens(alt).map((w) => w.replace(/[^a-z0-9]/g, "")).filter((w) => w.length > 1))
+    .filter((ws) => ws.length > 0)
+    .map((ws) => (ws.length === 1 ? `title.ilike.%${ws[0]}%` : `and(${ws.map((w) => `title.ilike.%${w}%`).join(",")})`));
   let query = db.from("jobs").select("id, title, location, remote_type, url, created_at, company_name, companies(name)").eq("is_active", true);
-  if (words.length > 0) query = query.or(words.map((w) => `title.ilike.%${w}%`).join(","));
+  if (clauses.length > 0) query = query.or(clauses.join(","));
   const [{ data }, reactions] = await Promise.all([query.order("created_at", { ascending: false }).limit(1000), loadReactions(db, uid)]);
 
   const kept = keptWordSet(reactions);

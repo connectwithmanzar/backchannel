@@ -1,10 +1,11 @@
 // One place that says which pages belong to which section, so the menu, the section strip and the tests agree.
-// The main menu is deliberately short: Jobs, Companies, Saved jobs. Everything else sits under "More".
+// The main menu is deliberately short: Copilots, Jobs, Companies, Saved jobs. Everything else sits under "More".
 
 export type NavLink = { href: string; label: string };
 export type Section = NavLink & { match: string[]; sub: NavLink[]; inMenu: boolean };
 
 export const SECTIONS: Section[] = [
+  { href: "/copilots", label: "Copilots", match: ["/copilots"], sub: [], inMenu: true },
   { href: "/roles", label: "Jobs", match: ["/roles"], sub: [], inMenu: true },
   {
     href: "/companies", label: "Companies", match: ["/companies", "/sources"], inMenu: true,
@@ -16,7 +17,6 @@ export const SECTIONS: Section[] = [
     href: "/outreach", label: "People", match: ["/outreach", "/referrals"], inMenu: false,
     sub: [{ href: "/outreach", label: "Messages" }, { href: "/referrals", label: "Referrals" }],
   },
-  { href: "/copilots", label: "Copilots", match: ["/copilots"], sub: [], inMenu: false },
   {
     href: "/autopilot", label: "Applications", match: ["/autopilot", "/pipeline", "/offers", "/pay", "/practice"], inMenu: false,
     sub: [

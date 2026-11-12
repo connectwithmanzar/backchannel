@@ -40,14 +40,14 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-8 shadow-sm">
+      <div className="w-full max-w-sm rounded-card border border-line bg-surface p-8 shadow-[0_2px_12px_rgba(81,101,184,0.08)]">
         {/* Logo */}
         <div className="mb-8 flex items-center gap-2">
           <svg width="32" height="32" viewBox="0 0 26 26" aria-hidden="true">
             <rect x="1" y="1" width="24" height="24" rx="7" fill="var(--accent)" />
             <path d="M7 9h9M7 13h12M7 17h6" stroke="var(--accent-ink)" strokeWidth="2.2" strokeLinecap="round" />
           </svg>
-          <span className="font-display text-2xl font-extrabold">Backchannel</span>
+          <span className="font-display text-2xl font-extrabold text-accent">Backchannel</span>
         </div>
 
         {sent ? (
@@ -77,7 +77,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full rounded-lg border border-line bg-sunk px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                className="w-full rounded-full border border-line bg-surface px-4 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
               />
             </div>
 
@@ -90,7 +90,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink transition hover:opacity-90 disabled:opacity-50"
+              className="rounded-full bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink transition hover:opacity-90 disabled:opacity-50"
             >
               {loading ? "Sending…" : "Send sign-in link"}
             </button>
@@ -101,13 +101,13 @@ export default function LoginPage() {
           <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
             {process.env.NEXT_PUBLIC_GOOGLE_LOGIN === "1" && (
               <button type="button" onClick={() => signInWith("google")}
-                className="w-full rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-semibold transition hover:border-fg/40">
+                className="w-full rounded-full border border-accent/40 bg-surface px-4 py-2.5 text-sm font-semibold text-accent transition hover:bg-accent-soft">
                 Continue with Google
               </button>
             )}
             {process.env.NEXT_PUBLIC_LINKEDIN_LOGIN === "1" && (
               <button type="button" onClick={() => signInWith("linkedin_oidc")}
-                className="w-full rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-semibold transition hover:border-fg/40">
+                className="w-full rounded-full border border-accent/40 bg-surface px-4 py-2.5 text-sm font-semibold text-accent transition hover:bg-accent-soft">
                 Continue with LinkedIn
               </button>
             )}

@@ -36,7 +36,7 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       aria-pressed={on}
       onClick={onClick}
       className={`rounded-full border px-3 py-1 text-[13px] transition-colors ${
-        on ? "border-fg bg-fg text-bg" : "border-line bg-surface hover:border-fg/40"
+        on ? "border-accent bg-accent text-accent-ink" : "border-line bg-surface hover:border-fg/40"
       }`}
     >
       {children}
@@ -303,11 +303,11 @@ export default function RolesFeed({
           {priorityIds.length > 0 && (
             <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Which companies">
               <button type="button" aria-pressed={view === "priority"} onClick={() => setView("priority")}
-                className={`rounded-full px-4 py-2 text-sm font-semibold ${view === "priority" ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${view === "priority" ? "bg-accent text-accent-ink" : "border border-line bg-surface hover:border-fg/40"}`}>
                 Priority <span className="num opacity-70">{priorityCount}</span>
               </button>
               <button type="button" aria-pressed={view === "all"} onClick={() => setView("all")}
-                className={`rounded-full px-4 py-2 text-sm font-semibold ${view === "all" ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${view === "all" ? "bg-accent text-accent-ink" : "border border-line bg-surface hover:border-fg/40"}`}>
                 All jobs <span className="num opacity-70">{allCount}</span>
               </button>
               <span className="text-sm text-muted">{view === "priority" ? "Roles at the companies you watch." : "Every company, with your watched ones first."}</span>
@@ -315,11 +315,11 @@ export default function RolesFeed({
           )}
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Which kinds of role">
             <Link href="/roles" aria-current={relevantOnly ? "true" : undefined}
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${relevantOnly ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${relevantOnly ? "bg-accent text-accent-ink" : "border border-line bg-surface hover:border-fg/40"}`}>
               Relevant to me{relevantOnly ? <> <span className="num opacity-70">{relevantCount}</span></> : null}
             </Link>
             <Link href="/roles?all=1" aria-current={!relevantOnly ? "true" : undefined}
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${!relevantOnly ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${!relevantOnly ? "bg-accent text-accent-ink" : "border border-line bg-surface hover:border-fg/40"}`}>
               All kinds of role{totalCount != null ? <> <span className="num opacity-70">{totalCount}</span></> : null}
             </Link>
           </div>
@@ -379,7 +379,7 @@ export default function RolesFeed({
                       <span className="rounded-md bg-good-soft px-2 py-0.5 text-xs font-semibold text-good">Open to India</span>
                     )}
                     {tierById[j.id] && (
-                      <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${tierById[j.id] === "D" ? "bg-warn-soft text-warn" : "bg-fg text-bg"}`}>Tier {tierById[j.id]}{suggestedSet.has(j.id) ? " (suggested)" : ""}</span>
+                      <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${tierById[j.id] === "D" ? "bg-warn-soft text-warn" : "bg-accent text-accent-ink"}`}>Tier {tierById[j.id]}{suggestedSet.has(j.id) ? " (suggested)" : ""}</span>
                     )}
                     <span className="rounded-md bg-signal-soft px-2 py-0.5 text-xs font-semibold text-signal">
                       {sourceLabel(j.source?.startsWith("jobradar:") ? j.source : j.board)}
