@@ -74,9 +74,13 @@ export default function RolesFeed({
   initialQuery = "",
   initialSaved = false,
   priorityIds = [],
+  showAll = false,
+  totalCount,
   tierById = {},
   suggestedIds = [],
 }: {
+  showAll?: boolean;
+  totalCount?: number;
   suggestedIds?: string[];
   tierById?: Record<string, Tier>;
   priorityIds?: string[];
@@ -97,14 +101,14 @@ export default function RolesFeed({
   const [countries, setCountries] = useState<Set<string>>(new Set());
   const [indiaOnly, setIndiaOnly] = useState(false);
   const [savedOnly, setSavedOnly] = useState(initialSaved);
-  const [relevantOnly, setRelevantOnly] = useState(true);
+  const relevantOnly = !showAll;
   const prioritySet = useMemo(() => new Set(priorityIds), [priorityIds]);
   const suggestedSet = useMemo(() => new Set(suggestedIds), [suggestedIds]);
   // The Priority count follows your market choice, so the number matches what the list can show.
   const priorityCount = useMemo(() => jobs.filter((j) => prioritySet.has(j.id) && (!relevantOnly || j.relevant) && (!markets.size || markets.has(j.market))).length, [jobs, prioritySet, markets, relevantOnly]);
   const relevantCount = useMemo(() => jobs.filter((j) => j.relevant).length, [jobs]);
   // Roles at the companies you watch come first; a search or the saved view starts on "All".
-  const [view, setView] = useState<"priority" | "all">(priorityIds.length > 0 && !initialSaved && !initialQuery ? "priority" : "all");
+  const [view, setView] = useState<"priority" | "all">("all");
   const [display, setDisplay] = useState<PayDisplay>("INR");
   const [payOnly, setPayOnly] = useState(false);
   const [minUsd, setMinUsd] = useState(0);
@@ -310,14 +314,14 @@ export default function RolesFeed({
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Which kinds of role">
-            <button type="button" aria-pressed={relevantOnly} onClick={() => setRelevantOnly(true)}
+            <Link href="/roles" aria-current={relevantOnly ? "true" : undefined}
               className={`rounded-full px-4 py-2 text-sm font-semibold ${relevantOnly ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
-              Relevant to me <span className="num opacity-70">{relevantCount}</span>
-            </button>
-            <button type="button" aria-pressed={!relevantOnly} onClick={() => setRelevantOnly(false)}
+              Relevant to me{relevantOnly ? <> <span className="num opacity-70">{relevantCount}</span></> : null}
+            </Link>
+            <Link href="/roles?all=1" aria-current={!relevantOnly ? "true" : undefined}
               className={`rounded-full px-4 py-2 text-sm font-semibold ${!relevantOnly ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
-              All kinds of role <span className="num opacity-70">{jobs.length}</span>
-            </button>
+              All kinds of role{totalCount != null ? <> <span className="num opacity-70">{totalCount}</span></> : null}
+            </Link>
           </div>
         </div>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3 text-sm text-muted">

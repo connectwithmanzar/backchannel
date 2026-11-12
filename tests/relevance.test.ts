@@ -16,7 +16,7 @@ test("GTM and revenue operations roles count", () => {
 
 test("associate and mid-level Account Executives count, senior and enterprise ones do not", () => {
   for (const t of ["Account Executive", "Associate Account Executive", "Account Executive, Commercial", "Mid-Market Account Executive", "Account Executive - SMB", "Corporate Account Executive"]) yes(t);
-  for (const t of ["Senior Account Executive", "Sr. Account Executive", "Enterprise Account Executive", "Strategic Account Executive", "Principal Account Executive", "Global Account Executive"]) no(t);
+  for (const t of ["Senior Account Executive", "Senior Account Executive - Inside Sales", "Sr. Account Executive", "Enterprise Account Executive", "Strategic Account Executive", "Principal Account Executive", "Global Account Executive"]) no(t);
 });
 
 test("heads, directors, VPs and managers do not count", () => {

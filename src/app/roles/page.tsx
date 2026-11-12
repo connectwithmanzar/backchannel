@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 
 
 
-export default async function RolesPage({ searchParams }: { searchParams: Promise<{ q?: string; saved?: string }> }) {
+export default async function RolesPage({ searchParams }: { searchParams: Promise<{ q?: string; saved?: string; all?: string }> }) {
   const sp = await searchParams;
   const [supabase, user] = await Promise.all([createClient(), getSessionUser()]);
 
@@ -144,6 +144,10 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
     .sort((a, b) => b.score - a.score)
     // Scoring used the full text; the browser only needs a short preview.
     .map((j) => ({ ...j, relevant: classifyRelevance(j.title, j.company, j.description).relevant, description: j.description.slice(0, 600) }));
+  // Only the roles that fit you are sent unless you ask for everything. That keeps the page quick.
+  const showAll = sp.all === "1";
+  const totalCount = scored.length;
+  const feed = showAll ? scored : scored.filter((j) => j.relevant || j.source === "pasted" || reactions[j.id]?.reaction === "bookmarked");
 
   return (
     <section className="py-6">
@@ -198,7 +202,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
         </div>
       )}
 
-      <ScopeSwitch mineLabel="My roles" mine={<RolesFeed jobs={scored} reactions={reactions} defaultMarkets={profile.markets.length ? profile.markets : ["india", "remote-in", "global"]} initialQuery={(sp.q ?? "").slice(0, 100)} initialSaved={sp.saved === "1"} priorityIds={priorityIds} tierById={tierById} suggestedIds={suggestedIds} />} web={<WebSearch kind="jobs" />} />
+      <ScopeSwitch mineLabel="My roles" mine={<RolesFeed jobs={feed} showAll={showAll} totalCount={totalCount} reactions={reactions} defaultMarkets={profile.markets.length ? profile.markets : ["india", "remote-in", "global"]} initialQuery={(sp.q ?? "").slice(0, 100)} initialSaved={sp.saved === "1"} priorityIds={priorityIds} tierById={tierById} suggestedIds={suggestedIds} />} web={<WebSearch kind="jobs" />} />
     </section>
   );
 }

@@ -29,6 +29,7 @@ export function classifyRelevance(title: string, company = "", description = "")
 
   let kind: RelevantKind | null = null;
   if (GTM.test(t)) kind = "GTM";
+  else if (/\baccount executive\b/i.test(t)) kind = "Account Executive";   // "Senior Account Executive - Inside Sales" is an AE role
   else if (SDR.test(t)) kind = "SDR/BDR";
   else if (AE.test(t)) kind = "Account Executive";
   if (!kind) return { relevant: false, kind: null, reason: "not an SDR/BDR, GTM or Account Executive title" };
