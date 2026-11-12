@@ -124,6 +124,22 @@ export function fromLinkUrl(link: string): { title: string | null; company: stri
   return { title: orNull(words(title)), company: company ? orNull(words(company)) : null };
 }
 
+/** The public (signed-out) LinkedIn job page has stable class names for the heading, company, place and description. */
+function linkedinPublic(html: string): { title: string | null; company: string | null; location: string | null; text: string } {
+  const grab = (re: RegExp) => clean(htmlToText(html.match(re)?.[1] ?? ""));
+  const title = grab(/<h1[^>]*class="[^"]*top-card-layout__title[^"]*"[^>]*>([\s\S]*?)<\/h1>/i);
+  const company = grab(/class="[^"]*topcard__org-name-link[^"]*"[^>]*>([\s\S]*?)<\/a>/i) || grab(/class="[^"]*top-card-layout__card[\s\S]*?topcard__flavor"[^>]*>([\s\S]*?)<\/span>/i);
+  const location = grab(/class="[^"]*topcard__flavor--bullet[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
+  const text = clean(htmlToText(html.match(/class="[^"]*show-more-less-html__markup[^"]*"[^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? ""));
+  return { title: orNull(title), company: orNull(company), location: orNull(location), text };
+}
+
+/** "Senior Analyst at Kaseya" → { title: "Senior Analyst", company: "Kaseya" }, splitting on the last " at ". */
+function splitAt(value: string): { title: string; company: string | null } {
+  const i = value.lastIndexOf(" at ");
+  return i > 0 ? { title: clean(value.slice(0, i)), company: orNull(clean(value.slice(i + 4).replace(/\s*\|.*$/, ""))) } : { title: clean(value), company: null };
+}
+
 /** Pulls what it can from a job page's HTML. Pure, so it can be tested without any network. */
 export function extractListing(html: string, link: string): Listing {
   const from: Listing["from"] = [];
@@ -151,6 +167,19 @@ export function extractListing(html: string, link: string): Listing {
   } else if (ogTitle && !out.title && !WALL.test(ogTitle)) {
     out.title = orNull(clean(ogTitle.split(/\s[|–—-]\s/)[0]));
     from.push("page-title");
+  }
+
+  // LinkedIn's public page: use its own markup, then split "Title at Company" if the heading was all that was found.
+  if (/linkedin\./i.test(new URL(link, "https://x.invalid").hostname)) {
+    const lp = linkedinPublic(html);
+    out.title = lp.title ?? out.title;
+    out.company ??= lp.company;
+    out.location ??= lp.location;
+    if (!out.text && lp.text.length >= 80) { out.text = lp.text; from.push("page-data"); }
+    if (out.title && !out.company) {
+      const s = splitAt(out.title);
+      if (s.company) { out.title = s.title; out.company = s.company; }
+    }
   }
 
   const url = fromLinkUrl(link);

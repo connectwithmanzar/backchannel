@@ -39,6 +39,28 @@ test("a LinkedIn page title gives company, role and place", () => {
   assert.equal(l.blocked, true);          // no description: the owner is asked to paste it
 });
 
+test("LinkedIn's public page: heading, company, place and description come from its own markup", () => {
+  const html = `<html><head><title>Senior Sales Operations Analyst at Kaseya | LinkedIn</title></head><body>
+    <h1 class="top-card-layout__title font-sans">Sales Development Representative</h1>
+    <a class="topcard__org-name-link topcard__flavor--black-link" href="/company/x">Kaseya</a>
+    <span class="topcard__flavor topcard__flavor--bullet">Bengaluru, Karnataka, India</span>
+    <div class="show-more-less-html__markup show-more-less-html__markup--clamp-after-5">You will <strong>prospect</strong> daily and book meetings with mid-market IT teams across India. We use Salesforce and Outreach. Strong written English required.</div>
+    <div>Sign in to view more jobs</div></body></html>`;
+  const l = extractListing(html, "https://www.linkedin.com/jobs/view/3812345678");
+  assert.equal(l.title, "Sales Development Representative");
+  assert.equal(l.company, "Kaseya");
+  assert.equal(l.location, "Bengaluru, Karnataka, India");
+  assert.match(l.text, /prospect daily and book meetings/);
+  assert.doesNotMatch(l.text, /Sign in to view/);
+  assert.equal(l.blocked, false);
+});
+
+test("when LinkedIn shows only a heading like 'Title at Company', it is split", () => {
+  const l = extractListing(`<html><head><title>Senior Sales Operations Analyst at Kaseya | LinkedIn</title></head><body></body></html>`, "https://www.linkedin.com/jobs/view/3812345678");
+  assert.equal(l.title, "Senior Sales Operations Analyst");
+  assert.equal(l.company, "Kaseya");
+});
+
 test("the title and company can come from a LinkedIn link alone", () => {
   assert.deepEqual(fromLinkUrl("https://www.linkedin.com/jobs/view/sales-development-representative-at-acme-corp-3812345678"), { title: "Sales Development Representative", company: "Acme Corp" });
   assert.deepEqual(fromLinkUrl("https://in.linkedin.com/jobs/view/gtm-engineer-3812345678/"), { title: "Gtm Engineer", company: null });
