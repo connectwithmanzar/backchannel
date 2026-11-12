@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toMarket } from "../src/lib/jobs/market";
+import { toMarket, countryToMarkets } from "../src/lib/jobs/market";
 import { detectMarket } from "../src/lib/jobs/location";
 
 // Real place names found on the live Jobs page that were wrongly filed as "global".
@@ -53,4 +53,16 @@ test("new place rules do not steal existing ones", () => {
   assert.equal(detectMarket(""), "Unknown");
   assert.equal(detectMarket("Atlantis"), "Other");
   assert.equal(detectMarket("Georgia, Tbilisi"), "US");   // known limit: a US state name wins over the country of Georgia
+});
+
+test("the scorecard's own market choices map to the right groups", () => {
+  assert.deepEqual(countryToMarkets("India (onsite)"), ["india"]);
+  assert.deepEqual(countryToMarkets("India (hybrid)"), ["india"]);
+  assert.deepEqual(countryToMarkets("India"), ["india", "remote-in"]);
+  assert.deepEqual(countryToMarkets("Remote India→US"), ["global", "remote-in"]);
+  assert.deepEqual(countryToMarkets("Remote India→EU"), ["global", "remote-in"]);
+  assert.deepEqual(countryToMarkets("UAE"), ["emea"]);
+  assert.deepEqual(countryToMarkets("UK"), ["emea"]);
+  assert.deepEqual(countryToMarkets("Singapore"), ["other"]);
+  assert.deepEqual(countryToMarkets("United States"), ["us"]);
 });

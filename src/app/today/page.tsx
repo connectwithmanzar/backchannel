@@ -7,6 +7,7 @@ import FitRing from "@/components/FitRing";
 import { buildSearchProfile } from "@/lib/score";
 import { toMarket } from "@/lib/jobs/market";
 import { formatCompanyName } from "@/lib/company-name";
+import { computeCoverage, type CoverageJob } from "@/lib/coverage";
 import { greeting, firstName } from "@/lib/format";
 import { plural } from "@/lib/format";
 
@@ -37,6 +38,24 @@ export default async function TodayPage() {
   const profileMarkets = buildSearchProfile(profile).markets;
   const wantedMarkets = new Set<string>(profileMarkets.length ? profileMarkets : ["india", "remote-in", "global"]);
   const highFit = sc.filter((s) => (s.score ?? 0) >= 75 && s.reaction !== "skipped" && wantedMarkets.has(toMarket(s.jobs.market, s.jobs.remote_type, s.jobs.location)));
+  // Coverage check: the jobs you saved by hand, against what Backchannel had already found from other sources.
+  type CovRow = { id: string; title: string; url: string | null; source: string | null; company_name: string | null; companies: { name: string } | null };
+  const toCov = (r: unknown): CoverageJob => {
+    const x = r as CovRow;
+    return { id: x.id, title: x.title, url: x.url ?? "", source: x.source ?? null, company: x.companies?.name ?? x.company_name ?? "" };
+  };
+  const handRes = uid
+    ? await db.from("jobs").select("id, title, url, source, company_name, companies(name)").eq("added_by", uid).eq("source", "pasted").order("created_at", { ascending: false }).limit(40)
+    : null;
+  const handSaved = (handRes?.error ? [] : handRes?.data ?? []).map(toCov);
+  let coverageOthers: CoverageJob[] = [];
+  if (handSaved.length) {
+    const titles = [...new Set(handSaved.map((h) => h.title))].slice(0, 40);
+    const { data: same } = await serviceClient().from("jobs").select("id, title, url, source, company_name, companies(name)")
+      .in("title", titles).or(`added_by.is.null,added_by.eq.${uid}`).limit(400);
+    coverageOthers = (same ?? []).map(toCov);
+  }
+  const coverage = computeCoverage(handSaved, coverageOthers);
   const wf = weeklyFunnel(events ?? []);
   const a = apps ?? [];
   const o = steps ?? [];
@@ -183,6 +202,29 @@ export default async function TodayPage() {
               })}
             </div>
             <Link href="/pipeline" className="mt-3 inline-block text-sm font-semibold text-accent">See the full funnel →</Link>
+          </Card>
+          <Card>
+            <h2 className="mb-1 text-[17px] font-semibold">Coverage check</h2>
+            {coverage.total === 0 ? (
+              <p className="text-sm text-muted">Save a job you find yourself (&quot;+ Add a job&quot; on Jobs, or the Chrome extension). Backchannel then checks whether it had already found it, so you can see how many jobs it misses.</p>
+            ) : (
+              <>
+                <p className="text-sm"><b className="num">{coverage.found} of {coverage.total}</b> jobs you saved by hand were already found ({coverage.rate}%).</p>
+                {Object.keys(coverage.via).length > 0 && (
+                  <p className="mt-1 text-sm text-muted">Found by: {Object.entries(coverage.via).map(([k, n]) => `${k} (${n})`).join(", ")}.</p>
+                )}
+                {coverage.missed.length > 0 && (
+                  <>
+                    <p className="mt-3 text-sm font-semibold">Missed so far</p>
+                    <ul className="mt-1 flex flex-col gap-1 text-sm">
+                      {coverage.missed.slice(0, 5).map((m) => (
+                        <li key={m.id} className="truncate"><Link href={`/roles/${m.id}`} className="font-semibold text-accent">{m.title}</Link> <span className="text-muted">· {formatCompanyName(m.company)}</span></li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </>
+            )}
           </Card>
           <Card>
             <h2 className="mb-1 text-[17px] font-semibold">Where roles come from</h2>

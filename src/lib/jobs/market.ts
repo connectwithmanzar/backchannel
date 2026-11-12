@@ -33,8 +33,11 @@ export function toMarket(label: string | null | undefined, remoteType?: string |
 export function countryToMarkets(country: string): Market[] {
   const c = country.toLowerCase();
   if (c === "india") return ["india", "remote-in"];
-  if (c.includes("united states") || c === "us" || c === "canada") return ["us"];
+  // The scorecard's own choices: "Remote India→US" is remote work; "India (onsite)" and "India (hybrid)" are in India.
   if (c.includes("remote") || c.includes("global") || c.includes("anywhere")) return ["global", "remote-in"];
+  if (c.startsWith("india")) return ["india"];
+  if (c.includes("united states") || c === "us" || c === "canada") return ["us"];
+  if (c.includes("singapore") || c.includes("australia")) return ["other"];
   if (["united kingdom", "uk", "germany", "netherlands", "france", "ireland", "spain", "uae", "europe", "sweden", "denmark", "israel"].some((x) => c.includes(x))) return ["emea"];
   return ["global"];
 }
