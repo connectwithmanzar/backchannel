@@ -21,6 +21,7 @@ import { isTelegramConfigured } from "@/lib/telegram";
 import { isOwner } from "@/lib/owner";
 import { effectiveTier, type Tier } from "@/lib/company-rating";
 import { formatCompanyName } from "@/lib/company-name";
+import { classifyRelevance } from "@/lib/relevance";
 import { COMPANY_SEEDS, isExcludedCompany } from "@/data/companies";
 
 export const dynamic = "force-dynamic";
@@ -99,6 +100,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
     market: toMarket(row.market, row.remote_type, row.location),
     sourceType: "careers",
     board: row.board ?? "",
+    source: (row as { source?: string | null }).source ?? undefined,
     url: row.url ?? "",
     postedAt: row.posted_at ?? undefined,
     lastCheckedAt: row.last_checked_at ?? new Date().toISOString(),
@@ -141,19 +143,19 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
   const scored = applyFeedback(scoredBase, reactions)
     .sort((a, b) => b.score - a.score)
     // Scoring used the full text; the browser only needs a short preview.
-    .map((j) => ({ ...j, description: j.description.slice(0, 600) }));
+    .map((j) => ({ ...j, relevant: classifyRelevance(j.title, j.company, j.description).relevant, description: j.description.slice(0, 600) }));
 
   return (
     <section className="py-6">
       <div className="text-xs font-semibold uppercase tracking-wider text-muted">
-        Your matches · SDR · BDR · GTM · sales
+        SDR · BDR · GTM · Associate AE · B2B
       </div>
       <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">
         Jobs
       </h1>
       <p className="mt-2 max-w-[62ch] text-muted">
-        Backchannel collects public sales roles from {seedCount} company careers pages and ranks them against your
-        profile. For the ones you want, it drafts a tailored CV and a referral message. You review and send.
+        Roles that match what you are looking for, from company career pages and JobRadar, ranked against your profile.
+        &ldquo;Relevant to me&rdquo; hides heads of sales, managers, senior AEs and consumer sales; switch to All roles to see everything.
       </p>
       {lastChecked && (
         <p className="mt-2 text-sm text-muted num">Roles last collected {shortDateTime(lastChecked)}.</p>

@@ -6,7 +6,8 @@ import { rateLimitShared, retryAfter } from "@/lib/rate-limit";
 import { isExcludedCompany } from "@/data/companies";
 import { isBlocked } from "@/lib/outreach/engine";
 import { scoreForUser } from "@/lib/jobs/scoring";
-import { buildPastedJob, fetchJobPage, parseJobUrl } from "@/lib/jobs/paste";
+import { buildPastedJob, parseJobUrl } from "@/lib/jobs/paste";
+import { fetchListing, type Listing } from "@/lib/jobs/fetch-listing";
 import { canonicalUrl } from "@/lib/jobs/url";
 
 export const runtime = "nodejs";
@@ -31,23 +32,25 @@ export async function POST(req: NextRequest) {
   const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
   let text = str(b.text, 20_000);
   let url: string | null = null;
+  let fetched: Listing | null = null;
 
   if (b.url) {
     const parsed = parseJobUrl(String(b.url));
     if (!parsed.ok) return NextResponse.json({ error: parsed.reason }, { status: 400 });
     url = canonicalUrl(parsed.url);
     if (!text) {
-      if (!parsed.fetchable) {
-        return NextResponse.json({ error: "Backchannel doesn't read that site itself (LinkedIn, Naukri and similar forbid it). Paste the job text next to the link and I'll do the rest." }, { status: 422 });
+      // Owner decision (12 Nov 2026): a pasted link from any board is opened once, as a public page, without a login.
+      const got = await fetchListing(parsed.url);
+      if (got.listing.text.length < 80) {
+        return NextResponse.json({ error: "That site didn't show me the job description. Paste the job text next to the link and I'll do the rest." }, { status: 422 });
       }
-      const page = await fetchJobPage(parsed.url);
-      if (!page) return NextResponse.json({ error: "Couldn't read that page. Paste the job text instead." }, { status: 422 });
-      text = page;
+      fetched = got.listing;
+      text = got.listing.text;
     }
   }
   if (text.length < 80) return NextResponse.json({ error: "Paste the job text (at least a few lines), or a link to a public careers page." }, { status: 400 });
 
-  let title = str(b.title, 200), company = str(b.company, 200), location = str(b.location, 200);
+  let title = str(b.title, 200) || fetched?.title || "", company = str(b.company, 200) || fetched?.company || "", location = str(b.location, 200) || fetched?.location || "";
   if (!title || !company) {
     if (!hasAIKey()) return NextResponse.json({ error: `${NO_AI_MESSAGE} Or fill in the title and company yourself.` }, { status: 503 });
     try {

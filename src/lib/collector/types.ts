@@ -26,6 +26,8 @@ export type RemoteType = "remote" | "hybrid" | "onsite" | "unknown";
 
 /** A cleaned job, ready to store and score. */
 export interface Job {
+  /** Where a saved copy came from: "pasted" for jobs saved by hand, "jobradar:<site>" for JobRadar. Empty for collected career pages. */
+  source?: string;
   id: string; // dedupe hash
   company: string;
   title: string;

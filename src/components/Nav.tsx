@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { TABS, MORE_LINKS, subLinksFor, isOn, tabIsActive } from "@/lib/nav-config";
+import { TABS, MORE_LINKS, subLinksFor, isOn, tabIsActive, moreIsActive } from "@/lib/nav-config";
 
 export default function Nav({ email }: { email: string }) {
   const path = usePathname();
@@ -31,7 +31,7 @@ export default function Nav({ email }: { email: string }) {
     router.refresh();
   }
 
-  const moreActive = MORE_LINKS.some((l) => isOn(path, l.href));
+  const moreActive = moreIsActive(path);
   const onProfile = isOn(path, "/profile");
   const initial = (email.trim()[0] ?? "?").toUpperCase();
   const subLinks = subLinksFor(path);
@@ -66,7 +66,7 @@ export default function Nav({ email }: { email: string }) {
     <div ref={rootRef}>
       <header className="sticky top-0 z-20 border-b border-line bg-surface">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5">
-          <Link href="/today" className="flex items-center gap-2 font-display text-xl font-bold">
+          <Link href="/roles" className="flex items-center gap-2 font-display text-xl font-bold">
             <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
               <rect x="1" y="1" width="24" height="24" rx="7" fill="var(--accent)" />
               <path d="M7 9h9M7 13h12M7 17h6" stroke="var(--accent-ink)" strokeWidth="2.2" strokeLinecap="round" />
@@ -117,7 +117,7 @@ export default function Nav({ email }: { email: string }) {
 
       <nav aria-label="Main (mobile)" className={`fixed inset-x-0 bottom-0 ${open?.startsWith("bottom") ? "z-50" : "z-20"} border-t border-line bg-surface md:hidden`}
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-        <div className="mx-auto grid max-w-md grid-cols-6">
+        <div className="mx-auto grid max-w-md grid-cols-4">
           {TABS.map((t) => (
             <Link key={t.href} href={t.href} aria-current={tabIsActive(path, t) ? "page" : undefined}
               className={`py-3.5 text-center text-[11px] font-semibold ${tabIsActive(path, t) ? "text-accent" : "text-muted"}`}>

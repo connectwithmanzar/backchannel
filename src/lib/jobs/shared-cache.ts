@@ -1,12 +1,13 @@
 import { unstable_cache } from "next/cache";
 import { serviceClient } from "@/lib/supabase/service";
+import { RELEVANT_TITLE_OR } from "@/lib/relevance";
 
 export const JOB_COLUMNS =
-  "id, title, location, remote_type, market, board, url, posted_at, last_checked_at, currency, ote_min, ote_max, base_min, base_max, pay_band_status, visa_sponsorship, description, company_name, company_id, companies(name, domain)" as const;
+  "id, title, location, remote_type, market, board, url, posted_at, last_checked_at, currency, ote_min, ote_max, base_min, base_max, pay_band_status, visa_sponsorship, description, company_name, company_id, source, companies(name, domain)" as const;
 
 // The cache has a size limit per entry, so the page works from the first part of each description.
 // Scores saved by the daily job still use the full text.
-export const CACHED_DESCRIPTION_CHARS = 3000;
+export const CACHED_DESCRIPTION_CHARS = 800;
 export const SHARED_JOBS_TAG = "jobs";
 
 /**
@@ -21,12 +22,13 @@ export const getSharedJobs = unstable_cache(
       .select(JOB_COLUMNS)
       .eq("is_active", true)
       .is("added_by", null)
+      .or(RELEVANT_TITLE_OR)
       .order("last_checked_at", { ascending: false })
-      .limit(500);
+      .limit(1000);
     if (error) throw new Error(`Loading shared jobs failed: ${error.message}`);
     return (data ?? []).map((r) => ({ ...r, description: (r.description ?? "").slice(0, CACHED_DESCRIPTION_CHARS) }));
   },
-  ["shared-jobs-v2"],
+  ["shared-jobs-v3"],
   { revalidate: 300, tags: [SHARED_JOBS_TAG] }
 );
 
@@ -50,10 +52,10 @@ async function loadFocusJobs(companyIds: string[], search?: string): Promise<Sha
   }
   if (!ids.size) return [];
   const { data, error } = await db.from("jobs").select(JOB_COLUMNS).eq("is_active", true).is("added_by", null)
-    .in("company_id", [...ids].slice(0, 200)).order("last_checked_at", { ascending: false }).limit(350);
+    .in("company_id", [...ids].slice(0, 200)).or(RELEVANT_TITLE_OR).order("last_checked_at", { ascending: false }).limit(350);
   if (error) { console.error("Loading focus jobs failed:", error.message); return []; }
   return (data ?? []).map((r) => ({ ...r, description: (r.description ?? "").slice(0, CACHED_DESCRIPTION_CHARS) })) as unknown as SharedJob[];
 }
 
 /** The same, kept for 5 minutes per set of companies and search, so the page does not re-read long descriptions on every visit. */
-export const getFocusJobs = unstable_cache(loadFocusJobs, ["focus-jobs-v1"], { revalidate: 300, tags: [SHARED_JOBS_TAG] });
+export const getFocusJobs = unstable_cache(loadFocusJobs, ["focus-jobs-v2"], { revalidate: 300, tags: [SHARED_JOBS_TAG] });

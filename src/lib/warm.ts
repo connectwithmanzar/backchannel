@@ -11,4 +11,4 @@ export function isWarmAuthorized(given: string | null | undefined, configured: s
 }
 
 /** Pages whose server code is loaded by the warm-up, so the first real visit after a quiet spell is not a cold start. */
-export const WARM_PATHS = ["/today", "/roles", "/companies", "/outreach", "/referrals", "/offers", "/profile", "/login"];
+export const WARM_PATHS = ["/today", "/roles", "/saved", "/companies", "/outreach", "/referrals", "/offers", "/profile", "/login"];

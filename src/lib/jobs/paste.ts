@@ -2,7 +2,8 @@ import { htmlToText } from "@/lib/collector/fetchers";
 import { dedupeHash, normalise, type NormalisedJob } from "@/lib/jobs/process";
 import type { RawJob } from "@/lib/collectors/ats";
 
-// Only public ATS pages are fetched by our servers. Sites that forbid scraping (LinkedIn, Naukri...) are never fetched.
+// `fetchable` marks the public career-page systems. Links the owner pastes are read by fetchListing (fetch-listing.ts) for any board,
+// by his decision of 12 Nov 2026; this list only describes which sites need no special care.
 const FETCHABLE_HOSTS = ["boards.greenhouse.io", "job-boards.greenhouse.io", "jobs.lever.co", "jobs.ashbyhq.com", "jobs.smartrecruiters.com", "apply.workable.com"];
 
 export type ParsedUrl = { ok: true; url: string; fetchable: boolean } | { ok: false; reason: string };

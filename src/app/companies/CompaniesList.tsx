@@ -136,7 +136,7 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
                   </p>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Link href={`/roles?q=${encodeURIComponent(c.name)}`} className={c.roles ? btnPrimary : btn}>View roles</Link>
+                  <Link href={`/companies/${c.id}`} className={c.roles ? btnPrimary : btn}>View roles</Link>
                   <Link href={`/referrals?company=${encodeURIComponent(c.name)}&domain=${encodeURIComponent(c.domain ?? "")}`} className={btn}>Find people</Link>
                   <button type="button" className={btn} aria-expanded={researchOpen === c.id} onClick={() => setResearchOpen(researchOpen === c.id ? null : c.id)}>{researchOpen === c.id ? "Close research" : "Research"}</button>
                   <button type="button" className={btn} aria-expanded={open} onClick={() => { setNotesOpen(open ? null : c.id); setDraft((d) => ({ ...d, [c.id]: d[c.id] ?? c.note })); }}>{open ? "Close notes" : "Notes"}</button>

@@ -1,21 +1,23 @@
-// One place that says which pages belong to which tab, so the menu, the section strip and the tests agree.
+// One place that says which pages belong to which section, so the menu, the section strip and the tests agree.
+// The main menu is deliberately short: Jobs, Companies, Saved jobs. Everything else sits under "More".
 
 export type NavLink = { href: string; label: string };
-export type Tab = NavLink & { match: string[]; sub: NavLink[] };
+export type Section = NavLink & { match: string[]; sub: NavLink[]; inMenu: boolean };
 
-export const TABS: Tab[] = [
-  { href: "/today", label: "Today", match: ["/today"], sub: [] },
-  { href: "/roles", label: "Jobs", match: ["/roles"], sub: [] },
+export const SECTIONS: Section[] = [
+  { href: "/roles", label: "Jobs", match: ["/roles"], sub: [], inMenu: true },
   {
-    href: "/companies", label: "Companies", match: ["/companies", "/sources"],
+    href: "/companies", label: "Companies", match: ["/companies", "/sources"], inMenu: true,
     sub: [{ href: "/companies", label: "My companies" }, { href: "/sources", label: "Where roles come from" }],
   },
+  { href: "/saved", label: "Saved jobs", match: ["/saved"], sub: [], inMenu: true },
+  { href: "/today", label: "Today", match: ["/today"], sub: [], inMenu: false },
   {
-    href: "/outreach", label: "People", match: ["/outreach", "/referrals"],
+    href: "/outreach", label: "People", match: ["/outreach", "/referrals"], inMenu: false,
     sub: [{ href: "/outreach", label: "Messages" }, { href: "/referrals", label: "Referrals" }],
   },
   {
-    href: "/autopilot", label: "Applications", match: ["/autopilot", "/pipeline", "/offers", "/pay", "/practice"],
+    href: "/autopilot", label: "Applications", match: ["/autopilot", "/pipeline", "/offers", "/pay", "/practice"], inMenu: false,
     sub: [
       { href: "/autopilot", label: "To apply" }, { href: "/pipeline", label: "Pipeline" },
       { href: "/offers", label: "Offers" }, { href: "/practice", label: "Practice" }, { href: "/pay", label: "Pay benchmark" },
@@ -23,15 +25,23 @@ export const TABS: Tab[] = [
   },
 ];
 
-// Rarely used pages. Your profile is the avatar at the top right, not a menu item.
+/** The tabs in the main menu. */
+export const TABS: Section[] = SECTIONS.filter((s) => s.inMenu);
+
+/** Under "More": the sections left out of the main menu, plus rarely used pages. Your profile is the avatar at the top right. */
 export const MORE_LINKS: NavLink[] = [
+  ...SECTIONS.filter((s) => !s.inMenu).map((s) => ({ href: s.href, label: s.label })),
   { href: "/side-income", label: "Side income" },
   { href: "/extension", label: "Chrome extension" },
 ];
 
 export const isOn = (path: string, href: string): boolean => path === href || path.startsWith(`${href}/`);
 
-export const tabIsActive = (path: string, tab: Tab): boolean => tab.match.some((m) => isOn(path, m));
+export const tabIsActive = (path: string, tab: Section): boolean => tab.match.some((m) => isOn(path, m));
 
-/** The section strip under the main bar: the sub-pages of whichever tab you are on (none for single-page tabs). */
-export const subLinksFor = (path: string): NavLink[] => TABS.find((t) => tabIsActive(path, t))?.sub ?? [];
+/** True when you are on a page that lives under "More" rather than a main tab. */
+export const moreIsActive = (path: string): boolean =>
+  SECTIONS.some((s) => !s.inMenu && tabIsActive(path, s)) || ["/side-income", "/extension"].some((h) => isOn(path, h));
+
+/** The section strip under the main bar: the sub-pages of whichever section you are on (none for single-page sections). */
+export const subLinksFor = (path: string): NavLink[] => SECTIONS.find((s) => tabIsActive(path, s))?.sub ?? [];

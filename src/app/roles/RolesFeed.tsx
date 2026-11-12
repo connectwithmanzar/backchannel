@@ -18,6 +18,9 @@ const MARKETS: Record<string, string> = {
 const PAGE_SIZE = 40;
 const FAMILIES = ["SDR/BDR", "GTM Engineer", "Account Executive", "Sales leadership", "Account management", "Partnerships", "Sales ops & CS"];
 
+/** A job as the feed shows it: scored, and marked relevant or not by the rules in lib/relevance. */
+export type FeedJob = ScoredJob & { relevant: boolean };
+
 export interface JobReaction {
   job_id: string;
   reaction: "bookmarked" | "skipped" | "applied" | null;
@@ -79,7 +82,7 @@ export default function RolesFeed({
   priorityIds?: string[];
   initialSaved?: boolean;
   initialQuery?: string;
-  jobs: ScoredJob[];
+  jobs: FeedJob[];
   reactions?: Record<string, JobReaction>;
   defaultMarkets?: string[];
 }) {
@@ -94,10 +97,12 @@ export default function RolesFeed({
   const [countries, setCountries] = useState<Set<string>>(new Set());
   const [indiaOnly, setIndiaOnly] = useState(false);
   const [savedOnly, setSavedOnly] = useState(initialSaved);
+  const [relevantOnly, setRelevantOnly] = useState(true);
   const prioritySet = useMemo(() => new Set(priorityIds), [priorityIds]);
   const suggestedSet = useMemo(() => new Set(suggestedIds), [suggestedIds]);
   // The Priority count follows your market choice, so the number matches what the list can show.
-  const priorityCount = useMemo(() => jobs.filter((j) => prioritySet.has(j.id) && (!markets.size || markets.has(j.market))).length, [jobs, prioritySet, markets]);
+  const priorityCount = useMemo(() => jobs.filter((j) => prioritySet.has(j.id) && (!relevantOnly || j.relevant) && (!markets.size || markets.has(j.market))).length, [jobs, prioritySet, markets, relevantOnly]);
+  const relevantCount = useMemo(() => jobs.filter((j) => j.relevant).length, [jobs]);
   // Roles at the companies you watch come first; a search or the saved view starts on "All".
   const [view, setView] = useState<"priority" | "all">(priorityIds.length > 0 && !initialSaved && !initialQuery ? "priority" : "all");
   const [display, setDisplay] = useState<PayDisplay>("INR");
@@ -156,8 +161,10 @@ export default function RolesFeed({
     for (const j of jobs) m.set(countryOf(j.location), (m.get(countryOf(j.location)) ?? 0) + 1);
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [jobs]);
-  const isMine = useCallback((j: ScoredJob) => j.board === "pasted" || reactions[j.id]?.reaction === "bookmarked", [reactions]);
+  // "Saved" means you saved it by hand or bookmarked it. Jobs JobRadar sent are not counted as saved.
+  const isMine = useCallback((j: FeedJob) => j.source === "pasted" || reactions[j.id]?.reaction === "bookmarked", [reactions]);
   const savedCount = jobs.filter(isMine).length;
+  const allCount = useMemo(() => jobs.filter((j) => !relevantOnly || j.relevant || isMine(j)).length, [jobs, relevantOnly, isMine]);
   const rows = useMemo(() => {
     const r = jobs.filter((j) => {
       const rxn = reactions[j.id]?.reaction;
@@ -166,6 +173,7 @@ export default function RolesFeed({
         // Jobs you saved or added yourself are never hidden by the market or role-type filters.
         (isMine(j) || ((!markets.size || markets.has(j.market)) && (!families.size || families.has(j.roleFamily)))) &&
         (!savedOnly || isMine(j)) &&
+        (!relevantOnly || j.relevant || isMine(j)) &&
         (view === "all" || prioritySet.has(j.id) || isMine(j)) &&
         (workType === "any" || j.remoteType === workType) &&
         (seniority === "any" || seniorityOf(j.title) === seniority) &&
@@ -195,7 +203,7 @@ export default function RolesFeed({
         return b.score - a.score;
       });
     return r;
-  }, [jobs, prioritySet, tierById, view, isMine, markets, families, countries, indiaOnly, savedOnly, query, locationQ, posted, workType, seniority, visaOnly, payOnly, minUsd, sort, showSkipped, reactions]);
+  }, [jobs, prioritySet, tierById, view, relevantOnly, isMine, markets, families, countries, indiaOnly, savedOnly, query, locationQ, posted, workType, seniority, visaOnly, payOnly, minUsd, sort, showSkipped, reactions]);
 
   const skippedCount = Object.values(reactions).filter((r) => r.reaction === "skipped").length;
 
@@ -287,19 +295,31 @@ export default function RolesFeed({
 
       {/* Feed */}
       <div className="min-w-0">
-        {priorityIds.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="Which roles to show">
-            <button type="button" aria-pressed={view === "priority"} onClick={() => setView("priority")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${view === "priority" ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
-              Priority <span className="num opacity-70">{priorityCount}</span>
+        <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+          {priorityIds.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Which companies">
+              <button type="button" aria-pressed={view === "priority"} onClick={() => setView("priority")}
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${view === "priority" ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
+                Priority <span className="num opacity-70">{priorityCount}</span>
+              </button>
+              <button type="button" aria-pressed={view === "all"} onClick={() => setView("all")}
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${view === "all" ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
+                All jobs <span className="num opacity-70">{allCount}</span>
+              </button>
+              <span className="text-sm text-muted">{view === "priority" ? "Roles at the companies you watch." : "Every company, with your watched ones first."}</span>
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Which kinds of role">
+            <button type="button" aria-pressed={relevantOnly} onClick={() => setRelevantOnly(true)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${relevantOnly ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
+              Relevant to me <span className="num opacity-70">{relevantCount}</span>
             </button>
-            <button type="button" aria-pressed={view === "all"} onClick={() => setView("all")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${view === "all" ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
-              All matches <span className="num opacity-70">{jobs.length}</span>
+            <button type="button" aria-pressed={!relevantOnly} onClick={() => setRelevantOnly(false)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${!relevantOnly ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>
+              All kinds of role <span className="num opacity-70">{jobs.length}</span>
             </button>
-            <span className="text-sm text-muted">{view === "priority" ? "Roles at the companies you watch." : "Everything, with your watched companies first."}</span>
           </div>
-        )}
+        </div>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3 text-sm text-muted">
           <span className="num">{rows.length} of {jobs.length} roles</span>
           <label>Pay in{" "}
@@ -358,7 +378,7 @@ export default function RolesFeed({
                       <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${tierById[j.id] === "D" ? "bg-warn-soft text-warn" : "bg-fg text-bg"}`}>Tier {tierById[j.id]}{suggestedSet.has(j.id) ? " (suggested)" : ""}</span>
                     )}
                     <span className="rounded-md bg-signal-soft px-2 py-0.5 text-xs font-semibold text-signal">
-                      {sourceLabel(j.board)}
+                      {sourceLabel(j.source?.startsWith("jobradar:") ? j.source : j.board)}
                     </span>
                     <span className="rounded-md bg-sunk px-2 py-0.5 text-xs">{j.roleFamily}</span>
                     <span className="rounded-md bg-sunk px-2 py-0.5 text-xs">{j.remoteType === "unknown" ? "Work mode not stated" : j.remoteType === "onsite" ? "On-site" : j.remoteType[0].toUpperCase() + j.remoteType.slice(1)}</span>
