@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader, Card, Empty } from "@/components/ui";
+import { fetchAllRows } from "@/lib/db-paging";
 import { FX_TO_USD } from "@/lib/score";
 import { toRoleFamily } from "@/lib/jobs/scoring";
 import PayCalc from "./PayCalc";
@@ -14,8 +15,8 @@ const range = (lo: number, hi: number) => (k(lo) === k(hi) ? k(hi) : `${k(lo)}â€
 
 export default async function PayPage() {
   const db = await createClient();
-  const { data } = await db.from("jobs").select("title, market, currency, base_min, base_max, ote_min, ote_max, url, companies(name)")
-    .eq("is_active", true).or("base_max.not.is.null,ote_max.not.is.null").limit(2000);
+  const { data } = await fetchAllRows((a, b) => db.from("jobs").select("title, market, currency, base_min, base_max, ote_min, ote_max, url, companies(name)")
+    .eq("is_active", true).or("base_max.not.is.null,ote_max.not.is.null").order("id").range(a, b), 6000);
   const rows = ((data ?? []) as unknown as Row[]).map((r) => {
     const fx = FX_TO_USD[r.currency ?? ""];
     const top = r.ote_max ?? r.base_max; const bottom = r.ote_min ?? r.base_min ?? top;

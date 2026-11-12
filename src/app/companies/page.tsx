@@ -5,6 +5,7 @@ import { Card } from "@/components/ui";
 import { roleCounts, suggestCompanies, tierRank, type CompanyRow, type CompanyStatus, type CompanyTier } from "@/lib/company-list";
 import { effectiveTier, isTier } from "@/lib/company-rating";
 import { formatCompanyName } from "@/lib/company-name";
+import { fetchAllRows } from "@/lib/db-paging";
 import { sanitizeResearch, type Research } from "@/lib/company-research";
 import CompanyJobsFinder from "../roles/CompanyJobsFinder";
 import ImportCompanies from "../sources/ImportCompanies";
@@ -26,13 +27,15 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Pr
   const uid = user?.id ?? "";
 
   const BASE = "id, name, domain, ats_type, ats_slug, enabled, collect_error, last_collected_at";
-  const [rich, { data: jobs }, withStatus] = await Promise.all([
+  // The database returns at most 1,000 rows a request, so both lists are read in pages.
+  const [rich, jobsRes, withStatus] = await Promise.all([
     // The enrichment columns arrive with migration 0014. Until it is run, read the plain list instead.
-    db.from("companies").select(`${BASE}, country, size, sector, linkedin_url, company_type, hiring_signal, linkedin_openings`).order("name").limit(1500),
-    db.from("jobs").select("company_id, location, created_at").eq("is_active", true).limit(8000),
+    fetchAllRows((a, b) => db.from("companies").select(`${BASE}, country, size, sector, linkedin_url, company_type, hiring_signal, linkedin_openings`).order("name").order("id").range(a, b), 5000),
+    fetchAllRows((a, b) => db.from("jobs").select("company_id, location, created_at").eq("is_active", true).order("id").range(a, b), 30000),
     db.from("watchlist").select("company_id, watching, status, note, tier").eq("user_id", uid),
   ]);
-  const companies = rich.error ? (await db.from("companies").select(BASE).order("name").limit(1500)).data : rich.data;
+  const jobs = jobsRes.data;
+  const companies = rich.error ? (await fetchAllRows((a, b) => db.from("companies").select(BASE).order("name").order("id").range(a, b), 5000)).data : rich.data;
   // The status and note columns arrive with migration 0013, tiers with 0017. Until they are run, read what exists instead.
   let watch: Wl[];
   if (!withStatus.error) watch = (withStatus.data ?? []) as Wl[];
