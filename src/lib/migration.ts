@@ -12,3 +12,5 @@ export function isMissingSchema(e: { message?: string; code?: string } | null | 
 /** True when a tier was refused because the database only allows A and B so far (migration 0018 not run). */
 export const isTierConstraint = (e: { message?: string; code?: string } | null | undefined): boolean =>
   !!e && (e.code === "23514" || /watchlist_tier_check|violates check constraint/i.test(e.message ?? ""));
+
+export const MIGRATION_0019 = "Copilots need one database update first. Run supabase/migrations/0019_copilots.sql in Supabase (SQL Editor, paste, Run), then try again.";

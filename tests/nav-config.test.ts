@@ -7,11 +7,11 @@ test("the main menu is Jobs, Companies and Saved jobs", () => {
 });
 
 test("everything else is under More, together with the rarely used pages", () => {
-  assert.deepEqual(MORE_LINKS.map((l) => l.label), ["Today", "People", "Applications", "Side income", "Chrome extension"]);
+  assert.deepEqual(MORE_LINKS.map((l) => l.label), ["Today", "People", "Copilots", "Applications", "Side income", "Chrome extension"]);
 });
 
 test("every page belongs to exactly one section", () => {
-  const pages = ["/today", "/roles", "/companies", "/sources", "/saved", "/outreach", "/referrals", "/autopilot", "/pipeline", "/offers", "/pay", "/practice"];
+  const pages = ["/today", "/roles", "/companies", "/sources", "/saved", "/outreach", "/referrals", "/copilots", "/autopilot", "/pipeline", "/offers", "/pay", "/practice"];
   for (const p of pages) assert.equal(SECTIONS.filter((s) => tabIsActive(p, s)).length, 1, p);
 });
 
@@ -22,7 +22,7 @@ test("a job or company detail page highlights its own tab", () => {
 });
 
 test("More lights up on pages that live under it, not on main tabs", () => {
-  for (const p of ["/today", "/outreach", "/referrals", "/offers", "/pay", "/practice", "/side-income", "/extension"]) assert.equal(moreIsActive(p), true, p);
+  for (const p of ["/today", "/outreach", "/referrals", "/copilots", "/offers", "/pay", "/practice", "/side-income", "/extension"]) assert.equal(moreIsActive(p), true, p);
   for (const p of ["/roles", "/companies", "/sources", "/saved", "/profile"]) assert.equal(moreIsActive(p), false, p);
 });
 

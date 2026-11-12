@@ -28,6 +28,9 @@ Full product built: Today dashboard, Roles (collection from Greenhouse/Lever/Ash
 - Vercel Hobby allows 2 daily crons: /api/collect-jobs (06:00 IST) and /api/daily (07:15 IST).
 - Next.js 16: `next lint` is gone; lint with `npx eslint src`.
 
+## Copilots (12 Nov 2026)
+Saved job searches under More > Copilots (`/copilots`): titles (max 5), remote and on-site places, level, words to avoid, on/off. Matching and learning live in `src/lib/copilots.ts` (pure, tested in `tests/copilots.test.ts`); data in table `copilots` (migration 0019, run by the owner by hand). Matches skip jobs you skipped and rank like jobs you saved or applied to (`job_scores.reaction`). A Copilot only finds and ranks jobs; it never sends an application (hard rule 7).
+
 ## Commands
 - `npm install`: install dependencies
 - `npm run dev`: run the app at http://localhost:3000

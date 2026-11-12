@@ -16,6 +16,7 @@ export const SECTIONS: Section[] = [
     href: "/outreach", label: "People", match: ["/outreach", "/referrals"], inMenu: false,
     sub: [{ href: "/outreach", label: "Messages" }, { href: "/referrals", label: "Referrals" }],
   },
+  { href: "/copilots", label: "Copilots", match: ["/copilots"], sub: [], inMenu: false },
   {
     href: "/autopilot", label: "Applications", match: ["/autopilot", "/pipeline", "/offers", "/pay", "/practice"], inMenu: false,
     sub: [
