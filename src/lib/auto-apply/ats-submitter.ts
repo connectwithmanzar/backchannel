@@ -292,6 +292,6 @@ export async function executeAutoApply(
     method: "browser_autofill",
     directSubmitSupported: false,
     receipt: undefined,
-    error: `${target.provider.toUpperCase()} requires active browser session for submission. Use 1-Click Autofill extension.`,
+    error: `${target.provider.toUpperCase()} can only be sent from a real browser, so it goes to the auto-apply robot on your Mac.`,
   };
 }

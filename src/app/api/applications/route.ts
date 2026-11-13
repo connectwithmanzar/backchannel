@@ -286,7 +286,7 @@ export async function POST(req: NextRequest) {
               updated_at: now,
             }).eq("id", app.id);
             queuedBrowser++;
-            details.push({ company, status: "queued_for_extension", error: `${ats.provider.toUpperCase()} queued for 1-click browser extension.` });
+            details.push({ company, status: "queued_for_extension", error: `${ats.provider.toUpperCase()} queued for the auto-apply robot on your Mac.` });
           }
         }
 

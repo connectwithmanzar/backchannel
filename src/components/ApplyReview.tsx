@@ -1,5 +1,8 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { oneTapApply, outcomeLine, type ApplyOutcome } from "@/lib/one-tap-apply";
 import { Pill, btn, btnPrimary, input } from "@/components/ui";
 import { copyText } from "@/lib/api";
 import type { AutoMode } from "@/lib/auto-apply";
@@ -25,6 +28,22 @@ export default function ApplyReview({ a, busy, act, autoMode = "off" }: { a: App
   const [copied, setCopied] = useState<string | null>(null);
   const [regenBusy, setRegenBusy] = useState<number | null>(null);
   const needs = a.status === "needs_answer";
+  const router = useRouter();
+  const [tapping, setTapping] = useState(false);
+  const [tapResult, setTapResult] = useState<ApplyOutcome | null>(null);
+
+  /** Send it straight to the company's job system when possible, otherwise queue it for the robot on your Mac. */
+  async function oneTap() {
+    setTapping(true); setTapResult(null);
+    const outcome = await oneTapApply(a.job_id, async (body) => {
+      // The application is already prepared here, so reuse it instead of preparing again.
+      if (body.action === "prepare") return { status: 200, data: { ok: true, id: a.id, status: a.status } };
+      const res = await fetch("/api/applications", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      return { status: res.status, data: (await res.json().catch(() => ({}))) as Record<string, unknown> };
+    });
+    setTapResult(outcome); setTapping(false);
+    if (outcome.kind === "submitted" || outcome.kind === "queued") router.refresh();
+  }
   const copy = async (k: string, t: string) => { if (await copyText(t)) { setCopied(k); setTimeout(() => setCopied(null), 1500); } };
 
   async function regenerate(index: number) {
@@ -118,12 +137,12 @@ export default function ApplyReview({ a, busy, act, autoMode = "off" }: { a: App
         <p className="text-sm text-muted">Submit automatically via direct ATS API or open the company&apos;s application page to review and confirm.</p>
         <div className="flex flex-wrap items-center gap-2">
           <button
-            className={btnPrimary + " bg-accent text-white hover:opacity-90"}
-            disabled={!!busy || needs}
-            title={needs ? "Answer the highlighted questions first" : "Submits directly to ATS API with your tailored ATS PDF resume"}
-            onClick={() => act(a.id + "direct", { action: "direct_auto_apply", id: a.id }, "Application submitted directly to ATS! 🎉")}
+            className={btnPrimary}
+            disabled={!!busy || needs || tapping}
+            title={needs ? "Answer the highlighted questions first" : "Sends it straight to the company when possible, otherwise queues it for the auto-apply robot on your Mac"}
+            onClick={oneTap}
           >
-            {busy === a.id + "direct" ? "Submitting to ATS…" : "⚡ 1-Click Auto-Apply"}
+            {tapping ? "Sending…" : "⚡ 1-Click Auto-Apply"}
           </button>
           <a className={btn} href={a.jobs?.url} target="_blank" rel="noopener noreferrer">Open application page ↗</a>
           <input id={`rcpt-${a.id}`} className={input + " max-w-xs"} placeholder="Confirmation number or note (optional)" value={receipt} onChange={(e) => setReceipt(e.target.value)} />
@@ -131,6 +150,12 @@ export default function ApplyReview({ a, busy, act, autoMode = "off" }: { a: App
             onClick={() => act(a.id + "sub", { action: "submitted", id: a.id, receipt }, "Marked as submitted. Good luck!")}>{busy === a.id + "sub" ? "Saving…" : "I submitted it"}</button>
           <button className={btn} disabled={!!busy} onClick={() => act(a.id + "skip", { action: "skip", id: a.id }, "Skipped.")}>Skip this role</button>
         </div>
+        {tapResult && (
+          <p role="status" className={`rounded-xl px-3 py-2 text-sm ${tapResult.kind === "submitted" || tapResult.kind === "queued" ? "bg-good-soft text-good" : "bg-warn-soft text-warn"}`}>
+            {outcomeLine(tapResult)}{" "}
+            {tapResult.kind === "needs_you" && /switched off/i.test(tapResult.message) && <Link href="/autopilot" className="font-semibold underline">Open settings</Link>}
+          </p>
+        )}
       </section>
     </div>
   );
