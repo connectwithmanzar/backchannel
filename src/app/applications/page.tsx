@@ -3,6 +3,8 @@ import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { Card, PageHeader, Pill } from "@/components/ui";
 import { GROUP_LABEL, GROUP_ORDER, MINUTES_PER_APPLICATION, detailOf, groupOf, summarise, timeSavedText, type AppGroup } from "@/lib/application-status";
 import { formatCompanyName } from "@/lib/company-name";
+import { loadFeed } from "@/lib/apply-feed-load";
+import LiveFeed from "./LiveFeed";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +35,7 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
     : null;
   const rows = (((full.error ? plain?.data : full.data) ?? []) as unknown as Partial<Row>[]).map((r) => ({ auto_status: null, auto_log: null, auto_at: null, ...r })) as Row[];
 
+  const feed = await loadFeed(db, uid);
   const summary = summarise(rows);
   const filter = GROUP_ORDER.includes(sp.show as AppGroup) ? (sp.show as AppGroup) : null;
   const shown = rows.filter((r) => !filter || groupOf(r) === filter);
@@ -42,6 +45,8 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
       <PageHeader eyebrow="Applications" title="Every application, and where it stands">
         Sent from Swipe, the job page or the auto-apply robot. Anything that needs an answer from you is at the top.
       </PageHeader>
+
+      <LiveFeed initial={feed} />
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <Card><p className="text-xs font-semibold uppercase tracking-wider text-muted">Sent</p><p className="mt-1 text-3xl font-bold">{summary.sent}</p></Card>
