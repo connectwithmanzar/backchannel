@@ -13,6 +13,7 @@ import { hasAIKey } from "@/lib/ai";
 import { cleanAutoMode } from "@/lib/auto-apply";
 import CompanyActions from "./CompanyActions";
 import WhoToAsk from "./WhoToAsk";
+import RoleBattlecard from "@/components/RoleBattlecard";
 import { matchConnections, referralSearchLinks, companyKey, type Connection } from "@/lib/jobs/referral-paths";
 
 export const dynamic = "force-dynamic";
@@ -79,6 +80,7 @@ export default async function RolePage({ params }: { params: Promise<{ id: strin
       <div className="mt-6 flex flex-wrap items-start gap-6">
         <div className="flex min-w-0 flex-[999_1_620px] flex-col gap-6">
           <ApplyCard jobId={id} application={application} hasCv={(pr.cv_text ?? "").length > 200} aiReady={hasAIKey()} autoMode={cleanAutoMode(autoPrefs?.auto_apply_mode)} />
+          <RoleBattlecard jobId={id} company={company} roleTitle={job.title} />
           {score ? (
             <Card className="flex flex-wrap gap-7 sm:p-6">
               <FitRing score={score.score ?? 0} size={110} />

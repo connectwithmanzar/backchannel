@@ -8,6 +8,7 @@ import { SENSITIVE_LABELS } from "@/lib/apps/labels";
 import { CONTACT_FIELDS, MODE_LABELS, type AutoMode, AUTO_MODES } from "@/lib/auto-apply";
 import ApplyReview, { type AppRow, type Act } from "@/components/ApplyReview";
 import ApplicationKanban from "@/components/ApplicationKanban";
+import FollowUpRadar from "@/components/FollowUpRadar";
 
 export type { AppRow };
 
@@ -27,6 +28,20 @@ export default function AutopilotClient({ apps, suggestions, settings, savedAnsw
 
   const review = apps.filter((a) => a.status === "needs_answer" || a.status === "awaiting_approval");
   const applied = apps.filter((a) => a.status === "submitted");
+
+  const fourDaysAgo = Date.now() - 4 * 24 * 60 * 60 * 1000;
+  const staleApps = applied
+    .filter((a) => {
+      const subTime = a.submitted_at ? new Date(a.submitted_at).getTime() : 0;
+      return subTime > 0 && subTime < fourDaysAgo && (!a.stage || a.stage === "applied" || a.stage === "screening");
+    })
+    .map((a) => ({
+      id: a.id,
+      company: a.jobs?.companies?.name || "Company",
+      roleTitle: a.jobs?.title || "Role",
+      submittedAt: a.submitted_at || new Date().toISOString(),
+      stage: a.stage || "applied",
+    }));
 
   async function act(key: string, body: object, ok: string, after?: () => void) {
     setBusy(key); setMsg(null);
@@ -55,6 +70,8 @@ export default function AutopilotClient({ apps, suggestions, settings, savedAnsw
       {!hasCv && <p className="rounded-lg bg-signal-soft px-3 py-2 text-sm text-signal">Upload your CV on <Link className="underline" href="/profile">your profile</Link> first. Autopilot only uses facts from your CV.</p>}
       {!aiReady && <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">AI isn&apos;t connected yet, so applications can&apos;t be prepared. Add an AI key in Vercel (see the setup guide).</p>}
       {msg && <p role="status" className={`rounded-lg px-3 py-2 text-sm ${msg.ok ? "bg-good-soft text-good" : "bg-warn-soft text-warn"}`}>{msg.text}</p>}
+
+      <FollowUpRadar staleApps={staleApps} />
 
       <div role="tablist" className="flex flex-wrap gap-1 border-b border-line">
         {tabs.map(([k, l]) => (
