@@ -7,7 +7,7 @@ test("the main menu is Home, Jobs, Applied and Inbox", () => {
 });
 
 test("everything else is under More, together with the rarely used pages", () => {
-  assert.deepEqual(MORE_LINKS.map((l) => l.label), ["Saved jobs", "Companies", "Today", "People", "Side income", "Chrome extension"]);
+  assert.deepEqual(MORE_LINKS.map((l) => l.label), ["Saved jobs", "Companies", "Today", "People", "Setup checklist", "Side income", "Chrome extension"]);
 });
 
 test("every page belongs to exactly one section", () => {
@@ -21,7 +21,7 @@ test("a job detail page highlights the Jobs tab", () => {
 });
 
 test("More lights up on pages that live under it, not on main tabs", () => {
-  for (const p of ["/saved", "/companies", "/today", "/outreach", "/referrals", "/side-income", "/extension"]) assert.equal(moreIsActive(p), true, p);
+  for (const p of ["/saved", "/companies", "/today", "/outreach", "/referrals", "/welcome", "/side-income", "/extension"]) assert.equal(moreIsActive(p), true, p);
   for (const p of ["/home", "/copilots", "/roles", "/swipe", "/applications", "/offers", "/inbox", "/profile"]) assert.equal(moreIsActive(p), false, p);
 });
 

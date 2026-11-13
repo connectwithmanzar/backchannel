@@ -3,6 +3,7 @@ import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { loadSwipeFeed } from "@/lib/jobs/swipe-feed";
 import { matchLabel } from "@/lib/match-label";
 import { summarise } from "@/lib/application-status";
+import { loadSetup } from "@/lib/onboarding-load";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +13,11 @@ export default async function HomePage() {
   const db = await createClient();
   const user = await getSessionUser();
   const uid = user?.id ?? "";
-  const [{ data: profile }, { data: apps }, jobs] = await Promise.all([
+  const [{ data: profile }, { data: apps }, jobs, setup] = await Promise.all([
     db.from("profiles").select("name, target_titles, markets").maybeSingle(),
     db.from("applications").select("status, stage, auto_status, auto_log").eq("user_id", uid).limit(500),
     uid ? loadSwipeFeed(db, uid) : Promise.resolve([]),
+    loadSetup(db, uid),
   ]);
   // The auto-apply columns come with migration 0020; without them, count from status and stage only.
   const rows = (apps ?? []).map((a) => ({ status: a.status ?? null, stage: a.stage ?? null, auto_status: (a as { auto_status?: string | null }).auto_status ?? null, auto_log: null }));
@@ -34,6 +36,13 @@ export default async function HomePage() {
           applications sent
         </Link>
       </div>
+
+      {setup.progress.next && (
+        <Link href="/welcome" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent bg-accent-soft px-5 py-4">
+          <span><b>{setup.progress.ready ? "Almost there" : "Finish setting up"}</b> <span className="text-muted">· {setup.progress.done} of {setup.progress.total} done. Next: {setup.progress.next.title.toLowerCase()}</span></span>
+          <span className="text-sm font-semibold text-accent">Continue →</span>
+        </Link>
+      )}
 
       <div className="rounded-3xl bg-gradient-to-br from-[#5a4a3a] to-[#2b241d] px-6 py-14 text-center text-white md:py-20">
         <p className="eyebrow text-white/70">Welcome back{first ? `, ${first}` : ""}</p>

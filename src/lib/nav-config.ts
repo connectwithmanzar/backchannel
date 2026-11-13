@@ -33,6 +33,7 @@ export const TABS: Section[] = SECTIONS.filter((s) => s.inMenu);
 /** Under "More": the sections left out of the main menu, plus rarely used pages. Your profile is the avatar at the top right. */
 export const MORE_LINKS: NavLink[] = [
   ...SECTIONS.filter((s) => !s.inMenu).map((s) => ({ href: s.href, label: s.label })),
+  { href: "/welcome", label: "Setup checklist" },
   { href: "/side-income", label: "Side income" },
   { href: "/extension", label: "Chrome extension" },
 ];
@@ -43,7 +44,7 @@ export const tabIsActive = (path: string, tab: Section): boolean => tab.match.so
 
 /** True when you are on a page that lives under "More" rather than a main tab. */
 export const moreIsActive = (path: string): boolean =>
-  SECTIONS.some((s) => !s.inMenu && tabIsActive(path, s)) || ["/side-income", "/extension"].some((h) => isOn(path, h));
+  SECTIONS.some((s) => !s.inMenu && tabIsActive(path, s)) || ["/welcome", "/side-income", "/extension"].some((h) => isOn(path, h));
 
 /** The section strip under the main bar: the sub-pages of whichever section you are on (none for single-page sections). */
 export const subLinksFor = (path: string): NavLink[] => SECTIONS.find((s) => tabIsActive(path, s))?.sub ?? [];
