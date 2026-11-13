@@ -4,15 +4,35 @@ import { prepareApplication, type AppQuestion } from "@/lib/apps/prepare";
 import { rateLimitShared, retryAfter } from "@/lib/rate-limit";
 import { checkQueueable, clampAutoCap, cleanAutoMode, buildFormProfile, type AutoMode } from "@/lib/auto-apply";
 import { executeAutoApply, identifyAts } from "@/lib/auto-apply/ats-submitter";
+import { checkRules, cleanRules, type AutoRules } from "@/lib/auto-rules";
 import { loadCandidatePersona, generateHumanAtsAnswer } from "@/lib/auto-apply/ats-answerer";
 
 const AUTO_MIGRATION = "Auto-apply needs one database update first. Run supabase/migrations/0020_auto_apply.sql in Supabase (SQL Editor, paste, Run), then try again.";
+const RULES_MIGRATION = "Your limits need one database update first. Run supabase/migrations/0021_auto_apply_rules.sql in Supabase (SQL Editor, paste, Run), then save again.";
 const isMissingColumn = (e: { message?: string; code?: string } | null) => !!e && (e.code === "42703" || e.code === "PGRST204" || /does not exist|could not find/i.test(e.message ?? ""));
 
 async function autoPrefs(db: Awaited<ReturnType<typeof createClient>>, userId: string) {
   const { data, error } = await db.from("preferences").select("auto_apply_mode, auto_apply_use_saved, standard_answers").eq("user_id", userId).maybeSingle();
   if (error) throw new Error(isMissingColumn(error) ? AUTO_MIGRATION : "Couldn't read your settings.");
   return { mode: cleanAutoMode(data?.auto_apply_mode) as AutoMode, useSaved: data?.auto_apply_use_saved === true, saved: (data?.standard_answers ?? {}) as Record<string, string> };
+}
+
+
+/** Your own limits (minimum match, pay floor, blocked companies, weekend pause). Without migration 0021 there are none. */
+async function loadRules(db: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<AutoRules> {
+  const { data, error } = await db.from("preferences").select("auto_apply_rules").eq("user_id", userId).maybeSingle();
+  return cleanRules(error ? {} : data?.auto_apply_rules);
+}
+
+/** The reason an automatic send is not allowed by your limits, or null when it is. */
+async function ruleBlock(db: Awaited<ReturnType<typeof createClient>>, userId: string, jobId: string, rules: AutoRules): Promise<string | null> {
+  const [{ data: job }, { data: sc }] = await Promise.all([
+    db.from("jobs").select("company_name, currency, ote_max, base_max, companies(name)").eq("id", jobId).maybeSingle(),
+    db.from("job_scores").select("score").eq("user_id", userId).eq("job_id", jobId).maybeSingle(),
+  ]);
+  const j = job as unknown as { company_name: string | null; currency: string | null; ote_max: number | null; base_max: number | null; companies: { name: string } | null } | null;
+  const r = checkRules({ company: j?.companies?.name ?? j?.company_name ?? "", score: sc?.score ?? null, payMax: j?.ote_max ?? j?.base_max ?? null, currency: j?.currency ?? null }, rules);
+  return r.ok ? null : r.reason;
 }
 
 export const runtime = "nodejs";
@@ -119,6 +139,8 @@ export async function POST(req: NextRequest) {
         if (!app) return NextResponse.json({ error: "Application not found." }, { status: 404 });
         const job = app.jobs as unknown as { title?: string; url?: string; company_name?: string; companies?: { name?: string } } | null;
         if (!job?.url) return NextResponse.json({ error: "Job has no application link." }, { status: 400 });
+        const blockedBy = await ruleBlock(db, user.id, app.job_id, await loadRules(db, user.id));
+        if (blockedBy) return NextResponse.json({ ok: false, error: blockedBy, blockedByRule: true }, { status: 403 });
 
         const saved = (prefs?.standard_answers ?? {}) as Record<string, string>;
         const formProfile = buildFormProfile(profile, user.email ?? "", saved);
@@ -159,8 +181,10 @@ export async function POST(req: NextRequest) {
       }
       case "queue_auto": {
         const prefs = await autoPrefs(db, user.id);
-        const { data: app } = await db.from("applications").select("id, status, questions").eq("id", b.id).eq("user_id", user.id).single();
+        const { data: app } = await db.from("applications").select("id, status, questions, job_id").eq("id", b.id).eq("user_id", user.id).single();
         if (!app) return NextResponse.json({ error: "Application not found." }, { status: 404 });
+        const blockedBy = await ruleBlock(db, user.id, app.job_id, await loadRules(db, user.id));
+        if (blockedBy) return NextResponse.json({ error: blockedBy }, { status: 403 });
         const check = checkQueueable({ status: app.status, questions: app.questions as AppQuestion[] | null }, prefs.mode, prefs.useSaved, prefs.saved);
         if (!check.ok) return NextResponse.json({ error: check.reason }, { status: 400 });
         const { error } = await db.from("applications").update({ questions: check.questions, auto_status: "queued", auto_log: null, auto_at: now, updated_at: now }).eq("id", b.id).eq("user_id", user.id);
@@ -170,11 +194,13 @@ export async function POST(req: NextRequest) {
       case "queue_all": {
         const prefs = await autoPrefs(db, user.id);
         if (prefs.mode === "off") return NextResponse.json({ error: "Auto-apply is switched off. Turn it on in Settings first." }, { status: 400 });
-        const { data: apps, error: listError } = await db.from("applications").select("id, status, questions, auto_status").eq("user_id", user.id).in("status", ["needs_answer", "awaiting_approval"]).limit(500);
+        const { data: apps, error: listError } = await db.from("applications").select("id, status, questions, auto_status, job_id").eq("user_id", user.id).in("status", ["needs_answer", "awaiting_approval"]).limit(500);
+        const rules = await loadRules(db, user.id);
         if (listError) throw new Error(isMissingColumn(listError) ? AUTO_MIGRATION : listError.message);
         let queued = 0, blocked = 0;
         for (const a of apps ?? []) {
           if (a.auto_status === "queued" || a.auto_status === "running") continue;
+          if (await ruleBlock(db, user.id, a.job_id, rules)) { blocked++; continue; }
           const check = checkQueueable({ status: a.status, questions: a.questions as AppQuestion[] | null }, prefs.mode, prefs.useSaved, prefs.saved);
           if (!check.ok) { blocked++; continue; }
           const { error } = await db.from("applications").update({ questions: check.questions, auto_status: "queued", auto_log: null, auto_at: now, updated_at: now }).eq("id", a.id).eq("user_id", user.id);
@@ -193,6 +219,7 @@ export async function POST(req: NextRequest) {
 
         const saved = (prefs?.standard_answers ?? {}) as Record<string, string>;
         const formProfile = buildFormProfile(profile, user.email ?? "", saved);
+        const batchRules = await loadRules(db, user.id);
         let submitted = 0;
         let queuedBrowser = 0;
         const details: { company: string; status: string; receipt?: string; error?: string }[] = [];
@@ -201,6 +228,8 @@ export async function POST(req: NextRequest) {
           const job = app.jobs as unknown as { title?: string; url?: string; company_name?: string; companies?: { name?: string } } | null;
           const company = job?.companies?.name || job?.company_name || "Company";
           if (!job?.url) continue;
+          const ruleReason = await ruleBlock(db, user.id, app.job_id, batchRules);
+          if (ruleReason) { details.push({ company, status: "blocked_by_rule", error: ruleReason }); continue; }
 
           const ats = identifyAts(job.url);
           const cvText = app.tailored_cv?.trim() || profile?.cv_text?.trim() || "";
@@ -276,9 +305,10 @@ export async function POST(req: NextRequest) {
         if (b.standard_answers && typeof b.standard_answers === "object") patch.standard_answers = b.standard_answers;
         if (b.auto_apply_mode !== undefined) patch.auto_apply_mode = cleanAutoMode(b.auto_apply_mode);
         if (b.auto_apply_daily_cap !== undefined) patch.auto_apply_daily_cap = clampAutoCap(b.auto_apply_daily_cap);
+        if (b.auto_apply_rules !== undefined) patch.auto_apply_rules = cleanRules(b.auto_apply_rules);
         if (typeof b.auto_apply_use_saved === "boolean") patch.auto_apply_use_saved = b.auto_apply_use_saved;
         const { error } = await db.from("preferences").upsert(patch, { onConflict: "user_id" });
-        if (error) throw new Error(isMissingColumn(error) && Object.keys(patch).some((k) => k.startsWith("auto_apply")) ? AUTO_MIGRATION : error.message);
+        if (error) throw new Error(isMissingColumn(error) && Object.keys(patch).some((k) => k.startsWith("auto_apply")) ? (patch.auto_apply_rules !== undefined ? RULES_MIGRATION : AUTO_MIGRATION) : error.message);
         return NextResponse.json({ ok: true });
       }
       default:

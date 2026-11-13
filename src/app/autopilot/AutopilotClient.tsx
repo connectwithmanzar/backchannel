@@ -6,6 +6,7 @@ import { Card, Empty, Pill, btn, btnPrimary, input, label } from "@/components/u
 import { postJson } from "@/lib/api";
 import { SENSITIVE_LABELS } from "@/lib/apps/labels";
 import { CONTACT_FIELDS, MODE_LABELS, type AutoMode, AUTO_MODES } from "@/lib/auto-apply";
+import type { AutoRules } from "@/lib/auto-rules";
 import ApplyReview, { type AppRow, type Act } from "@/components/ApplyReview";
 import ApplicationKanban from "@/components/ApplicationKanban";
 import FollowUpRadar from "@/components/FollowUpRadar";
@@ -17,7 +18,7 @@ export interface Suggestion { job_id: string; score: number; bookmarked: boolean
 const STAGES = [["applied", "Applied"], ["screening", "Screening"], ["interview", "Interview"], ["final", "Final round"], ["offer", "Offer"], ["rejected", "Rejected"], ["withdrawn", "Withdrawn"]];
 
 export default function AutopilotClient({ apps, suggestions, settings, savedAnswers, hasCv, aiReady }: {
-  apps: AppRow[]; suggestions: Suggestion[]; settings: { mode: "ask" | "auto"; minFit: number; cap: number; autoMode: AutoMode; autoCap: number; autoUseSaved: boolean };
+  apps: AppRow[]; suggestions: Suggestion[]; settings: { mode: "ask" | "auto"; minFit: number; cap: number; autoMode: AutoMode; autoCap: number; autoUseSaved: boolean; rules: AutoRules };
   savedAnswers: Record<string, string>; hasCv: boolean; aiReady: boolean;
 }) {
   const router = useRouter();
@@ -140,7 +141,7 @@ function ReviewItem({ a, open, onToggle, busy, act, autoMode }: {
 }
 
 function Settings({ settings, saved, busy, act }: {
-  settings: { mode: "ask" | "auto"; minFit: number; cap: number; autoMode: AutoMode; autoCap: number; autoUseSaved: boolean }; saved: Record<string, string>; busy: string | null;
+  settings: { mode: "ask" | "auto"; minFit: number; cap: number; autoMode: AutoMode; autoCap: number; autoUseSaved: boolean; rules: AutoRules }; saved: Record<string, string>; busy: string | null;
   act: (k: string, b: object, ok: string) => Promise<void>;
 }) {
   const [mode, setMode] = useState(settings.mode);
@@ -150,6 +151,10 @@ function Settings({ settings, saved, busy, act }: {
   const [autoMode, setAutoMode] = useState<AutoMode>(settings.autoMode);
   const [autoCap, setAutoCap] = useState(settings.autoCap);
   const [useSaved, setUseSaved] = useState(settings.autoUseSaved);
+  const [minScore, setMinScore] = useState(settings.rules.minScore);
+  const [minPay, setMinPay] = useState(settings.rules.minPayLpa);
+  const [blocked, setBlocked] = useState(settings.rules.blockedCompanies.join("\n"));
+  const [weekends, setWeekends] = useState(settings.rules.pauseWeekends);
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <Card className="flex flex-col gap-4 md:col-span-2">
@@ -168,6 +173,19 @@ function Settings({ settings, saved, busy, act }: {
         <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={useSaved} onChange={(e) => setUseSaved(e.target.checked)} className="mt-1 accent-accent" />
           <span><b>Use my saved answers without asking each time.</b> Visa, salary, notice period and similar questions are filled only from the answers you saved on the right, never guessed. Anything without a saved answer still stops and asks you.</span></label>
         <div><button className={btnPrimary} disabled={!!busy} onClick={() => act("autoset", { action: "settings", auto_apply_mode: autoMode, auto_apply_daily_cap: autoCap, auto_apply_use_saved: useSaved }, "Auto-apply settings saved.")}>Save auto-apply settings</button></div>
+      </Card>
+      <Card className="flex flex-col gap-4 md:col-span-2">
+        <h3 className="text-lg font-bold">Your limits for automatic applying</h3>
+        <p className="text-sm text-muted">These hold for one-tap apply on Swipe, the robot queue and batch sending. A role that breaks a limit is not sent, and you are told why.</p>
+        <label className="flex flex-col gap-1"><span className={label}>Minimum match score: <span className="num">{minScore === 0 ? "no minimum" : minScore}</span></span>
+          <input type="range" min={0} max={95} step={5} value={minScore} onChange={(e) => setMinScore(+e.target.value)} className="accent-accent" /></label>
+        <label className="flex flex-col gap-1"><span className={label}>Salary floor in lakh rupees a year (0 for none)</span>
+          <input type="number" min={0} max={500} value={minPay} onChange={(e) => setMinPay(Math.max(0, +e.target.value || 0))} className="w-32 rounded-xl border border-line bg-surface px-3 py-2 text-sm" />
+          <span className="text-xs text-muted">Only checked when a posting states its yearly pay in rupees. Roles with no stated pay are not blocked.</span></label>
+        <label className="flex flex-col gap-1"><span className={label}>Never apply to these companies (one per line)</span>
+          <textarea rows={3} value={blocked} onChange={(e) => setBlocked(e.target.value)} className="rounded-xl border border-line bg-surface px-3 py-2 text-sm" /></label>
+        <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={weekends} onChange={(e) => setWeekends(e.target.checked)} className="mt-1 accent-accent" /><span><b>Pause on weekends.</b> Nothing is sent on Saturday or Sunday (India time).</span></label>
+        <div><button className={btnPrimary} disabled={!!busy} onClick={() => act("autorules", { action: "settings", auto_apply_rules: { minScore, minPayLpa: minPay, blockedCompanies: blocked, pauseWeekends: weekends } }, "Your limits are saved.")}>Save my limits</button></div>
       </Card>
       <Card className="flex flex-col gap-4">
         <h3 className="text-lg font-bold">Mode</h3>

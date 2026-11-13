@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui";
 import { hasAIKey } from "@/lib/ai";
+import { cleanRules } from "@/lib/auto-rules";
 import { cleanAutoMode, clampAutoCap } from "@/lib/auto-apply";
 import AutopilotClient, { type AppRow, type Suggestion } from "./AutopilotClient";
 
@@ -36,7 +37,7 @@ export default async function AutopilotPage() {
       <AutopilotClient
         apps={(apps ?? []) as unknown as AppRow[]}
         suggestions={suggestions}
-        settings={{ mode: prefs?.autopilot_mode === "auto" ? "auto" : "ask", minFit, cap: prefs?.autopilot_daily_cap ?? 5, autoMode: cleanAutoMode(prefs?.auto_apply_mode), autoCap: clampAutoCap(prefs?.auto_apply_daily_cap), autoUseSaved: prefs?.auto_apply_use_saved === true }}
+        settings={{ mode: prefs?.autopilot_mode === "auto" ? "auto" : "ask", minFit, cap: prefs?.autopilot_daily_cap ?? 5, autoMode: cleanAutoMode(prefs?.auto_apply_mode), autoCap: clampAutoCap(prefs?.auto_apply_daily_cap), autoUseSaved: prefs?.auto_apply_use_saved === true, rules: cleanRules(prefs?.auto_apply_rules) }}
         savedAnswers={(prefs?.standard_answers ?? {}) as Record<string, string>}
         hasCv={(profile?.cv_text ?? "").length > 200}
         aiReady={hasAIKey()}
