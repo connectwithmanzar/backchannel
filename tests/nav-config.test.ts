@@ -11,7 +11,7 @@ test("everything else is under More, together with the rarely used pages", () =>
 });
 
 test("every page belongs to exactly one section", () => {
-  const pages = ["/today", "/roles", "/companies", "/sources", "/saved", "/outreach", "/referrals", "/copilots", "/autopilot", "/pipeline", "/offers", "/pay", "/practice"];
+  const pages = ["/today", "/roles", "/swipe", "/companies", "/sources", "/saved", "/outreach", "/referrals", "/copilots", "/autopilot", "/pipeline", "/offers", "/pay", "/practice"];
   for (const p of pages) assert.equal(SECTIONS.filter((s) => tabIsActive(p, s)).length, 1, p);
 });
 
@@ -27,7 +27,7 @@ test("More lights up on pages that live under it, not on main tabs", () => {
 });
 
 test("the section strip appears only for sections with several pages", () => {
-  assert.deepEqual(subLinksFor("/roles"), []);
+  assert.deepEqual(subLinksFor("/roles").map((l) => l.label), ["List", "Swipe", "Grid"]);
   assert.deepEqual(subLinksFor("/saved"), []);
   assert.deepEqual(subLinksFor("/sources").map((l) => l.label), ["My companies", "Where roles come from"]);
   assert.deepEqual(subLinksFor("/referrals").map((l) => l.label), ["Messages", "Referrals"]);
