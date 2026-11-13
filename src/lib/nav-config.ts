@@ -6,7 +6,7 @@ export type Section = NavLink & { match: string[]; sub: NavLink[]; inMenu: boole
 
 export const SECTIONS: Section[] = [
   { href: "/home", label: "Home", match: ["/home", "/copilots"], sub: [], inMenu: true },
-  { href: "/swipe", label: "Jobs", match: ["/swipe", "/roles"], sub: [{ href: "/swipe", label: "Swipe" }, { href: "/swipe?view=grid", label: "Grid" }, { href: "/roles", label: "List with filters" }], inMenu: true },
+  { href: "/swipe", label: "Jobs", match: ["/swipe", "/roles", "/targets"], sub: [{ href: "/swipe", label: "Swipe" }, { href: "/swipe?view=grid", label: "Grid" }, { href: "/roles", label: "List with filters" }, { href: "/targets", label: "Target list" }], inMenu: true },
   {
     href: "/applications", label: "Applied", match: ["/applications", "/autopilot", "/pipeline", "/offers", "/pay", "/practice"], inMenu: true,
     sub: [

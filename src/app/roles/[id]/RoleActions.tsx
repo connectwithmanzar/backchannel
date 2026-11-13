@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { btn, btnPrimary } from "@/components/ui";
+import TargetButton from "@/components/TargetButton";
 
 export default function RoleActions({ jobId, reaction, url }: { jobId: string; reaction: string | null; url: string }) {
   const router = useRouter();
@@ -23,6 +24,7 @@ export default function RoleActions({ jobId, reaction, url }: { jobId: string; r
         {reaction !== "skipped"
           ? <button type="button" className={btn} disabled={!!busy} onClick={() => react("skipped")}>Not for me</button>
           : <button type="button" className={btn} disabled={!!busy} onClick={() => react(null)}>Undo skip</button>}
+        <TargetButton jobId={jobId} source="job" />
         {url && <a className={btnPrimary} href={url} target="_blank" rel="noopener noreferrer">Apply on company site ↗</a>}
       </div>
       {msg && <p role="status" className={`text-sm ${msg.ok ? "text-good" : "text-warn"}`}>{msg.text}</p>}

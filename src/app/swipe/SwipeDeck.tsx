@@ -4,6 +4,7 @@ import Link from "next/link";
 import FitRing from "@/components/FitRing";
 import { Card, Pill, btn, btnPrimary } from "@/components/ui";import { oneTapApply, outcomeLine, type ApplicationsCall, type ApplyOutcome } from "@/lib/one-tap-apply";
 import type { SwipeJob } from "@/lib/jobs/swipe-feed";
+import TargetButton from "@/components/TargetButton";
 import { matchLabel } from "@/lib/match-label";
 import { swipeDecision, swipeProgress, tiltFor } from "@/lib/swipe-gesture";
 
@@ -142,6 +143,7 @@ export default function SwipeDeck({ initial, view }: { initial: SwipeJob[]; view
       <button type="button" className={btn} onClick={() => void pass(job)} disabled={!!pending}>Pass{size === "lg" ? " ←" : ""}</button>
       <button type="button" className={btn} onClick={() => void save(job)} disabled={!!pending}>Save{size === "lg" ? " ↑" : ""}</button>
       <button type="button" className={btnPrimary} onClick={() => apply(job)} disabled={!!pending}>Apply{size === "lg" ? " →" : ""}</button>
+      {size === "sm" && <TargetButton jobId={job.id} source="swipe" disabled={!!pending} />}
     </div>
   );
 
@@ -204,6 +206,7 @@ export default function SwipeDeck({ initial, view }: { initial: SwipeJob[]; view
 
             <div className="mt-5 flex items-center justify-center gap-5">
               <button type="button" onClick={() => void pass(current)} disabled={!!pending} aria-label="Pass (left arrow)" className="flex h-16 w-16 items-center justify-center rounded-full border border-line bg-surface text-2xl text-warn shadow-sm hover:bg-sunk disabled:opacity-50">✕</button>
+              <TargetButton jobId={current.id} source="swipe" variant="round" disabled={!!pending} />
               <button type="button" onClick={() => void save(current)} disabled={!!pending} aria-label="Save (up arrow)" className="flex h-14 w-14 items-center justify-center rounded-full border border-line bg-surface text-xl shadow-sm hover:bg-sunk disabled:opacity-50">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true"><path d="M7 4h10v16l-5-3.5L7 20z" /></svg>
               </button>
