@@ -149,3 +149,22 @@ export async function listInbox(token: string, query: string, max = 40): Promise
   }
   return out;
 }
+
+/** What other people wrote in the given threads, newest messages included. Used for replies to emails Backchannel sent. */
+export async function repliesInThreads(token: string, threadIds: string[], myEmail: string): Promise<InboxItem[]> {
+  const me = myEmail.trim().toLowerCase();
+  const out: InboxItem[] = [];
+  for (let i = 0; i < threadIds.length; i += 8) {
+    const batch = await Promise.all(threadIds.slice(i, i + 8).map((id) => gmailGet(token, `/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`).catch(() => null)));
+    for (const t of batch) {
+      for (const m of (t?.messages ?? []) as { id: string; threadId: string; snippet?: string; payload?: { headers?: { name: string; value: string }[] } }[]) {
+        const header = (n: string) => m.payload?.headers?.find((h) => h.name.toLowerCase() === n)?.value ?? "";
+        const from = header("from");
+        const subject = header("subject");
+        if (!from || fromAddress(from) === me || isBounceMessage(from, subject) || isDelayNotice(subject) || isAutoReply(subject)) continue;
+        out.push({ id: m.id, threadId: m.threadId, from, subject, date: header("date"), snippet: String(m.snippet ?? "") });
+      }
+    }
+  }
+  return out;
+}

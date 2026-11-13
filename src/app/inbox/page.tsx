@@ -2,14 +2,14 @@ import Link from "next/link";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { serviceClient } from "@/lib/supabase/service";
 import { Card, PageHeader, Pill } from "@/components/ui";
-import { accessToken, gmailConfigured, listInbox } from "@/lib/outreach/gmail";
-import { INBOX_QUERY, KIND_LABEL, routeMails, type AppRef, type RoutedMail } from "@/lib/inbox-routing";
+import { accessToken, gmailConfigured, listInbox, repliesInThreads } from "@/lib/outreach/gmail";
+import { INVITE_QUERY, KIND_LABEL, keepRepliesAndInvites, routeMails, type AppRef, type RoutedMail } from "@/lib/inbox-routing";
 import { formatCompanyName } from "@/lib/company-name";
 import StageButton from "./StageButton";
 
 export const dynamic = "force-dynamic";
 
-const TONE = { interview: "good", offer: "signal", assessment: "accent", rejection: "warn", received: "neutral", other: "neutral" } as const;
+const TONE = { invite: "good", interview: "good", offer: "signal", assessment: "accent", rejection: "warn", received: "neutral", other: "neutral" } as const;
 
 async function load(uid: string): Promise<{ state: "off" | "error" | "ok"; mails: RoutedMail[]; email?: string; error?: string }> {
   if (!gmailConfigured()) return { state: "off", mails: [] };
@@ -23,8 +23,11 @@ async function load(uid: string): Promise<{ state: "off" | "error" | "ok"; mails
   });
   try {
     const token = await accessToken(acct.refresh_token);
-    const items = await listInbox(token, INBOX_QUERY);
-    return { state: "ok", mails: routeMails(items, apps), email: acct.email };
+    // Only threads that Backchannel started: the replies in them, plus calendar invites.
+    const { data: sent } = await db.from("outreach").select("gmail_thread_id").eq("user_id", uid).not("gmail_thread_id", "is", null).order("sent_at", { ascending: false }).limit(60);
+    const threadIds = [...new Set((sent ?? []).map((r) => r.gmail_thread_id as string))];
+    const [replies, invites] = await Promise.all([repliesInThreads(token, threadIds, acct.email), listInbox(token, INVITE_QUERY, 20)]);
+    return { state: "ok", mails: routeMails(keepRepliesAndInvites(replies, invites), apps), email: acct.email };
   } catch (e) {
     return { state: "error", mails: [], error: e instanceof Error ? e.message : "Couldn't read your Gmail." };
   }
@@ -61,13 +64,13 @@ export default async function InboxPage() {
   return (
     <section className="py-6">
       <PageHeader eyebrow="Applications" title="Replies from companies">
-        Job-related mail from the last 30 days, matched to the application it belongs to. Backchannel only reads; it never replies or moves a stage without your tap.
+        Replies to the emails you sent from Backchannel, and calendar invites. Nothing else from your mailbox is shown. Backchannel only reads; it never replies or moves a stage without your tap.
       </PageHeader>
       {data.state === "off" && <Card><p className="text-sm">Connect your Gmail to see replies here. <Link href="/outreach" className="font-semibold text-accent">Connect Gmail</Link></p></Card>}
       {data.state === "error" && <Card><p role="alert" className="text-sm text-warn">{data.error}</p><p className="mt-2 text-sm text-muted">If this keeps happening, reconnect Gmail on the <Link href="/outreach" className="font-semibold text-accent">Messages page</Link>.</p></Card>}
-      {data.state === "ok" && data.mails.length === 0 && <Card><p className="text-sm text-muted">No job-related mail in the last 30 days in {data.email}.</p></Card>}
+      {data.state === "ok" && data.mails.length === 0 && <Card><p className="text-sm text-muted">No replies to your Backchannel emails yet, and no calendar invites in the last 30 days ({data.email}).</p></Card>}
       {routed.length > 0 && <><h2 className="mb-3 text-lg font-semibold">Matched to an application</h2><ul className="mb-8 flex flex-col gap-3">{routed.map(row)}</ul></>}
-      {loose.length > 0 && <><h2 className="mb-1 text-lg font-semibold">Not matched to any application</h2><p className="mb-3 text-sm text-muted">Could be recruiters reaching out first, or mail from a company you haven&apos;t applied to.</p><ul className="flex flex-col gap-3">{loose.map(row)}</ul></>}
+      {loose.length > 0 && <><h2 className="mb-1 text-lg font-semibold">Not matched to any application</h2><p className="mb-3 text-sm text-muted">Replies from people you emailed, or invites, that don&apos;t match one of your applications.</p><ul className="flex flex-col gap-3">{loose.map(row)}</ul></>}
     </section>
   );
 }

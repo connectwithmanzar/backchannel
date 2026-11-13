@@ -1,7 +1,7 @@
 // Works out what a recruiter email is and which application it belongs to. Pure functions, tested without Gmail.
 import { fromAddress } from "@/lib/outreach/limits";
 
-export type MailKind = "interview" | "assessment" | "offer" | "rejection" | "received" | "other";
+export type MailKind = "invite" | "interview" | "assessment" | "offer" | "rejection" | "received" | "other";
 
 export interface InboxMail { id: string; threadId: string; from: string; subject: string; date: string; snippet: string }
 export interface AppRef { id: string; company: string; title: string; stage: string | null }
@@ -12,12 +12,16 @@ export interface RoutedMail extends InboxMail {
   suggestedStage: "screening" | "interview" | "offer" | "rejected" | null;
 }
 
-/** The Gmail search that finds job-related mail from the last 30 days. */
+/** Calendar invitations in the last 30 days (interview invites arrive this way). */
+export const INVITE_QUERY = 'in:inbox newer_than:30d (filename:ics OR subject:"invitation:" OR subject:"updated invitation:")';
+
+/** The older search for job-related mail; the Replies page no longer uses it. */
 export const INBOX_QUERY = 'in:inbox newer_than:30d (interview OR "your application" OR "thank you for applying" OR "next steps" OR assessment OR "we regret" OR "unfortunately" OR offer OR recruiter OR "move forward" OR "schedule a call")';
 
 // Order matters: a rejection that mentions "interview" is still a rejection.
 export function classifyMail(subject: string, snippet: string): MailKind {
   const t = `${subject} ${snippet}`.toLowerCase();
+  if (/^(updated )?invitation:|has invited you|accepted:|declined:/.test(subject.trim().toLowerCase())) return "invite";
   if (/(unfortunately|regret to inform|not (be )?moving forward|not (be )?proceed|decided to (move|go) (forward )?with (other|another)|will not be (moving|proceeding)|position has been filled)/.test(t)) return "rejection";
   if (/(offer letter|pleased to offer|happy to offer|we'd like to offer|extend (you )?an offer|job offer)/.test(t)) return "offer";
   if (/(interview|schedule a (call|chat|time)|availability|speak with you|meet with (our|the) team|phone screen|intro call)/.test(t)) return "interview";
@@ -27,7 +31,7 @@ export function classifyMail(subject: string, snippet: string): MailKind {
 }
 
 const SUGGEST: Record<MailKind, RoutedMail["suggestedStage"]> = {
-  interview: "interview", assessment: "screening", offer: "offer", rejection: "rejected", received: null, other: null,
+  invite: "interview", interview: "interview", assessment: "screening", offer: "offer", rejection: "rejected", received: null, other: null,
 };
 
 const STOP = new Set(["inc", "ltd", "llc", "limited", "pvt", "private", "technologies", "technology", "solutions", "group", "the", "and", "co", "corp", "company", "labs", "software", "global"]);
@@ -79,5 +83,11 @@ export function routeMails(mails: InboxMail[], apps: AppRef[]): RoutedMail[] {
 }
 
 export const KIND_LABEL: Record<MailKind, string> = {
-  interview: "Interview", assessment: "Assessment", offer: "Offer", rejection: "Not moving forward", received: "Received", other: "Other",
+  invite: "Invite", interview: "Interview", assessment: "Assessment", offer: "Offer", rejection: "Not moving forward", received: "Received", other: "Other",
 };
+
+/** Keep only mail that belongs on the Replies page: replies in threads you sent from Backchannel, and calendar invites. Newest first, no repeats. */
+export function keepRepliesAndInvites(replies: InboxMail[], invites: InboxMail[]): InboxMail[] {
+  const seen = new Set<string>();
+  return [...replies, ...invites].filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
+}

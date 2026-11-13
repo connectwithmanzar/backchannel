@@ -51,3 +51,18 @@ test("newest mail comes first", () => {
   const out = routeMails([mail({ id: "old", date: "Mon, 3 Nov 2026 10:00:00 +0000" }), mail({ id: "new", date: "Mon, 10 Nov 2026 10:00:00 +0000" })], apps);
   assert.deepEqual(out.map((m) => m.id), ["new", "old"]);
 });
+
+import { keepRepliesAndInvites } from "../src/lib/inbox-routing";
+
+test("calendar invitations are recognised and suggest the interview stage for a matched application", () => {
+  assert.equal(classifyMail("Invitation: Intro call with Acme @ Tue 11am", ""), "invite");
+  assert.equal(classifyMail("Updated invitation: Intro call", ""), "invite");
+  const [r] = routeMails([mail({ from: "priya@acme.com", subject: "Invitation: Intro call @ Tue" })], apps);
+  assert.equal(r.kind, "invite");
+  assert.equal(r.suggestedStage, "interview");
+});
+
+test("the Replies page keeps replies and invites without repeats", () => {
+  const out = keepRepliesAndInvites([mail({ id: "r1" }), mail({ id: "x" })], [mail({ id: "x" }), mail({ id: "i1" })]);
+  assert.deepEqual(out.map((m) => m.id), ["r1", "x", "i1"]);
+});
