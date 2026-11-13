@@ -66,3 +66,20 @@ test("the Replies page keeps replies and invites without repeats", () => {
   const out = keepRepliesAndInvites([mail({ id: "r1" }), mail({ id: "x" })], [mail({ id: "x" }), mail({ id: "i1" })]);
   assert.deepEqual(out.map((m) => m.id), ["r1", "x", "i1"]);
 });
+
+import { isCalendarInvite } from "../src/lib/inbox-routing";
+
+test("only real calendar invitations count as invites, not marketing mail with the word in it", () => {
+  assert.equal(isCalendarInvite("Invitation: Intro call @ Tue 11am (IST)", "priya@acme.com"), true);
+  assert.equal(isCalendarInvite("Updated invitation: Intro call", "priya@acme.com"), true);
+  assert.equal(isCalendarInvite("Accepted: Intro call", "priya@acme.com"), true);
+  assert.equal(isCalendarInvite("Dubai Business Exchange: 🔒 By Invitation Only 🔒", "Sheila M (Meetup) <info@meetup.com>"), false);
+  assert.equal(isCalendarInvite("You're invited to our webinar", "news@brand.com"), false);
+});
+
+test("words many companies share do not match a mail to the wrong application", () => {
+  const grimbell: AppRef = { id: "g", company: "Grimbell Business Solutions", title: "Sales Development Representative", stage: "applied" };
+  const m = mail({ from: "Sheila M (Meetup) <info@meetup.com>", subject: "Dubai Business Exchange: By Invitation Only", snippet: "Business networking" });
+  assert.equal(matchApplication(m, [grimbell]), null);
+  assert.equal(matchApplication(mail({ from: "hr@grimbell.com", subject: "Your application" }), [grimbell])?.id, "g");
+});

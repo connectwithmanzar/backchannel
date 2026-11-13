@@ -3,7 +3,7 @@ import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { serviceClient } from "@/lib/supabase/service";
 import { Card, PageHeader, Pill } from "@/components/ui";
 import { accessToken, gmailConfigured, listInbox, repliesInThreads } from "@/lib/outreach/gmail";
-import { INVITE_QUERY, KIND_LABEL, keepRepliesAndInvites, routeMails, type AppRef, type RoutedMail } from "@/lib/inbox-routing";
+import { INVITE_QUERY, KIND_LABEL, isCalendarInvite, keepRepliesAndInvites, routeMails, type AppRef, type RoutedMail } from "@/lib/inbox-routing";
 import { formatCompanyName } from "@/lib/company-name";
 import StageButton from "./StageButton";
 
@@ -27,7 +27,7 @@ async function load(uid: string): Promise<{ state: "off" | "error" | "ok"; mails
     const { data: sent } = await db.from("outreach").select("gmail_thread_id").eq("user_id", uid).not("gmail_thread_id", "is", null).order("sent_at", { ascending: false }).limit(60);
     const threadIds = [...new Set((sent ?? []).map((r) => r.gmail_thread_id as string))];
     const [replies, invites] = await Promise.all([repliesInThreads(token, threadIds, acct.email), listInbox(token, INVITE_QUERY, 20)]);
-    return { state: "ok", mails: routeMails(keepRepliesAndInvites(replies, invites), apps), email: acct.email };
+    return { state: "ok", mails: routeMails(keepRepliesAndInvites(replies, invites.filter((m) => isCalendarInvite(m.subject, m.from))), apps), email: acct.email };
   } catch (e) {
     return { state: "error", mails: [], error: e instanceof Error ? e.message : "Couldn't read your Gmail." };
   }

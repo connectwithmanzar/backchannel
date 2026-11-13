@@ -60,7 +60,7 @@ export default function FindPeople({ configured, initialCompany = "", initialDom
 
   return (
     <Card className="mb-5 flex flex-col gap-3">
-      <h2 className="text-xl font-bold">Find who to ask</h2>
+      <h2 className="text-xl font-bold">Search for more people (Apollo or web search)</h2>
       {!configured ? (
         <p className="text-sm text-muted">People search isn&apos;t set up yet. It needs an Apollo API key (<code>APOLLO_API_KEY</code>) in Vercel. Until then, add people you know in the form below.</p>
       ) : (

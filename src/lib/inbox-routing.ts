@@ -34,7 +34,8 @@ const SUGGEST: Record<MailKind, RoutedMail["suggestedStage"]> = {
   invite: "interview", interview: "interview", assessment: "screening", offer: "offer", rejection: "rejected", received: null, other: null,
 };
 
-const STOP = new Set(["inc", "ltd", "llc", "limited", "pvt", "private", "technologies", "technology", "solutions", "group", "the", "and", "co", "corp", "company", "labs", "software", "global"]);
+// Words that many companies share. They never count as proof that a mail is about a particular company.
+const STOP = new Set(["inc", "ltd", "llc", "limited", "pvt", "private", "technologies", "technology", "solutions", "group", "the", "and", "co", "corp", "company", "labs", "software", "global", "business", "services", "service", "consulting", "digital", "media", "international", "partners", "systems", "enterprise", "enterprises", "industries", "marketing", "networks", "ventures", "worldwide", "holdings", "management", "associates", "online", "india", "dubai", "uae"]);
 const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w));
 
 /** How strongly a mail points at one application: company words in sender, subject or snippet, plus the job title. */
@@ -90,4 +91,11 @@ export const KIND_LABEL: Record<MailKind, string> = {
 export function keepRepliesAndInvites(replies: InboxMail[], invites: InboxMail[]): InboxMail[] {
   const seen = new Set<string>();
   return [...replies, ...invites].filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
+}
+
+/** A real calendar invitation (from Google Calendar or similar), not a marketing mail that says "invitation". */
+export function isCalendarInvite(subject: string, from: string): boolean {
+  const sub = subject.trim().toLowerCase();
+  if (/^(updated invitation|invitation|accepted|declined|tentatively accepted|canceled event|cancelled event)(\s+from [^:]+)?:/.test(sub)) return true;
+  return /calendar-notification@google\.com|calendar@|@calendar\./i.test(from) && /@/.test(sub + from);
 }
