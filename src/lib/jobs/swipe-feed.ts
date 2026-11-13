@@ -28,6 +28,9 @@ export interface SwipeJob {
   score: number;
   /** One plain sentence on why it fits. */
   why: string;
+  /** Short reasons it fits, and things to watch, shown as ticks and cautions. */
+  reasons: string[];
+  caveats: string[];
   tags: string[];
   /** The start of the job description, plain text. */
   description: string;
@@ -132,6 +135,8 @@ export async function loadSwipeFeed(db: SupabaseClient, userId: string): Promise
       postedAt: j.postedAt ?? null,
       score: j.score,
       why: reactions.get(j.id)?.explanation?.trim() || j.explanation,
+      reasons: j.reasons,
+      caveats: j.caveats,
       tags: [...new Set([...j.matchedTools, j.roleFamily])].slice(0, 6),
       description: j.description.slice(0, 1600),
       url: j.url,

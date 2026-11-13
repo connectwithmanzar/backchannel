@@ -973,7 +973,7 @@ test("previewing a page scores it like a collected role and saves nothing", () =
   assert.equal(good.roleFamily, "SDR/BDR");
   assert.equal(good.openToIndia, true);
   assert.equal(weak.openToIndia, false);
-  assert.equal(good.parts.length, 5);
+  assert.equal(good.parts.length, 7);
   assert.match(good.explanation, /Salesforce, Outreach|Salesforce/);
 });
 

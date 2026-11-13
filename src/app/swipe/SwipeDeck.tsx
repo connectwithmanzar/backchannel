@@ -136,7 +136,15 @@ export default function SwipeDeck({ initial, view }: { initial: SwipeJob[]; view
             <ul className="mt-3 flex flex-wrap gap-2 text-xs" aria-label="Job facts">
               {meta(current).map((m) => <li key={m} className="rounded-full bg-sunk px-2.5 py-1">{m}</li>)}
             </ul>
-            <div className="mt-4 rounded-xl bg-bg p-3 text-sm"><p className="text-xs font-semibold uppercase tracking-wider text-muted">Why it fits</p><p className="mt-1">{current.why}</p></div>
+            <div className="mt-4 rounded-xl bg-bg p-3 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted">Why it fits</p>
+              {current.reasons.length + current.caveats.length > 0 ? (
+                <ul className="mt-2 flex flex-col gap-1">
+                  {current.reasons.slice(0, 4).map((r) => <li key={r} className="flex gap-2"><span className="text-good" aria-hidden="true">✓</span><span>{r[0].toUpperCase() + r.slice(1)}</span></li>)}
+                  {current.caveats.slice(0, 3).map((c) => <li key={c} className="flex gap-2"><span className="text-signal" aria-hidden="true">!</span><span className="text-muted">{c[0].toUpperCase() + c.slice(1)}</span></li>)}
+                </ul>
+              ) : <p className="mt-1">{current.why}</p>}
+            </div>
             {current.tags.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{current.tags.map((t) => <Pill key={t}>{t}</Pill>)}</div>}
             {actions(current, "lg")}
             <p className="mt-3 text-xs text-muted">{deck.length} left · Keys: ← pass, ↑ save, → apply, Z undo</p>

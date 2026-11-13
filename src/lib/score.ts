@@ -1,5 +1,6 @@
 import type { Job, Market, RoleFamily } from "./collector/types";
 import { countryToMarkets } from "./jobs/market";
+import { seniorityOf, type Seniority } from "./role-filters";
 
 export interface SearchProfile {
   name: string;
@@ -9,6 +10,8 @@ export interface SearchProfile {
   minOteUsd: number;
   minOteByMarket?: Partial<Record<Market, number>>;
   prefersRemote: boolean;
+  /** The levels you are aiming at, read from your target titles. Unset means no preference. */
+  targetLevels?: Seniority[];
 }
 
 const FLOOR_MARKETS: Market[] = ["india", "remote-in", "emea", "us", "global"];
@@ -43,6 +46,37 @@ export function familiesFromTitles(titles: string[] | null | undefined): RoleFam
   return out.size ? [...out] : DEFAULT_FAMILIES;
 }
 
+const LEVEL_ORDER: Seniority[] = ["entry", "mid", "senior", "lead"];
+const DEFAULT_LEVELS: Seniority[] = ["entry", "mid", "senior"];
+
+/** The levels your target titles point at ("Senior SDR" is senior, "Account Executive" is mid). Empty means everything below leadership. */
+export function levelsFromTitles(titles: string[] | null | undefined): Seniority[] {
+  const out = new Set<Seniority>((titles ?? []).filter((t) => t.trim()).map(seniorityOf));
+  return out.size ? [...out] : DEFAULT_LEVELS;
+}
+
+/** 0 to 100: how well a role's level suits the levels you want. Leadership you did not ask for is a poor fit. */
+export function levelFit(title: string, wanted: Seniority[] | undefined): number {
+  if (!wanted || wanted.length === 0) return 70;
+  const level = seniorityOf(title);
+  if (wanted.includes(level)) return 100;
+  if (level === "lead") return 20;
+  const dist = Math.min(...wanted.map((w) => Math.abs(LEVEL_ORDER.indexOf(w) - LEVEL_ORDER.indexOf(level))));
+  return dist <= 1 ? 55 : 25;
+}
+
+/** 0 to 100: newer postings first, since old ones are usually filled. An unknown date is neutral. */
+export function freshnessFit(postedAt: string | undefined, now = Date.now()): number {
+  if (!postedAt) return 60;
+  const days = (now - Date.parse(postedAt)) / 864e5;
+  if (!Number.isFinite(days)) return 60;
+  if (days <= 3) return 100;
+  if (days <= 14) return 85;
+  if (days <= 30) return 60;
+  if (days <= 60) return 35;
+  return 15;
+}
+
 interface ProfileRow {
   name?: string | null; tools?: string[] | null; markets?: string[] | null; target_titles?: string[] | null;
   min_ote_usd?: number | null; min_ote_by_market?: unknown;
@@ -58,6 +92,7 @@ export function buildSearchProfile(row: ProfileRow | null | undefined): SearchPr
     minOteUsd: row?.min_ote_usd ?? 0,
     minOteByMarket: parseMinOteByMarket(row?.min_ote_by_market),
     prefersRemote: false,
+    targetLevels: levelsFromTitles(row?.target_titles),
   };
 }
 
@@ -72,6 +107,9 @@ export interface ScoredJob extends Job {
   score: number;
   parts: { label: string; value: number }[];
   explanation: string;
+  /** The reasons it fits, and the things to watch, as separate short phrases. */
+  reasons: string[];
+  caveats: string[];
   matchedTools: string[];
   payUsdMax?: number;
 }
@@ -101,14 +139,32 @@ export function scoreJob(job: Job, p: SearchProfile): ScoredJob {
   const pay = payUsdMax === undefined || baseOnly ? 50 : payUsdMax >= floor ? 100 : 10;
   const company = job.companyQuality ?? 50;
 
-  const score = Math.round(role * 0.3 + mkt * 0.2 + tools * 0.15 + pay * 0.2 + company * 0.15);
-  const bits = [
-    p.targetFamilies.includes(job.roleFamily) ? `${job.roleFamily} is one of your target role types` : `${job.roleFamily} is outside your target role types`,
-    !p.markets.length ? `you haven't picked target markets yet` : p.markets.includes(job.market) ? `the location fits your markets` : `the location is outside your markets`,
-    matchedTools.length ? `it mentions ${matchedTools.join(", ")}` : p.tools.length ? `it doesn't name your tools` : `you haven't added your tools yet`,
-    payUsdMax === undefined ? `pay isn't published` : baseOnly ? `only base pay is published, so it can't be compared with your OTE minimum` : payUsdMax >= floor ? `pay is published and meets your minimum` : `pay is published but below your minimum`,
-    ...(job.companyQuality !== undefined && job.companyQuality >= 70 ? [`the company is hiring broadly and shows its pay`] : job.companyQuality !== undefined && job.companyQuality <= 35 ? [`there is little hiring signal at this company`] : []),
-  ];
+  const level = levelFit(job.title, p.targetLevels);
+  const fresh = freshnessFit(job.postedAt);
+
+  const score = Math.round(role * 0.26 + level * 0.12 + mkt * 0.17 + tools * 0.12 + pay * 0.15 + company * 0.1 + fresh * 0.08);
+  const reasons = [
+    p.targetFamilies.includes(job.roleFamily) ? `${job.roleFamily} is one of your target role types` : null,
+    matchedTools.length ? `it mentions ${matchedTools.join(", ")}` : null,
+    level === 100 && p.targetLevels ? `the level matches what you are aiming for` : null,
+    p.markets.length && p.markets.includes(job.market) ? `the location fits your markets` : null,
+    payUsdMax !== undefined && !baseOnly && payUsdMax >= floor ? `pay is published and meets your minimum` : null,
+    job.companyQuality !== undefined && job.companyQuality >= 70 ? `the company is hiring broadly and shows its pay` : null,
+    fresh >= 85 ? `it was posted recently` : null,
+  ].filter((x): x is string => !!x);
+  const caveats = [
+    !p.targetFamilies.includes(job.roleFamily) ? `${job.roleFamily} is outside your target role types` : null,
+    level <= 25 ? `the level looks ${seniorityOf(job.title) === "lead" ? "like leadership, above" : "far from"} what you are aiming for` : null,
+    p.markets.length && !p.markets.includes(job.market) ? `the location is outside your markets` : null,
+    p.tools.length && !matchedTools.length ? `it doesn't name your tools` : null,
+    payUsdMax !== undefined && !baseOnly && payUsdMax < floor ? `pay is published but below your minimum` : null,
+    payUsdMax === undefined ? `pay isn't published` : baseOnly ? `only base pay is published, so it can't be compared with your OTE minimum` : null,
+    job.companyQuality !== undefined && job.companyQuality <= 35 ? `there is little hiring signal at this company` : null,
+    fresh <= 35 ? `the posting is old and may already be filled` : null,
+  ].filter((x): x is string => !!x);
+  const sentence = (parts: string[]) => parts.join("; ");
+  const lead = reasons.length ? sentence(reasons.slice(0, 4)) : `nothing stands out for you yet`;
+  const explanation = lead[0].toUpperCase() + lead.slice(1) + "." + (caveats.length ? ` Watch out: ${sentence(caveats.slice(0, 2))}.` : "");
   return {
     ...job,
     score,
@@ -118,8 +174,12 @@ export function scoreJob(job: Job, p: SearchProfile): ScoredJob {
       { label: "Tools", value: tools },
       { label: "Pay", value: pay },
       { label: "Company", value: company },
+      { label: "Level", value: level },
+      { label: "Freshness", value: fresh },
     ],
-    explanation: bits[0][0].toUpperCase() + bits.slice(0).join("; ").slice(1) + ".",
+    explanation,
+    reasons,
+    caveats,
     matchedTools,
     payUsdMax,
   };
