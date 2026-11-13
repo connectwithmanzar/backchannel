@@ -4,6 +4,8 @@ import Link from "next/link";
 import FitRing from "@/components/FitRing";
 import { Card, Pill, btn, btnPrimary } from "@/components/ui";import { oneTapApply, outcomeLine, type ApplicationsCall, type ApplyOutcome } from "@/lib/one-tap-apply";
 import type { SwipeJob } from "@/lib/jobs/swipe-feed";
+import { matchLabel } from "@/lib/match-label";
+import { swipeDecision, swipeProgress, tiltFor } from "@/lib/swipe-gesture";
 
 const UNDO_SECONDS = 4;
 
@@ -34,6 +36,9 @@ export default function SwipeDeck({ initial, view }: { initial: SwipeJob[]; view
   const [done, setDone] = useState<Done[]>([]);
   const [last, setLast] = useState<Undoable | null>(null);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [drag, setDrag] = useState<{ x: number; y: number; active: boolean }>({ x: 0, y: 0, active: false });
+  const start = useRef<{ x: number; y: number } | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopTimer = () => { if (timer.current) { clearInterval(timer.current); timer.current = null; } };
@@ -90,7 +95,32 @@ export default function SwipeDeck({ initial, view }: { initial: SwipeJob[]; view
     if (!(await react(l.job.id, null))) setError("Couldn't undo that. Check your connection.");
   }, [last]);
 
-  const current = deck[0] ?? null;
+  const q = query.trim().toLowerCase();
+  const visible = q ? deck.filter((j) => `${j.title} ${j.company} ${j.location}`.toLowerCase().includes(q)) : deck;
+  const current = visible[0] ?? null;
+
+  const onDown = (e: React.PointerEvent) => {
+    if (pending) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    start.current = { x: e.clientX, y: e.clientY };
+    setDrag({ x: 0, y: 0, active: true });
+  };
+  const onMove = (e: React.PointerEvent) => {
+    if (!start.current) return;
+    setDrag({ x: e.clientX - start.current.x, y: e.clientY - start.current.y, active: true });
+  };
+  const onUp = () => {
+    if (!start.current) return;
+    const decision = swipeDecision(drag.x, drag.y);
+    start.current = null;
+    setDrag({ x: 0, y: 0, active: false });
+    if (!current) return;
+    if (decision === "apply") apply(current);
+    else if (decision === "pass") void pass(current);
+    else if (decision === "save") void save(current);
+  };
+  const pull = swipeProgress(drag.x, drag.y);
+  const hint = drag.active ? swipeDecision(drag.x * 3, drag.y * 3) : null;
 
   // Keyboard: left passes, right applies, up saves, Z undoes. Ignored while typing.
   useEffect(() => {
@@ -119,46 +149,79 @@ export default function SwipeDeck({ initial, view }: { initial: SwipeJob[]; view
 
   return (
     <div>
+      {view === "swipe" && deck.length > 0 && (
+        <div className="mb-5">
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Job title, company or city" aria-label="Search these roles"
+            className="w-full rounded-full border border-line bg-surface px-5 py-3 text-sm" />
+        </div>
+      )}
       {error && <p role="alert" className="mb-3 rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
 
       {deck.length === 0 && !pending ? (
         <Card><p className="text-sm text-muted">You&apos;ve been through every relevant role for now. New ones arrive every morning. You can also <Link href="/roles" className="font-semibold text-accent">browse the full list</Link>.</p></Card>
+      ) : view === "swipe" && !current ? (
+        <Card><p className="text-sm text-muted">No roles match &ldquo;{query}&rdquo;. <button type="button" className="font-semibold text-accent" onClick={() => setQuery("")}>Clear search</button></p></Card>
       ) : view === "swipe" && current ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,430px)_minmax(0,1fr)]">
-          <Card className="flex flex-col sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm text-muted">{current.company}{current.tier ? ` · Tier ${current.tier}` : ""}</p>
-                <h2 className="mt-1 text-2xl font-bold leading-snug">{current.title}</h2>
-              </div>
-              <FitRing score={current.score} size={64} />
-            </div>
-            <ul className="mt-3 flex flex-wrap gap-2 text-xs" aria-label="Job facts">
-              {meta(current).map((m) => <li key={m} className="rounded-full bg-sunk px-2.5 py-1">{m}</li>)}
-            </ul>
-            <div className="mt-4 rounded-xl bg-bg p-3 text-sm">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted">Why it fits</p>
-              {current.reasons.length + current.caveats.length > 0 ? (
-                <ul className="mt-2 flex flex-col gap-1">
-                  {current.reasons.slice(0, 4).map((r) => <li key={r} className="flex gap-2"><span className="text-good" aria-hidden="true">✓</span><span>{r[0].toUpperCase() + r.slice(1)}</span></li>)}
-                  {current.caveats.slice(0, 3).map((c) => <li key={c} className="flex gap-2"><span className="text-signal" aria-hidden="true">!</span><span className="text-muted">{c[0].toUpperCase() + c.slice(1)}</span></li>)}
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)]">
+          <div>
+            <div className="relative mx-auto max-w-md pb-3">
+              <div className="absolute inset-x-6 top-3 h-full rounded-3xl border border-line bg-surface opacity-60" aria-hidden="true" />
+              <div className="absolute inset-x-3 top-1.5 h-full rounded-3xl border border-line bg-surface opacity-80" aria-hidden="true" />
+              <article
+                onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+                style={{ transform: `translate(${drag.x}px, ${Math.min(0, drag.y)}px) rotate(${tiltFor(drag.x)}deg)`, transition: drag.active ? "none" : "transform 0.2s ease", touchAction: "pan-y" }}
+                className="relative cursor-grab select-none rounded-3xl border border-line bg-surface p-5 shadow-sm active:cursor-grabbing"
+                aria-label={`${current.title} at ${current.company}`}
+              >
+                {hint && (
+                  <span className={`absolute right-4 top-4 rounded-full px-3 py-1 text-sm font-semibold text-white ${hint === "apply" ? "bg-good" : hint === "pass" ? "bg-warn" : "bg-accent"}`} style={{ opacity: pull }}>
+                    {hint === "apply" ? "Apply" : hint === "pass" ? "Pass" : "Save"}
+                  </span>
+                )}
+                <div className="flex items-start gap-4">
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-line bg-bg text-xl font-semibold text-muted" aria-hidden="true">{current.company.slice(0, 1).toUpperCase()}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-muted">{current.company}{current.tier ? ` · Tier ${current.tier}` : ""}</p>
+                    <h2 className="mt-0.5 text-3xl leading-tight">{current.title}</h2>
+                  </div>
+                </div>
+                <p className="mt-3"><span className="inline-block rounded-full bg-signal-soft px-3 py-1 text-sm font-medium text-signal">{current.score}% match · {matchLabel(current.score)}</span></p>
+                <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted" aria-label="Job facts">
+                  {meta(current).map((m) => <li key={m}>{m}</li>)}
                 </ul>
-              ) : <p className="mt-1">{current.why}</p>}
+                <div className="mt-5 rounded-2xl bg-sunk p-4 text-sm">
+                  <p className="eyebrow text-muted">Why it fits</p>
+                  {current.reasons.length + current.caveats.length > 0 ? (
+                    <ul className="mt-2 flex flex-col gap-1.5">
+                      {current.reasons.slice(0, 4).map((r) => <li key={r} className="flex gap-2"><span className="text-good" aria-hidden="true">✓</span><span>{r[0].toUpperCase() + r.slice(1)}</span></li>)}
+                      {current.caveats.slice(0, 3).map((c) => <li key={c} className="flex gap-2"><span className="text-signal" aria-hidden="true">!</span><span className="text-muted">{c[0].toUpperCase() + c.slice(1)}</span></li>)}
+                    </ul>
+                  ) : <p className="mt-2">{current.why}</p>}
+                </div>
+                {current.tags.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{current.tags.map((t) => <Pill key={t}>{t}</Pill>)}</div>}
+              </article>
             </div>
-            {current.tags.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{current.tags.map((t) => <Pill key={t}>{t}</Pill>)}</div>}
-            {actions(current, "lg")}
-            <p className="mt-3 text-xs text-muted">{deck.length} left · Keys: ← pass, ↑ save, → apply, Z undo</p>
-            {last && !pending && <button type="button" className="mt-2 self-start text-sm font-semibold text-accent" onClick={() => void undoLast()}>Undo {last.kind === "pass" ? "pass" : "save"}</button>}
-          </Card>
+
+            <div className="mt-5 flex items-center justify-center gap-5">
+              <button type="button" onClick={() => void pass(current)} disabled={!!pending} aria-label="Pass (left arrow)" className="flex h-16 w-16 items-center justify-center rounded-full border border-line bg-surface text-2xl text-warn shadow-sm hover:bg-sunk disabled:opacity-50">✕</button>
+              <button type="button" onClick={() => void save(current)} disabled={!!pending} aria-label="Save (up arrow)" className="flex h-14 w-14 items-center justify-center rounded-full border border-line bg-surface text-xl shadow-sm hover:bg-sunk disabled:opacity-50">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true"><path d="M7 4h10v16l-5-3.5L7 20z" /></svg>
+              </button>
+              <button type="button" onClick={() => apply(current)} disabled={!!pending} aria-label="Apply (right arrow)" className="flex h-20 w-20 items-center justify-center rounded-full bg-fg text-3xl text-bg shadow-md hover:opacity-90 disabled:opacity-50">✓</button>
+            </div>
+            <p className="mt-4 text-center text-xs text-muted">{visible.length} left · Drag the card, or use ← pass, ↑ save, → apply, Z undo</p>
+            {last && !pending && <p className="mt-2 text-center"><button type="button" className="text-sm font-semibold text-accent" onClick={() => void undoLast()}>Undo {last.kind === "pass" ? "pass" : "save"}</button></p>}
+          </div>
+
           <Card className="sm:p-6">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted">Job details</p>
+              <p className="eyebrow text-muted">Job details</p>
               <span className="flex gap-3 text-sm font-semibold">
                 <Link href={`/roles/${current.id}`} className="text-accent">Open page</Link>
                 {current.url && <a href={current.url} target="_blank" rel="noopener noreferrer" className="text-accent">Original posting ↗</a>}
               </span>
             </div>
-            <h3 className="mt-2 text-xl font-bold">{current.title}</h3>
+            <h3 className="mt-2 text-2xl">{current.title}</h3>
             <p className="text-sm text-muted">{current.company}</p>
             <p className="mt-4 whitespace-pre-line text-sm leading-relaxed">{current.description || "No description was collected for this role. Open the original posting to read it."}</p>
           </Card>
