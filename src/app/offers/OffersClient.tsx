@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { btn, btnPrimary, Card, input, Pill } from "@/components/ui";
 import { postJson } from "@/lib/api";
 import { OFFER_CURRENCIES, type OfferRow } from "@/lib/offers";
+import NegotiationStrategist from "@/components/NegotiationStrategist";
 
 const usd = (n: number | null) => (n == null ? "n/a" : `$${Math.round(n).toLocaleString("en-US")}`);
 const blank = { company: "", role_title: "", location: "", currency: "USD", base: "", variable: "", joining_bonus: "", equity_note: "", visa_note: "", deadline: "", notes: "" };
@@ -43,6 +44,8 @@ export default function OffersClient({ offers }: { offers: OfferRow[] }) {
           <div><button type="submit" className={btnPrimary} disabled={!!busy || !f.company.trim()}>{busy === "add" ? "Adding…" : "Add offer"}</button></div>
         </form>
       </Card>
+
+      <NegotiationStrategist />
 
       {offers.length === 0 ? <Card><p className="text-sm text-muted">No offers yet. When one arrives, add it above to compare.</p></Card> : (
         <Card className="overflow-x-auto">
