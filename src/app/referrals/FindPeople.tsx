@@ -3,8 +3,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { btn, btnPrimary, Card, input, Pill } from "@/components/ui";
 
-interface Person { id: string; firstName: string; lastHint: string; title: string; company: string; hasEmail: boolean; role: "hiring_manager" | "recruiter" | "other" }
-interface Revealed { name: string; title: string; linkedinUrl: string | null }
+interface Person { id: string; firstName: string; lastHint: string; title: string; company: string; hasEmail: boolean; role: "hiring_manager" | "recruiter" | "other"; location?: string }
+interface Revealed { name: string; title: string; linkedinUrl: string | null; location?: string }
 
 const ROLE_LABEL: Record<Person["role"], string> = { hiring_manager: "Hiring side", recruiter: "Recruiter", other: "Other" };
 
@@ -65,17 +65,17 @@ export default function FindPeople({ configured, initialCompany = "", initialDom
         <p className="text-sm text-muted">People search isn&apos;t set up yet. It needs an Apollo API key (<code>APOLLO_API_KEY</code>) in Vercel. Until then, add people you know in the form below.</p>
       ) : (
         <>
-          <p className="text-sm text-muted">Enter a target company and its website. You get the sales leaders and recruiters there (first name and job title). Backchannel never sends LinkedIn messages: you find them on LinkedIn and send the ask yourself.</p>
+          <p className="text-sm text-muted">Enter a target company. Website and domain are auto-detected via AI search if omitted. Filter by region (e.g. Dubai, Bengaluru) to request referrals from people in your geography.</p>
           <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); search(); }}>
-            <input aria-label="Company" className={input} placeholder="Company, e.g. Apollo.io" value={company} onChange={(e) => setCompany(e.target.value)} />
-            <input aria-label="Website" className={input} placeholder="Website, e.g. apollo.io" value={domain} onChange={(e) => setDomain(e.target.value)} />
+            <input aria-label="Company" className={input} placeholder="Company, e.g. Apollo.io, Holistic AI" value={company} onChange={(e) => setCompany(e.target.value)} />
+            <input aria-label="Website" className={input} placeholder="Website (optional, auto-detected)" value={domain} onChange={(e) => setDomain(e.target.value)} />
             <input aria-label="Location" className={input} placeholder="Location, e.g. Dubai, Bengaluru (optional)" value={location} onChange={(e) => setLocation(e.target.value)} />
             <select aria-label="Who to look for" className={input} value={kind} onChange={(e) => setKind(e.target.value)}>
               <option value="both">Sales leaders, then recruiters</option>
               <option value="hiring">Sales leaders only</option>
               <option value="recruiter">Recruiters only</option>
             </select>
-            <button type="submit" className={btnPrimary} disabled={busy === "search" || !company.trim() || !domain.trim()}>{busy === "search" ? "Searching…" : "Find people"}</button>
+            <button type="submit" className={btnPrimary} disabled={busy === "search" || !company.trim()}>{busy === "search" ? "Searching…" : "Find people"}</button>
           </form>
           {msg && <p role="status" className={`text-sm ${msg.ok ? "text-good" : "text-warn"}`}>{msg.text}</p>}
           {people && people.length > 0 && fromCache && (
@@ -91,6 +91,9 @@ export default function FindPeople({ configured, initialCompany = "", initialDom
                       <b>{r?.name ?? `${p.firstName} ${p.lastHint}`}</b> <span className="text-muted">· {p.title}</span>
                       <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
                         <Pill tone={p.role === "other" ? "neutral" : "accent"}>{ROLE_LABEL[p.role]}</Pill>
+                        {(r?.location || p.location) && (
+                          <Pill tone="good">📍 {r?.location || p.location}</Pill>
+                        )}
                         {p.hasEmail && <span>email on file</span>}
                         {r?.linkedinUrl && <a href={r.linkedinUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">LinkedIn profile</a>}
                       </div>

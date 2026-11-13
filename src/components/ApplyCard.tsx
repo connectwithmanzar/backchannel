@@ -5,11 +5,12 @@ import { useState } from "react";
 import { Card, Pill, btnPrimary, input } from "@/components/ui";
 import { postJson } from "@/lib/api";
 import ApplyReview, { type AppRow } from "@/components/ApplyReview";
+import type { AutoMode } from "@/lib/auto-apply";
 
 const STAGES = [["applied", "Applied"], ["screening", "Screening"], ["interview", "Interview"], ["final", "Final round"], ["offer", "Offer"], ["rejected", "Rejected"], ["withdrawn", "Withdrawn"]];
 
 /** Everything about applying to one job: prepare, review, submit and track. The same card on every job page. */
-export default function ApplyCard({ jobId, application, hasCv, aiReady }: { jobId: string; application: AppRow | null; hasCv: boolean; aiReady: boolean }) {
+export default function ApplyCard({ jobId, application, hasCv, aiReady, autoMode = "off" }: { jobId: string; application: AppRow | null; hasCv: boolean; aiReady: boolean; autoMode?: AutoMode }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -46,7 +47,7 @@ export default function ApplyCard({ jobId, application, hasCv, aiReady }: { jobI
           </button>
         </div>
       ) : inReview && application ? (
-        <div className="mt-4 border-t border-line pt-4"><ApplyReview a={application} busy={busy} act={act} /></div>
+        <div className="mt-4 border-t border-line pt-4"><ApplyReview a={application} busy={busy} act={act} autoMode={autoMode} /></div>
       ) : applied && application ? (
         <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
           <label className="flex items-center gap-2"><span className="text-muted">Stage</span>
@@ -56,6 +57,7 @@ export default function ApplyCard({ jobId, application, hasCv, aiReady }: { jobI
             </select>
           </label>
           {application.receipt && <span className="text-muted">Receipt: {application.receipt}</span>}
+          {application.auto_status === "submitted" && <Pill tone="accent">Sent by auto-apply</Pill>}
         </div>
       ) : null}
     </Card>

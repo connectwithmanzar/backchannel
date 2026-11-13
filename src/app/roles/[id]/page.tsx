@@ -10,6 +10,7 @@ import RoleActions from "./RoleActions";
 import ApplyCard from "@/components/ApplyCard";
 import type { AppRow } from "@/components/ApplyReview";
 import { hasAIKey } from "@/lib/ai";
+import { cleanAutoMode } from "@/lib/auto-apply";
 import CompanyActions from "./CompanyActions";
 import WhoToAsk from "./WhoToAsk";
 import { matchConnections, referralSearchLinks, companyKey, type Connection } from "@/lib/jobs/referral-paths";
@@ -28,9 +29,10 @@ export default async function RolePage({ params }: { params: Promise<{ id: strin
 
   const { data: job } = await db.from("jobs").select(JOB_COLUMNS).eq("id", id).maybeSingle();
   if (!job) notFound();
-  const [{ data: score }, { data: app }] = await Promise.all([
+  const [{ data: score }, { data: app }, { data: autoPrefs }] = await Promise.all([
     db.from("job_scores").select("score, parts, explanation, reaction").eq("user_id", uid).eq("job_id", id).maybeSingle(),
-    db.from("applications").select("id, job_id, status, stage, tailored_cv, cv_changes, cover_note, questions, receipt, submitted_at, notes").eq("user_id", uid).eq("job_id", id).maybeSingle(),
+    db.from("applications").select("*").eq("user_id", uid).eq("job_id", id).maybeSingle(),
+    db.from("preferences").select("*").eq("user_id", uid).maybeSingle(),
   ]);
   const company = (job.companies as unknown as { name: string; domain: string | null } | null)?.name ?? job.company_name ?? "Unknown company";
   const domain = (job.companies as unknown as { name: string; domain: string | null } | null)?.domain ?? "";
@@ -76,7 +78,7 @@ export default async function RolePage({ params }: { params: Promise<{ id: strin
 
       <div className="mt-6 flex flex-wrap items-start gap-6">
         <div className="flex min-w-0 flex-[999_1_620px] flex-col gap-6">
-          <ApplyCard jobId={id} application={application} hasCv={(pr.cv_text ?? "").length > 200} aiReady={hasAIKey()} />
+          <ApplyCard jobId={id} application={application} hasCv={(pr.cv_text ?? "").length > 200} aiReady={hasAIKey()} autoMode={cleanAutoMode(autoPrefs?.auto_apply_mode)} />
           {score ? (
             <Card className="flex flex-wrap gap-7 sm:p-6">
               <FitRing score={score.score ?? 0} size={110} />

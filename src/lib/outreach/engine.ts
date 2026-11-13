@@ -51,18 +51,48 @@ export async function generateSequence(db: SupabaseClient, userId: string, c: { 
     p?.segment && `Segment: ${p.segment}`, p?.motion && `Motion: ${p.motion}`, p?.tools?.length && `Tools: ${p.tools.join(", ")}`,
   ].filter(Boolean).join("\n");
 
+  const SYSTEM = `You write elite, punchy, high-conversion outreach for a top B2B sales professional reaching out to sales leaders and recruiters.
+${DATA_NOTICE}
+CRITICAL RULES:
+- STRICTLY 2 TO 3 SHORT LINES per email/message. No walls of text. Executive brevity wins.
+- ZERO FORMAL FLUFF OR CORPORATE CLICHÉS. Never say "I hope this email finds you well", "I came across your profile", "My name is...", "I am writing to express my interest", or "Hope you're having a great week".
+- SHOW UNIQUE VALUE IMMEDIATELY: Connect the JD's specific sales motion or challenge directly to one verified achievement or metric from the candidate's CV/scorecard.
+- Never invent numbers, titles, or facts. Only use provided candidate facts.
+
+DIFFERENT STRATEGY FOR EMAIL VS LINKEDIN:
+- EMAIL (email1):
+  * Line 1 (Hook): Specific trigger about their team, role, or outbound motion.
+  * Line 2 (Value/Proof): Exact metric/achievement from CV that proves you solve that problem (e.g. quota %, meetings/mo, segment).
+  * Line 3 (Low-friction Ask): Short, zero-pressure CTA (e.g. "Open to a brief 5-min chat next Tuesday, or who leads this hire?").
+  * email2 (Day 3 follow-up): Exactly 2 lines. One additional proof point/tool from CV + gentle bump.
+  * email3 (Day 7 breakup): Exactly 2 lines. Permission to close the loop without pressure.
+- LINKEDIN CONNECT (li_connect):
+  * Strictly UNDER 200 characters. Casual, peer-to-peer tone. ZERO sales pitch. Natural context linking their team to your background.
+- LINKEDIN MESSAGE (li_message):
+  * Exactly 2 lines. Casual DM after connecting acknowledging connection, referencing the open role, and asking who runs point.`;
+
   const g = await aiJson<Gen>(
-    `You write short, human outreach from a B2B sales professional to someone who hires at a company they want to join.
-Rules: ${DATA_NOTICE} Only use facts given about the sender; never invent numbers, names, mutual connections or company news. If no company news is given, don't claim any.
-Plain text, no em-dashes, no buzzwords, no "I hope this finds you well". The first email is 60-90 words and never more than 100. It opens with one specific reason for writing to this person, gives one proof point taken from the facts, and makes ONE ask. Do not attach anything or include links. Sign off with the sender's first name only.`,
-    `SENDER FACTS:\n${facts || "(only the name is known)"}\nSender name: ${p?.name ?? ""}\n${p?.cv_text ? `CV excerpt:\n${p.cv_text.slice(0, 3000)}` : ""}
+    SYSTEM,
+    `SENDER FACTS:
+${facts || "(only the name is known)"}
+Sender name: ${p?.name ?? ""}
+${p?.cv_text ? `CV excerpt:\n${p.cv_text.slice(0, 3000)}` : ""}
+
 RECIPIENT: ${c.name}${c.title ? `, ${c.title}` : ""} at ${c.company_name}
-${job ? `ROLE THEY'RE HIRING FOR: ${job.title}\n${untrusted("job_description", htmlToText(job.description ?? "").slice(0, 2500))}` : "No specific open role; ask about upcoming sales hiring."}
+${job ? `ROLE THEY'RE HIRING FOR: ${job.title}\nJOB DESCRIPTION:\n${untrusted("job_description", htmlToText(job.description ?? "").slice(0, 2500))}` : "No specific open role; ask about upcoming sales hiring."}
 THE ASK FOR THE FIRST EMAIL: ${ANGLES.find((a) => a.id === angle)?.ask}
 ${c.notes ? `SENDER'S NOTES ABOUT THIS PERSON: ${untrusted("sender_notes", c.notes)}` : ""}
 
-Return JSON: {"subject": "plain subject, at most 5 words and 40 characters, no clickbait, may use the recipient's first name", "email1": "intro", "email2": "follow-up 3 days later, adds one proof point from the facts", "email3": "brief final note 7 days later", "li_connect": "LinkedIn connection note, max 280 characters", "li_message": "LinkedIn message after connecting, max 500 characters"}`,
-    { maxTokens: 1800 }
+Return JSON:
+{
+  "subject": "punchy, ultra-casual subject (2 to 4 words, lower-case style, e.g. 'quick question', 'sales at [company]', '[first_name] / [sender_name]')",
+  "email1": "strictly 2-3 lines. Hook on their hiring/motion + hard proof point from CV + low-friction ask. No greeting like Dear Sir.",
+  "email2": "follow-up 3 days later, strictly 2 lines",
+  "email3": "brief final note 7 days later, strictly 2 lines",
+  "li_connect": "LinkedIn connection request note, strictly UNDER 200 characters, zero pitch",
+  "li_message": "LinkedIn direct message after connecting, strictly 2 lines"
+}`,
+    { maxTokens: 1800, smart: true }
   );
   const sig = prefs?.email_signature?.trim();
   const finish = (b: string) => `${b.trim()}${sig ? `\n\n${sig}` : ""}\n\n${OPT_OUT}`;

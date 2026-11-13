@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui";
 import { hasAIKey } from "@/lib/ai";
+import { cleanAutoMode, clampAutoCap } from "@/lib/auto-apply";
 import AutopilotClient, { type AppRow, type Suggestion } from "./AutopilotClient";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +11,9 @@ export default async function AutopilotPage() {
   const { data: { user } } = await db.auth.getUser();
   const uid = user?.id ?? "";
   const [{ data: prefs }, { data: profile }, { data: apps }] = await Promise.all([
-    db.from("preferences").select("autopilot_mode, autopilot_min_fit, autopilot_daily_cap, standard_answers").eq("user_id", uid).maybeSingle(),
+    db.from("preferences").select("*").eq("user_id", uid).maybeSingle(),
     db.from("profiles").select("cv_text").eq("user_id", uid).maybeSingle(),
-    db.from("applications").select("id, job_id, status, stage, tailored_cv, cover_note, cv_changes, questions, receipt, submitted_at, notes, updated_at, jobs(title, url, location, companies(name))").eq("user_id", uid).order("updated_at", { ascending: false }),
+    db.from("applications").select("*, jobs(title, url, location, companies(name))").eq("user_id", uid).order("updated_at", { ascending: false }),
   ]);
   const minFit = prefs?.autopilot_min_fit ?? 75;
   const done = new Set((apps ?? []).map((a) => a.job_id));
@@ -35,7 +36,7 @@ export default async function AutopilotPage() {
       <AutopilotClient
         apps={(apps ?? []) as unknown as AppRow[]}
         suggestions={suggestions}
-        settings={{ mode: prefs?.autopilot_mode === "auto" ? "auto" : "ask", minFit, cap: prefs?.autopilot_daily_cap ?? 5 }}
+        settings={{ mode: prefs?.autopilot_mode === "auto" ? "auto" : "ask", minFit, cap: prefs?.autopilot_daily_cap ?? 5, autoMode: cleanAutoMode(prefs?.auto_apply_mode), autoCap: clampAutoCap(prefs?.auto_apply_daily_cap), autoUseSaved: prefs?.auto_apply_use_saved === true }}
         savedAnswers={(prefs?.standard_answers ?? {}) as Record<string, string>}
         hasCv={(profile?.cv_text ?? "").length > 200}
         aiReady={hasAIKey()}

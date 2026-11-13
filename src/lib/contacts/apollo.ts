@@ -13,9 +13,10 @@ export interface FoundPerson {
   company: string;
   hasEmail: boolean;
   role: PersonRole;
+  location?: string;
 }
 
-export interface RevealedPerson { id: string; name: string; title: string; linkedinUrl: string | null }
+export interface RevealedPerson { id: string; name: string; title: string; linkedinUrl: string | null; location?: string }
 
 export const HIRING_TITLES = [
   "head of sales", "vp sales", "vice president sales", "director of sales", "sales development manager", "head of sdr",
@@ -64,22 +65,38 @@ export function buildSearchUrl(domain: string, titles: string[] = HIRING_TITLES,
   return `${BASE}/mixed_people/api_search?${p.toString()}`;
 }
 
-type ApolloPerson = { id?: string; first_name?: string; last_name_obfuscated?: string; title?: string; has_email?: boolean; organization?: { name?: string } };
+type ApolloPerson = {
+  id?: string;
+  first_name?: string;
+  last_name_obfuscated?: string;
+  title?: string;
+  has_email?: boolean;
+  organization?: { name?: string };
+  city?: string;
+  state?: string;
+  country?: string;
+  raw_address?: string;
+};
 
 export function parsePeople(json: unknown, fallbackCompany: string): FoundPerson[] {
   const people = (json as { people?: ApolloPerson[] } | null)?.people;
   if (!Array.isArray(people)) return [];
   return people
     .filter((p): p is ApolloPerson & { id: string } => typeof p?.id === "string" && !!p.first_name)
-    .map((p) => ({
-      id: p.id,
-      firstName: p.first_name ?? "",
-      lastHint: p.last_name_obfuscated ?? "",
-      title: p.title ?? "",
-      company: p.organization?.name ?? fallbackCompany,
-      hasEmail: p.has_email === true,
-      role: classifyTitle(p.title ?? ""),
-    }))
+    .map((p) => {
+      const locParts = [p.city, p.state || p.country].filter(Boolean);
+      const loc = locParts.length ? locParts.join(", ") : p.raw_address || undefined;
+      return {
+        id: p.id,
+        firstName: p.first_name ?? "",
+        lastHint: p.last_name_obfuscated ?? "",
+        title: p.title ?? "",
+        company: p.organization?.name ?? fallbackCompany,
+        hasEmail: p.has_email === true,
+        role: classifyTitle(p.title ?? ""),
+        location: loc,
+      };
+    })
     .sort((a, b) => Number(a.role === "other") - Number(b.role === "other"));
 }
 

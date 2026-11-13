@@ -47,6 +47,7 @@ function StoryBank() {
   const [draft, setDraft] = useState<{ id?: string } & typeof EMPTY>(EMPTY);
   const [msg, setMsg] = useState<Msg>(null);
   const [busy, setBusy] = useState(false);
+  const [extracting, setExtracting] = useState(false);
 
   async function load() {
     try {
@@ -56,6 +57,24 @@ function StoryBank() {
     } catch { setMsg({ ok: false, text: "Couldn't load your stories. Check your connection." }); }
   }
   useEffect(() => { load(); }, []);
+
+  async function autoExtract() {
+    setExtracting(true); setMsg(null);
+    try {
+      const res = await fetch("/api/stories/extract", { method: "POST" });
+      const d = await readJson(res);
+      if (d.error) {
+        setMsg({ ok: false, text: String(d.error) });
+      } else {
+        setMsg({ ok: true, text: `Extracted ${d.count} high-impact stories from your CV!` });
+        await load();
+      }
+    } catch {
+      setMsg({ ok: false, text: "Failed to extract stories. Check your connection." });
+    } finally {
+      setExtracting(false);
+    }
+  }
 
   async function save() {
     setBusy(true); setMsg(null);
@@ -80,8 +99,20 @@ function StoryBank() {
 
   return (
     <Card>
-      <h2 className="text-lg font-semibold">Story bank</h2>
-      <p className="mt-1 text-sm text-muted">Three to five real stories you can tell in an interview: what the situation was, what you did, and the result with a number if you have one. Practice answers are checked against these.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Story bank &amp; Candidate Brain</h2>
+          <p className="mt-1 text-sm text-muted">Real STAR stories used by Auto-Apply and Interview Prep. Grounded in your real numbers with zero AI fluff.</p>
+        </div>
+        <button
+          type="button"
+          className="rounded-xl border border-accent/40 bg-accent/10 px-3.5 py-1.5 text-xs font-semibold text-accent hover:bg-accent/20 disabled:opacity-50"
+          onClick={autoExtract}
+          disabled={extracting || busy}
+        >
+          {extracting ? "Analyzing CV…" : "💡 Auto-Extract Stories from My CV"}
+        </button>
+      </div>
       <ul className="mt-3 flex flex-col gap-2">
         {stories.map((s) => (
           <li key={s.id} className="rounded-xl border border-line p-3 text-sm">

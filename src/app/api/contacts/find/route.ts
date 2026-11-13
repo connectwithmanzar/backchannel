@@ -4,7 +4,10 @@ import { serviceClient } from "@/lib/supabase/service";
 import { rateLimitShared, retryAfter } from "@/lib/rate-limit";
 import { isExcludedCompany } from "@/data/companies";
 import { isBlocked } from "@/lib/outreach/engine";
-import { ApolloError, apolloConfigured, cleanDomain, parseLocations, revealPerson, searchCacheKey, searchPeople, type PeopleKind } from "@/lib/contacts/apollo";
+import { ApolloError, apolloConfigured, cleanDomain, parseLocations, revealPerson, searchCacheKey, searchPeople, type PeopleKind, type FoundPerson } from "@/lib/contacts/apollo";
+import { resolveDomain } from "@/lib/jobs/company-finder";
+import { searchWeb, webSearchConfigured } from "@/lib/websearch";
+import { aiJson, hasAIKey } from "@/lib/ai";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -23,7 +26,9 @@ export async function POST(req: NextRequest) {
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "Please sign in." }, { status: 401 });
-  if (!apolloConfigured()) return NextResponse.json({ error: "People search isn't set up yet. Add APOLLO_API_KEY in Vercel, then redeploy." }, { status: 503 });
+  if (!apolloConfigured() && !webSearchConfigured() && !hasAIKey()) {
+    return NextResponse.json({ error: "People search isn't set up yet. Add APOLLO_API_KEY or TAVILY_API_KEY in Vercel." }, { status: 503 });
+  }
   if (!(await rateLimitShared(`find:${user.id}`, 60, 3600_000))) {
     return NextResponse.json({ error: `Slow down a little. Try again in ${retryAfter(`find:${user.id}`)}s.` }, { status: 429 });
   }
@@ -40,8 +45,23 @@ export async function POST(req: NextRequest) {
   try {
     if (b.action === "search") {
       const company = String(b.company ?? "").trim().slice(0, 200);
-      const domain = cleanDomain(String(b.domain ?? ""));
-      if (!company || !domain) return NextResponse.json({ error: "Enter the company name and its website, like acme.com." }, { status: 400 });
+      if (!company) return NextResponse.json({ error: "Enter the company name." }, { status: 400 });
+
+      let domain = cleanDomain(String(b.domain ?? ""));
+      // 1. Automatically fetch company domain if user didn't enter it
+      if (!domain) {
+        const { data: coRow } = await svc.from("companies").select("domain").ilike("name", company).not("domain", "is", null).limit(1).maybeSingle();
+        if (coRow?.domain) {
+          domain = cleanDomain(coRow.domain);
+        } else {
+          domain = cleanDomain((await resolveDomain(company).catch(() => null)) ?? "");
+        }
+        if (!domain) {
+          const cleanName = company.toLowerCase().replace(/[^a-z0-9]/g, "");
+          domain = company.toLowerCase().includes("ai") ? `${cleanName}.ai` : `${cleanName}.com`;
+        }
+      }
+
       // Stealth: never surface people at a blocked or excluded company.
       if (isExcludedCompany(company, domain) || (await isBlocked(db, user.id, `x@${domain}`, company))) {
         return NextResponse.json({ error: `${company} is on your stealth or excluded list, so I won't look for people there.` }, { status: 400 });
@@ -57,7 +77,41 @@ export async function POST(req: NextRequest) {
       if ((await usedThisMonth("search")) >= SEARCH_CAP) {
         return NextResponse.json({ error: `You've used your ${SEARCH_CAP} company searches for this month.` }, { status: 429 });
       }
-      const people = await searchPeople(domain, company, { locations, kind });
+
+      let people: FoundPerson[] = [];
+
+      if (apolloConfigured()) {
+        people = await searchPeople(domain, company, { locations, kind });
+      } else if (webSearchConfigured() || hasAIKey()) {
+        // Fallback: AI / Web search for hiring managers and recruiters
+        const query = `${company} ("Head of Sales" OR "VP Sales" OR "Director of Sales" OR "Recruiter") ${locations.join(" ")} site:linkedin.com/in`;
+        const webResults = await searchWeb(query, { max: 10 }).catch(() => []);
+        if (webResults.length && hasAIKey()) {
+          const prompt = `Extract sales leaders and recruiters from these search results for company "${company}".
+Results:
+${webResults.map((r, i) => `[${i}] Title: ${r.title} | Link: ${r.url} | Snippet: ${r.snippet}`).join("\n\n")}
+
+Return JSON list:
+[
+  {
+    "id": "li_${domain}_0",
+    "firstName": "First name",
+    "lastHint": "Last name or initial",
+    "title": "Job Title",
+    "company": "${company}",
+    "hasEmail": false,
+    "role": "hiring_manager" or "recruiter",
+    "location": "City, Country (e.g. Dubai, UAE or Bengaluru, India, or Remote if mentioned)"
+  }
+]`;
+          try {
+            people = await aiJson<FoundPerson[]>("You extract professional contacts.", prompt, { fast: true });
+          } catch {
+            people = [];
+          }
+        }
+      }
+
       await svc.from("contact_lookups").upsert(
         { user_id: user.id, kind: "search", company_key: cacheKey, result: people, created_at: new Date().toISOString() },
         { onConflict: "user_id,kind,company_key" }

@@ -38,11 +38,30 @@ export function suggestTier(r: RatingInput | null | undefined): { average: numbe
   return { average, tier: tierFromRating(average) };
 }
 
-/** Your confirmed tier wins; otherwise the suggestion. `suggested` tells the screen to label it. */
-export function effectiveTier(confirmed: unknown, r: RatingInput | null | undefined): { tier: Tier | null; suggested: boolean } {
+/** Derives an automated tier based on real-time hiring volume and company signals */
+export function automatedTier(c?: { roles?: number; hiring?: string | null; hasBoard?: boolean } | null): Tier | null {
+  if (!c) return null;
+  const roles = c.roles ?? 0;
+  if (c.hiring === "hiring_surge" || roles >= 5) return "A";
+  if (roles >= 2 || c.hasBoard) return "B";
+  if (roles === 1) return "C";
+  return "D";
+}
+
+/** Your confirmed tier wins; otherwise review rating suggestion, then automated hiring signals. */
+export function effectiveTier(
+  confirmed: unknown,
+  r: RatingInput | null | undefined,
+  meta?: { roles?: number; hiring?: string | null; hasBoard?: boolean } | null
+): { tier: Tier | null; suggested: boolean } {
   if (isTier(confirmed)) return { tier: confirmed, suggested: false };
   const s = suggestTier(r).tier;
-  return { tier: s, suggested: s !== null };
+  if (s !== null) return { tier: s, suggested: true };
+  if (meta) {
+    const auto = automatedTier(meta);
+    if (auto !== null) return { tier: auto, suggested: true };
+  }
+  return { tier: null, suggested: false };
 }
 
 /** Sort order for lists: A first, then B, C, companies with no tier, and D last. */

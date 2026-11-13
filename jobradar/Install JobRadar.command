@@ -23,11 +23,14 @@ if [ "$SRC" != "$HOME_DIR" ]; then
   for f in "$SRC"/data/*; do [ -e "$f" ] && [ ! -e "$HOME_DIR/data/$(basename "$f")" ] && cp "$f" "$HOME_DIR/data/"; done
 fi
 cd "$HOME_DIR"
-"$UV" run --python 3.12 --with-requirements requirements.txt python -c "import jobspy, streamlit" >/dev/null
+"$UV" run --python 3.12 --with-requirements requirements.txt python -c "import jobspy, streamlit, playwright" >/dev/null
+echo "     Installing the auto-apply browser (Chromium, one time, about 150 MB)..."
+"$UV" run --python 3.12 --with-requirements requirements.txt playwright install chromium >/dev/null
 
 echo "3/5  Stopping any JobRadar already running..."
 launchctl bootout "gui/$UID_NUM/com.jobradar.app" 2>/dev/null || true
 launchctl bootout "gui/$UID_NUM/com.jobradar.daily" 2>/dev/null || true
+launchctl bootout "gui/$UID_NUM/com.jobradar.apply" 2>/dev/null || true
 pkill -f "streamlit run app.py" 2>/dev/null || true
 sleep 2
 
@@ -72,8 +75,26 @@ cat > "$AGENTS/com.jobradar.daily.plist" <<EOF
   <key>StandardErrorPath</key><string>$HOME_DIR/data/autorun.out</string>
 </dict></plist>
 EOF
+cat > "$AGENTS/com.jobradar.apply.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.jobradar.apply</string>
+  <key>WorkingDirectory</key><string>$HOME_DIR</string>
+  <key>ProgramArguments</key><array>
+    <string>$UV</string><string>run</string><string>--python</string><string>3.12</string>
+    <string>--with-requirements</string><string>requirements.txt</string>
+    <string>python</string><string>apply_runner.py</string>
+  </array>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+  <key>StartInterval</key><integer>1800</integer>
+  <key>StandardOutPath</key><string>$HOME_DIR/data/apply.out</string>
+  <key>StandardErrorPath</key><string>$HOME_DIR/data/apply.out</string>
+</dict></plist>
+EOF
 launchctl bootstrap "gui/$UID_NUM" "$AGENTS/com.jobradar.app.plist"
 launchctl bootstrap "gui/$UID_NUM" "$AGENTS/com.jobradar.daily.plist"
+launchctl bootstrap "gui/$UID_NUM" "$AGENTS/com.jobradar.apply.plist"
 
 echo "5/5  Creating the JobRadar app and adding it to your Dock..."
 mkdir -p "$HOME/Applications"
@@ -89,4 +110,5 @@ for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:8501 && break; sl
 open "http://localhost:8501"
 echo ""
 echo "Done. Click JobRadar in your Dock any time. It starts by itself when your Mac starts,"
-echo "and your saved daily search runs every morning at 8:00. You can close this window."
+echo "and your saved daily search runs every morning at 8:00. Auto-apply checks Backchannel every 30 minutes"
+echo "and does nothing until you switch it on there (it starts in dry-run mode). You can close this window."

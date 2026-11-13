@@ -65,6 +65,23 @@ Several tabs use Backchannel, so keep it connected in the sidebar.
 - **Working Nomads** (remote sales roles open to India): needs nothing; it appears under Sites for India.
 - **Market view → Source uniqueness** shows what share of each source's jobs no other source found. After two weeks, switch off any source under 10%.
 
+## Auto-apply (fills in application forms for you)
+
+Backchannel prepares each application (your tailored CV, cover note and saved answers). When you queue one, JobRadar opens the
+company's own application page in a Chrome window on your Mac, fills it in, and (in submit mode) presses Submit. It checks
+Backchannel every 30 minutes, and does nothing until you switch it on in Backchannel (Applications, Settings).
+
+- **Start with dry run.** In dry-run mode it fills the form and **stops before Submit**, then takes a screenshot so you can see exactly
+  what it would have sent. Do a few of these first. Switch to submit mode in Backchannel only when you are happy.
+- **"Needs you"** means it stopped on purpose and Backchannel tells you why, for example a visa or salary question with no saved
+  answer, a CAPTCHA, a site that wants you to log in or make an account (Workday, iCIMS, Taleo), or a required box it can't fill
+  honestly. Finish those by hand: open the job from Backchannel and apply there.
+- **It never** solves CAPTCHAs, logs in, creates accounts, or touches LinkedIn, Indeed, Naukri or Glassdoor. It only says
+  "submitted" when the page shows a confirmation.
+- **Screenshots** are in `~/JobRadar/data/apply_shots/`. A log of every try is in `~/JobRadar/data/apply_log.json`.
+- It leaves 20 to 60 seconds between applications and respects the daily limit you set in Backchannel.
+- Try one form without Backchannel (fake details, never submits): `cd ~/JobRadar && uv run --python 3.12 --with-requirements requirements.txt python apply_runner.py --url "THE JOB LINK" --dry-run`
+
 ## Which sites work in which market
 
 | Market | Free (JobSpy) | Apify (paid) |

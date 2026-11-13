@@ -5,7 +5,9 @@ import Link from "next/link";
 import { Card, Empty, Pill, btn, btnPrimary, input, label } from "@/components/ui";
 import { postJson } from "@/lib/api";
 import { SENSITIVE_LABELS } from "@/lib/apps/labels";
+import { CONTACT_FIELDS, MODE_LABELS, type AutoMode, AUTO_MODES } from "@/lib/auto-apply";
 import ApplyReview, { type AppRow, type Act } from "@/components/ApplyReview";
+import ApplicationKanban from "@/components/ApplicationKanban";
 
 export type { AppRow };
 
@@ -14,7 +16,7 @@ export interface Suggestion { job_id: string; score: number; bookmarked: boolean
 const STAGES = [["applied", "Applied"], ["screening", "Screening"], ["interview", "Interview"], ["final", "Final round"], ["offer", "Offer"], ["rejected", "Rejected"], ["withdrawn", "Withdrawn"]];
 
 export default function AutopilotClient({ apps, suggestions, settings, savedAnswers, hasCv, aiReady }: {
-  apps: AppRow[]; suggestions: Suggestion[]; settings: { mode: "ask" | "auto"; minFit: number; cap: number };
+  apps: AppRow[]; suggestions: Suggestion[]; settings: { mode: "ask" | "auto"; minFit: number; cap: number; autoMode: AutoMode; autoCap: number; autoUseSaved: boolean };
   savedAnswers: Record<string, string>; hasCv: boolean; aiReady: boolean;
 }) {
   const router = useRouter();
@@ -30,6 +32,16 @@ export default function AutopilotClient({ apps, suggestions, settings, savedAnsw
     setBusy(key); setMsg(null);
     try { await postJson("/api/applications", body); setMsg({ ok: true, text: ok }); after?.(); router.refresh(); }
     catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
+    finally { setBusy(null); }
+  }
+
+  async function queueAll() {
+    setBusy("qall"); setMsg(null);
+    try {
+      const d = await postJson<{ queued: number; blocked: number }>("/api/applications", { action: "queue_all" });
+      setMsg({ ok: true, text: `Queued ${d.queued} for auto-apply.${d.blocked ? ` ${d.blocked} still need your answers first.` : ""}` });
+      router.refresh();
+    } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
     finally { setBusy(null); }
   }
 
@@ -73,30 +85,21 @@ export default function AutopilotClient({ apps, suggestions, settings, savedAnsw
       ) : <Empty>No matches above {settings.minFit}% fit yet. Save roles with the bookmark on the Roles page, or lower the minimum fit in Settings.</Empty>)}
 
       {tab === "review" && (review.length ? (
-        <ul className="flex flex-col gap-3">
-          {review.map((a) => <ReviewItem key={a.id} a={a} open={open === a.id} onToggle={() => setOpen(open === a.id ? null : a.id)} busy={busy} act={act} />)}
-        </ul>
+        <div className="flex flex-col gap-3">
+          {settings.autoMode !== "off" && (
+            <Card className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted">Auto-apply is on ({MODE_LABELS[settings.autoMode].toLowerCase()}). Send every ready application to JobRadar in one go.</p>
+              <button className={btnPrimary} disabled={!!busy} onClick={queueAll}>{busy === "qall" ? "Queuing…" : "Queue all ready applications"}</button>
+            </Card>
+          )}
+          <ul className="flex flex-col gap-3">
+            {review.map((a) => <ReviewItem key={a.id} a={a} open={open === a.id} onToggle={() => setOpen(open === a.id ? null : a.id)} busy={busy} act={act} autoMode={settings.autoMode} />)}
+          </ul>
+        </div>
       ) : <Empty>Nothing to review. Prepare an application from Ready to prepare.</Empty>)}
 
       {tab === "applied" && (applied.length ? (
-        <div className="overflow-x-auto rounded-card border border-line bg-surface">
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs uppercase tracking-wider text-muted"><th className="px-3 py-2">Role</th><th className="px-3 py-2">Applied</th><th className="px-3 py-2">Stage</th><th className="px-3 py-2">Receipt</th></tr></thead>
-            <tbody>{applied.map((a) => (
-              <tr key={a.id} className="border-t border-line align-top">
-                <td className="px-3 py-2"><b>{a.jobs?.title}</b><div className="text-muted">{a.jobs?.companies?.name}</div></td>
-                <td className="px-3 py-2 num whitespace-nowrap">{a.submitted_at ? new Date(a.submitted_at).toLocaleDateString("en-IN") : "—"}</td>
-                <td className="px-3 py-2">
-                  <select aria-label="Stage" className={input + " w-auto"} value={a.stage ?? "applied"} disabled={!!busy}
-                    onChange={(e) => act(a.id, { action: "stage", id: a.id, stage: e.target.value }, "Stage updated.")}>
-                    {STAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
-                </td>
-                <td className="px-3 py-2 text-muted">{a.receipt || "—"}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
+        <ApplicationKanban apps={applied} busy={busy} act={act} />
       ) : <Empty>Applications you submit show up here, so you can track each one through to an offer.</Empty>)}
 
       {tab === "settings" && <Settings settings={settings} saved={savedAnswers} busy={busy} act={act} />}
@@ -104,31 +107,51 @@ export default function AutopilotClient({ apps, suggestions, settings, savedAnsw
   );
 }
 
-function ReviewItem({ a, open, onToggle, busy, act }: {
-  a: AppRow; open: boolean; onToggle: () => void; busy: string | null; act: Act;
+function ReviewItem({ a, open, onToggle, busy, act, autoMode }: {
+  a: AppRow; open: boolean; onToggle: () => void; busy: string | null; act: Act; autoMode: AutoMode;
 }) {
   const needs = a.status === "needs_answer";
   return (
     <li><Card>
       <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full flex-wrap items-center justify-between gap-2 text-left">
         <div className="min-w-0"><div className="font-bold">{a.jobs?.title}</div><div className="text-sm text-muted">{a.jobs?.companies?.name} · {a.jobs?.location}</div></div>
-        {needs ? <Pill tone="warn">Confirm your answers</Pill> : <Pill tone="good">Ready to submit</Pill>}
+        {a.auto_status === "queued" ? <Pill tone="accent">Queued for auto-apply</Pill> : a.auto_status === "needs_you" ? <Pill tone="warn">Auto-apply needs you</Pill> : needs ? <Pill tone="warn">Confirm your answers</Pill> : <Pill tone="good">Ready to submit</Pill>}
       </button>
-      {open && <div className="mt-4 border-t border-line pt-4"><ApplyReview a={a} busy={busy} act={act} /></div>}
+      {open && <div className="mt-4 border-t border-line pt-4"><ApplyReview a={a} busy={busy} act={act} autoMode={autoMode} /></div>}
     </Card></li>
   );
 }
 
 function Settings({ settings, saved, busy, act }: {
-  settings: { mode: "ask" | "auto"; minFit: number; cap: number }; saved: Record<string, string>; busy: string | null;
+  settings: { mode: "ask" | "auto"; minFit: number; cap: number; autoMode: AutoMode; autoCap: number; autoUseSaved: boolean }; saved: Record<string, string>; busy: string | null;
   act: (k: string, b: object, ok: string) => Promise<void>;
 }) {
   const [mode, setMode] = useState(settings.mode);
   const [minFit, setMinFit] = useState(settings.minFit);
   const [cap, setCap] = useState(settings.cap);
   const [answers, setAnswers] = useState<Record<string, string>>(saved);
+  const [autoMode, setAutoMode] = useState<AutoMode>(settings.autoMode);
+  const [autoCap, setAutoCap] = useState(settings.autoCap);
+  const [useSaved, setUseSaved] = useState(settings.autoUseSaved);
   return (
     <div className="grid gap-4 md:grid-cols-2">
+      <Card className="flex flex-col gap-4 md:col-span-2">
+        <h3 className="text-lg font-bold">Auto-apply on my Mac</h3>
+        <p className="text-sm text-muted">JobRadar, on your Mac, opens each company&apos;s real application form in a browser, fills it in from your tailored CV and saved details, and can send it. It stops and tells you when something needs you: a CAPTCHA, a login, or a question it must not guess. Start with Practice.</p>
+        {AUTO_MODES.map((m) => (
+          <label key={m} className="flex cursor-pointer gap-3 rounded-xl border border-line p-3">
+            <input type="radio" name="automode" checked={autoMode === m} onChange={() => setAutoMode(m)} className="mt-1 accent-accent" />
+            <span><b>{MODE_LABELS[m]}</b></span>
+          </label>
+        ))}
+        <label className="flex flex-col gap-1"><span className={label}>Send at most <span className="num">{autoCap}</span> applications a day</span>
+          <input type="range" min={1} max={100} value={autoCap} onChange={(e) => setAutoCap(+e.target.value)} className="accent-accent" />
+          {autoCap > 30 && <span className="text-sm text-signal">Above about 30 a day, applications get less specific and job sites are more likely to block you. Quality beats volume.</span>}
+        </label>
+        <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={useSaved} onChange={(e) => setUseSaved(e.target.checked)} className="mt-1 accent-accent" />
+          <span><b>Use my saved answers without asking each time.</b> Visa, salary, notice period and similar questions are filled only from the answers you saved on the right, never guessed. Anything without a saved answer still stops and asks you.</span></label>
+        <div><button className={btnPrimary} disabled={!!busy} onClick={() => act("autoset", { action: "settings", auto_apply_mode: autoMode, auto_apply_daily_cap: autoCap, auto_apply_use_saved: useSaved }, "Auto-apply settings saved.")}>Save auto-apply settings</button></div>
+      </Card>
       <Card className="flex flex-col gap-4">
         <h3 className="text-lg font-bold">Mode</h3>
         {([["ask", "Prepare when I click", "You choose which roles to prepare."], ["auto", "Prepare automatically every morning", "After the daily job check, Autopilot prepares your best new matches, up to your daily limit. You still review and submit each one."]] as const).map(([v, t, d]) => (
@@ -142,8 +165,13 @@ function Settings({ settings, saved, busy, act }: {
         <button className={btnPrimary} disabled={!!busy} onClick={() => act("settings", { action: "settings", autopilot_mode: mode, autopilot_min_fit: minFit, autopilot_daily_cap: cap }, "Settings saved.")}>Save settings</button>
       </Card>
       <Card className="flex flex-col gap-3">
-        <h3 className="text-lg font-bold">Saved answers</h3>
+        <h3 className="text-lg font-bold">Saved details and answers</h3>
         <p className="text-sm text-muted">Autopilot never guesses these. It fills them from here, or asks you.</p>
+        {Object.entries(CONTACT_FIELDS).map(([k, l]) => (
+          <label key={k} className="flex flex-col gap-1"><span className="text-sm font-semibold">{l}</span>
+            <input id={`sa-${k}`} className={input} value={answers[k] ?? ""} onChange={(e) => setAnswers({ ...answers, [k]: e.target.value })} />
+          </label>
+        ))}
         {Object.entries(SENSITIVE_LABELS).map(([k, l]) => (
           <label key={k} className="flex flex-col gap-1"><span className="text-sm font-semibold">{l}</span>
             <input id={`sa-${k}`} className={input} value={answers[k] ?? ""} onChange={(e) => setAnswers({ ...answers, [k]: e.target.value })} />

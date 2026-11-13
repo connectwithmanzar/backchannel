@@ -67,6 +67,20 @@ function ReactionButton({
   );
 }
 
+function formatAddedDate(iso?: string | null): string {
+  if (!iso) return "Added recently";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0) return "Added just now";
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return mins <= 1 ? "Added just now" : `Added ${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `Added ${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return "Added yesterday";
+  if (days < 7) return `Added ${days}d ago`;
+  return `Added ${new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+}
+
 export default function RolesFeed({
   jobs,
   reactions: initialReactions = {},
@@ -365,7 +379,12 @@ export default function RolesFeed({
                   className="grid w-full grid-cols-1 gap-x-4 gap-y-1.5 p-4 text-left sm:grid-cols-[minmax(0,1fr)_auto]"
                 >
                   <div className="min-w-0">
-                    <h3 className="text-[17px] font-bold">{j.title}</h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-[17px] font-bold">{j.title}</h3>
+                      <span className="rounded-full bg-sunk px-2 py-0.5 text-[11px] font-medium text-muted">
+                        🕒 {formatAddedDate(j.postedAt || j.lastCheckedAt)}
+                      </span>
+                    </div>
                     <div className="line-clamp-1 text-sm text-muted">{j.company} · {j.location}</div>
                   </div>
                   <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-1">

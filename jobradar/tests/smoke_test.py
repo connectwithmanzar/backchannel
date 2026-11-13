@@ -144,5 +144,77 @@ except Exception as e:  # noqa: BLE001
 found, _ = core.name_search(["Careem"], ["India", "UAE"])
 check(found is not None and len(found) > 0, "great-company search still finds a matching company's sales roles")
 
+
+# --- Auto-apply runner: pure decisions only (no browser, no network) ---
+import apply_runner as ar  # noqa: E402
+
+check(ar.detect_ats("https://boards.greenhouse.io/acme/jobs/123") == "greenhouse", "ats: greenhouse board URL")
+check(ar.detect_ats("https://job-boards.greenhouse.io/acme/jobs/123") == "greenhouse", "ats: new greenhouse board URL")
+check(ar.detect_ats("https://jobs.lever.co/acme/abc-123") == "lever", "ats: lever")
+check(ar.detect_ats("https://jobs.ashbyhq.com/acme/abc") == "ashby", "ats: ashby")
+check(ar.detect_ats("https://apply.workable.com/acme/j/ABC/") == "workable", "ats: workable")
+check(ar.detect_ats("https://acme.recruitee.com/o/sdr") == "recruitee", "ats: recruitee")
+check(ar.detect_ats("https://careers.smartrecruiters.com/Acme/123") == "smartrecruiters", "ats: smartrecruiters")
+check(ar.detect_ats("https://acme.com/careers/sdr?gh_jid=555") == "greenhouse", "ats: greenhouse via gh_jid on a company page")
+check(ar.detect_ats("https://acme.com/careers/sdr", frame_urls=["https://boards.greenhouse.io/embed/job_app?for=acme&token=1"]) == "greenhouse", "ats: greenhouse via embedded frame")
+check(ar.detect_ats("https://acme.com/careers/sdr", html="<a href='https://jobs.lever.co/acme/1'>") == "lever", "ats: lever link on a company page")
+check(ar.detect_ats("https://acme.com/careers/sdr") is None, "ats: unknown site is None")
+check(ar.apply_url_for("https://jobs.lever.co/acme/abc", "lever") == "https://jobs.lever.co/acme/abc/apply", "lever form lives at /apply")
+check(ar.apply_url_for("https://jobs.ashbyhq.com/acme/abc", "ashby") == "https://jobs.ashbyhq.com/acme/abc/application", "ashby form lives at /application")
+
+check("LinkedIn" in (ar.unsupported_reason("https://www.linkedin.com/jobs/view/1") or ""), "never touches LinkedIn")
+check(ar.unsupported_reason("https://in.indeed.com/viewjob?jk=1") is not None, "never touches Indeed")
+check(ar.unsupported_reason("https://www.naukri.com/job-listings-x") is not None, "never touches Naukri")
+check(ar.unsupported_reason("https://www.glassdoor.co.in/job-listing/x") is not None, "never touches Glassdoor")
+check("Workday" in (ar.unsupported_reason("https://acme.wd5.myworkdayjobs.com/en-US/x/job/1") or ""), "Workday needs an account: stops")
+check(ar.unsupported_reason("https://jobs.lever.co/acme/1") is None, "lever is allowed")
+
+for label, want in [
+    ("First Name *", "first_name"), ("Last name", "last_name"), ("Full name", "full_name"), ("Name *", "full_name"),
+    ("Email *", "email"), ("E-mail address", "email"), ("Phone number *", "phone"), ("Mobile", "phone"),
+    ("LinkedIn Profile", "linkedin"), ("LinkedIn URL", "linkedin"), ("Website / Portfolio", "website"),
+    ("Resume/CV *", "resume"), ("Cover letter", "cover_letter"), ("Current location", "location"), ("Location (City)", "location"),
+    ("Current company", "current_company"),
+]:
+    check(ar.map_label(label) == want, f"label '{label}' -> {want} (got {ar.map_label(label)})")
+for label in ["How did you hear about us?", "Why do you want to work here?", "Are you legally authorized to work in the US?",
+              "Will you require visa sponsorship?", "Expected salary", "Notice period", "Are you willing to relocate?", "Gender", "Company name", "GitHub"]:
+    check(ar.map_label(label) is None, f"label '{label}' is never filled from the profile")
+
+qs = [{"q": "Are you legally authorized to work in India?", "answer": "Yes", "sensitive": True},
+      {"q": "Why this company?", "answer": "Because of X", "sensitive": False},
+      {"q": "What is your notice period?", "answer": "30 days", "sensitive": True}]
+check((ar.match_question("Are you authorized to work in India? *", qs) or {}).get("answer") == "Yes", "question match: same question, different wording")
+check((ar.match_question("Notice period (days)", qs) or {}).get("answer") == "30 days", "question match: notice period")
+check(ar.match_question("Do you require visa sponsorship?", qs) is None, "question match: unrelated question is not matched")
+check(ar.match_question("How did you hear about us?", qs) is None, "question match: nothing for 'how did you hear'")
+
+check(ar.best_option("Yes", ["Yes", "No"]) == "Yes", "option: exact")
+check(ar.best_option("No", ["Yes, I need sponsorship", "No, I do not need sponsorship"]) == "No, I do not need sponsorship", "option: no -> 'No, ...'")
+check(ar.best_option("30 days", ["Immediately", "30 days", "60 days"]) == "30 days", "option: contains")
+check(ar.best_option("Purple", ["Yes", "No"]) is None, "option: never guesses between unrelated options")
+check(ar.pick_decline(["Male", "Female", "Decline to self-identify"]) == "Decline to self-identify", "diversity: picks decline")
+check(ar.pick_decline(["Male", "Female"]) is None, "diversity: no decline option -> None")
+check(ar.is_diversity("Gender identity") and ar.is_diversity("Are you a protected veteran?") and not ar.is_diversity("Why us?"), "diversity labels recognised")
+check(ar.is_sensitive("Will you now or in the future require visa sponsorship?") and ar.is_sensitive("Salary expectations") and not ar.is_sensitive("Tell us about yourself"), "sensitive labels recognised")
+check(ar.is_consent("I have read the privacy policy") and not ar.is_consent("I have 5 years of SaaS sales experience"), "consent boxes recognised")
+
+ok1, why1 = ar.success_signal("https://x.com/apply", "https://x.com/apply", "Thank you for applying! We have received your application.")
+check(ok1 and "page says" in why1, "success: confirmation words on the page")
+ok2, _ = ar.success_signal("https://x.com/apply", "https://x.com/apply/confirmation", "")
+check(ok2, "success: thank-you style URL")
+ok3, _ = ar.success_signal("https://x.com/apply", "https://x.com/apply", "Please fill in all required fields")
+check(not ok3, "success: a form with errors is not success")
+ok4, _ = ar.success_signal("https://x.com/apply", "https://x.com/other", "Submit your application")
+check(not ok4, "success: a different page without confirmation is not success")
+check(ar.challenge_text("Please verify you are human") and not ar.challenge_text("Thanks for applying"), "captcha wording recognised")
+html = ar.cv_html("JANE\n\nEXPERIENCE\n- Booked <meetings> & more\nPlain line")
+check("<li>Booked &lt;meetings&gt; &amp; more</li>" in html and "<h2>" in html, "CV text becomes a clean escaped page for the PDF")
+
+check("not a bot" in (ar.forbids_automation("we ask you to prove that you are not a bot auto-applying to the role") or ""), "employer says no bots: detected and respected")
+check(ar.forbids_automation("AI tools are not permitted during the interview") is not None, "employer says AI tools not permitted: detected")
+check(ar.forbids_automation("Tell us about your sales experience and your quota attainment") is None, "an ordinary form is not flagged as anti-bot")
+check(ar.clean_label("Email* Email") == "Email*" and ar.clean_label("Phone number *") == "Phone number *", "doubled form labels are collapsed")
+
 print(f"\n{'All checks passed' if not failures else f'{len(failures)} check(s) failed'}.")
 sys.exit(1 if failures else 0)

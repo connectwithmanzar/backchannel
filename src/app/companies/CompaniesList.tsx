@@ -80,7 +80,7 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
         {(["any", ...TIERS] as const).map((t) => (
           <button key={t} type="button" aria-pressed={tierFilter === t} onClick={() => { setTierFilter(t); setLimit(PAGE); }}
             className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${tierFilter === t ? "bg-accent text-accent-ink" : "bg-surface text-muted ring-1 ring-line hover:text-fg"}`}>
-            {t === "any" ? "Any" : `Tier ${t}`} <span className="num opacity-70">· {t === "any" ? rows.length : rows.filter((r) => r.tier === t).length}</span>
+            {t === "any" ? "Any" : `Tier ${t}`} <span className="num opacity-70">· {t === "any" ? rows.length : rows.filter((r) => effectiveTier(r.tier, r.research, r).tier === t).length}</span>
           </button>
         ))}
       </div>
@@ -104,10 +104,23 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
                     </p>
                   </div>
                   <div className="flex gap-1.5" role="group" aria-label={`Your tier for ${c.name}`}>
-                    {TIERS.map((t) => (
-                      <button key={t} type="button" title={TIER_MEANING[t]} aria-pressed={c.tier === t} onClick={() => setTier(c.id, c.tier === t ? null : t)}
-                        className={`rounded-full px-3 py-1 text-xs font-bold max-md:min-h-11 max-md:px-4 ${c.tier === t ? "bg-accent text-accent-ink" : "bg-sunk text-muted hover:text-fg"}`}>Tier {t}</button>
-                    ))}
+                    {TIERS.map((t) => {
+                      const eff = effectiveTier(c.tier, c.research, c);
+                      const isConfirmed = c.tier === t;
+                      const isAuto = !c.tier && eff.tier === t;
+                      return (
+                        <button key={t} type="button" title={isAuto ? `Auto-assigned: ${TIER_MEANING[t]}` : TIER_MEANING[t]} aria-pressed={isConfirmed} onClick={() => setTier(c.id, c.tier === t ? null : t)}
+                          className={`rounded-full px-3 py-1 text-xs font-bold max-md:min-h-11 max-md:px-4 ${
+                            isConfirmed
+                              ? "bg-accent text-accent-ink shadow-sm"
+                              : isAuto
+                              ? "border border-accent/40 bg-accent/15 text-accent"
+                              : "bg-sunk text-muted hover:text-fg"
+                          }`}>
+                          Tier {t}{isAuto ? " (auto)" : ""}
+                        </button>
+                      );
+                    })}
                   </div>
                   <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Your status for ${c.name}`}>
                     {(Object.keys(STATUS_LABEL) as Exclude<CompanyStatus, null>[]).map((s) => (
@@ -126,7 +139,7 @@ export default function CompaniesList({ initial }: { initial: CompanyRow[] }) {
                   {c.sector && <Pill>{c.sector}</Pill>}
                   {c.note && <Pill>Has a note</Pill>}
                   {(() => {
-                    const e = effectiveTier(c.tier, c.research);
+                    const e = effectiveTier(c.tier, c.research, c);
                     return e.tier ? <Pill tone={e.tier === "A" ? "good" : e.tier === "D" ? "warn" : "neutral"}>{e.suggested ? `Suggested Tier ${e.tier}` : `Tier ${e.tier}`}</Pill> : <Pill>Not rated</Pill>;
                   })()}
                 </div>

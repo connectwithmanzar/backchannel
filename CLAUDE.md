@@ -34,6 +34,9 @@ Saved job searches under More > Copilots (`/copilots`): titles (max 5), remote a
 ## One apply flow (13 Nov 2026)
 Every list (Jobs, Saved jobs, Copilot matches) opens the same job page `/roles/[id]`, whose top card (`src/components/ApplyCard.tsx`) prepares, reviews, submits and tracks the application. The review body is `src/components/ApplyReview.tsx`, shared with Applications (`/autopilot`). It still never submits for you: you open the company's page and confirm. Auto-submit by filling forms in a browser on the owner's Mac (JobRadar) is planned, not built.
 
+## Auto-apply (13 Nov 2026, migration 0020)
+Queue and settings live in Backchannel; the robot browser lives in JobRadar (`jobradar/apply_runner.py`, Playwright, on the owner's Mac). Backchannel side: `src/lib/auto-apply.ts` (pure rules, tests in `tests/auto-apply.test.ts`), `/api/applications` actions `queue_auto`, `queue_all`, `unqueue_auto` and the `auto_apply_*` settings, and owner-only `/api/jobradar/apply-queue`, `apply-answer`, `apply-result` (JOBRADAR_SECRET). Modes: off (default), dry_run (fills, never sends), submit. Sensitive answers (rule 4) come only from the owner's saved answers and only with his "use saved answers" switch; the robot never solves CAPTCHAs, never touches LinkedIn/Indeed/Naukri/Glassdoor, and reports `needs_you` instead of guessing. Pages read `preferences`/`applications` with `select("*")` so they keep working before 0020 is run.
+
 ## Commands
 - `npm install`: install dependencies
 - `npm run dev`: run the app at http://localhost:3000

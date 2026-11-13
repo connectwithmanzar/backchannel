@@ -1,5 +1,5 @@
 import { countryOf } from "@/lib/role-filters";
-import { tierRank as rankTier, type Tier } from "@/lib/company-rating";
+import { tierRank as rankTier, effectiveTier, type Tier } from "@/lib/company-rating";
 import type { Research } from "@/lib/company-research";
 
 export type CompanyStatus = "interested" | "applied" | "not_for_me" | null;
@@ -26,7 +26,8 @@ export type TierFilter = "any" | Tier;
 export const tierRank = rankTier;
 
 export function filterByTier(rows: CompanyRow[], tier: TierFilter): CompanyRow[] {
-  return tier === "any" ? rows : rows.filter((c) => c.tier === tier);
+  if (tier === "any") return rows;
+  return rows.filter((c) => effectiveTier(c.tier, c.research, c).tier === tier);
 }
 
 export interface Suggestion { id: string; name: string; reason: string }

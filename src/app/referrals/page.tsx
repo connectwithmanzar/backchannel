@@ -4,6 +4,7 @@ import { hasAIKey } from "@/lib/ai";
 import { formatCompanyName } from "@/lib/company-name";
 import FindPeople from "./FindPeople";
 import { apolloConfigured } from "@/lib/contacts/apollo";
+import { webSearchConfigured } from "@/lib/websearch";
 import ReferralsClient, { type Ref, type JobOpt } from "./ReferralsClient";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export default async function ReferralsPage({ searchParams }: { searchParams: Pr
       <PageHeader eyebrow="Referrals" title="Warm intros, tracked">
         A referral is the fastest way past the pile. Add someone you know at a company, let AI draft a short ask from your real numbers, send it yourself, and track it from asked to interview.
       </PageHeader>
-      <FindPeople configured={apolloConfigured()} initialCompany={(sp.company ?? "").slice(0, 200)} initialDomain={(sp.domain ?? "").slice(0, 200)} />
+      <FindPeople configured={apolloConfigured() || hasAIKey() || webSearchConfigured()} initialCompany={(sp.company ?? "").slice(0, 200)} initialDomain={(sp.domain ?? "").slice(0, 200)} />
       <ReferralsClient refs={(refs ?? []) as Ref[]} jobs={opts} aiReady={hasAIKey()} />
     </section>
   );

@@ -67,7 +67,7 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Pr
       };
     })
     // Companies with open roles first, then by how many.
-    .sort((a, b) => tierRank(effectiveTier(b.tier, b.research).tier) - tierRank(effectiveTier(a.tier, a.research).tier) || b.roles - a.roles || a.name.localeCompare(b.name));
+    .sort((a, b) => tierRank(effectiveTier(b.tier, b.research, b).tier) - tierRank(effectiveTier(a.tier, a.research, a).tier) || b.roles - a.roles || a.name.localeCompare(b.name));
   const suggestions = suggestCompanies(rows);
   const owner = isOwner(user?.email);
   // How far the board search has got. The board_checked_at column arrives with migration 0015.

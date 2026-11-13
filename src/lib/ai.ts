@@ -1,16 +1,21 @@
 import OpenAI from "openai";
 
 // Provider choice, first key found wins:
+//   USE_OLLAMA / OLLAMA_BASE_URL → Local Ollama (100% free, runs locally, e.g. qwen2.5:14b)
 //   GROQ_API_KEY       → Groq (free tier, no inference data kept by default), open model gpt-oss-120b
-//   GEMINI_API_KEY     → Google Gemini via its OpenAI-compatible endpoint (free tier; Google's terms say free-tier
-//                        content may be used to improve products and read by people, so only use it for data you are fine sharing)
+//   GEMINI_API_KEY     → Google Gemini via its OpenAI-compatible endpoint (free tier)
 //   OPENROUTER_API_KEY → OpenRouter (model "anthropic/claude-haiku-4-5")
 //   ANTHROPIC_API_KEY  → Anthropic's OpenAI-compatible endpoint (model "claude-haiku-4-5")
-export type AiProvider = { name: "groq" | "gemini" | "openrouter" | "anthropic" | "none"; baseURL: string; apiKey: string; model: string; smartModel: string; fastModel: string };
+export type AiProvider = { name: "ollama" | "groq" | "gemini" | "openrouter" | "anthropic" | "none"; baseURL: string; apiKey: string; model: string; smartModel: string; fastModel: string };
 
 const hasKey = (v: string | undefined) => (v ?? "").length > 10;
 
 export function pickProvider(env: Record<string, string | undefined>): AiProvider {
+  if (env.USE_OLLAMA === "true" || env.OLLAMA_BASE_URL || env.OLLAMA_MODEL) {
+    const baseURL = (env.OLLAMA_BASE_URL || "http://localhost:11434/v1").replace(/\/$/, "");
+    const model = env.OLLAMA_MODEL || "qwen2.5:14b";
+    return { name: "ollama", baseURL, apiKey: "ollama", model, smartModel: env.AI_MODEL_SMART ?? model, fastModel: env.AI_MODEL_FAST ?? model };
+  }
   if (hasKey(env.GROQ_API_KEY)) {
     const model = env.GROQ_MODEL ?? "openai/gpt-oss-120b";
     return { name: "groq", baseURL: "https://api.groq.com/openai/v1", apiKey: env.GROQ_API_KEY!, model, smartModel: env.AI_MODEL_SMART ?? model, fastModel: env.AI_MODEL_FAST ?? model };

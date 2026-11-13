@@ -3,3 +3,4 @@ streamlit>=1.50
 pandas
 openpyxl
 requests
+playwright>=1.48
