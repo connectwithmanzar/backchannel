@@ -1,0 +1,54 @@
+name: Auto-apply robot
+# Runs the JobRadar auto-apply robot on GitHub's servers, so applications go out with your laptop closed. Free for a public repository.
+# It first asks Backchannel whether anything is waiting, and only installs and starts the browser when something is.
+# Needs two repository secrets: BACKCHANNEL_URL (e.g. https://backchannel-eight.vercel.app) and JOBRADAR_SECRET (same key as in Vercel).
+# This repository is public, so the run log is public too: the robot's detailed output is kept out of it. Only result counts are printed.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+concurrency:
+  group: auto-apply
+  cancel-in-progress: false
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BACKCHANNEL_URL: ${{ secrets.BACKCHANNEL_URL }}
+      JOBRADAR_SECRET: ${{ secrets.JOBRADAR_SECRET }}
+    steps:
+      - name: Anything waiting?
+        id: peek
+        run: |
+          if [ -z "$BACKCHANNEL_URL" ] || [ -z "$JOBRADAR_SECRET" ]; then echo "Secrets BACKCHANNEL_URL and JOBRADAR_SECRET are not set."; exit 1; fi
+          code=$(curl -s -m 60 -o /tmp/peek.json -w "%{http_code}" -H "Authorization: Bearer $JOBRADAR_SECRET" "${BACKCHANNEL_URL%/}/api/jobradar/apply-queue?peek=1")
+          echo "status $code"
+          test "$code" = "200"
+          n=$(python3 -c "import json; print(int(json.load(open('/tmp/peek.json')).get('ready', 0)))")
+          echo "waiting: $n"
+          echo "ready=$n" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.peek.outputs.ready != '0'
+      - uses: actions/setup-python@v5
+        if: steps.peek.outputs.ready != '0'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: jobradar/requirements-cloud.txt
+      - name: Install the robot
+        if: steps.peek.outputs.ready != '0'
+        run: |
+          pip install -r jobradar/requirements-cloud.txt
+          playwright install --with-deps chromium
+      - name: Run the robot
+        if: steps.peek.outputs.ready != '0'
+        working-directory: jobradar
+        run: |
+          set +e
+          python cloud_worker.py --once > /tmp/run.log 2>&1
+          status=$?
+          echo "exit status $status"
+          echo "Results:"
+          grep -oE -- '-> [a-z_]+' /tmp/run.log | sort | uniq -c || echo "none"
+          if [ "$status" != "0" ]; then echo "The run failed. Details are hidden because this repository is public."; exit 1; fi

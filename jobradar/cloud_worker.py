@@ -46,6 +46,7 @@ def run_forever(run_once: Callable[[], int], interval_s: int, sleep: Callable[[f
 
 
 def main() -> int:
+    once_only = "--once" in sys.argv[1:]
     missing = missing_settings(dict(os.environ))
     if missing:
         print(f"Missing settings: {', '.join(missing)}. Add them in your server's environment variables (see CLOUD.md).", flush=True)
@@ -58,6 +59,9 @@ def main() -> int:
                 apply_runner.say("Another run is still going. Skipping this round.")
                 return 0
             return apply_runner.run_queue(None, headless=True)
+
+    if once_only:  # one pass, for scheduled runners such as GitHub Actions
+        return once()
 
     interval = interval_from_env(os.environ.get("APPLY_INTERVAL_S"))
     apply_runner.say(f"Cloud worker started. Checking the queue every {interval} s.")

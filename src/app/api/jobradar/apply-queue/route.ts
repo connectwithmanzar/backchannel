@@ -50,6 +50,9 @@ export async function GET(req: NextRequest) {
     .filter((r) => r.jobs?.url && (r.auto_status === "queued" || isStale(r.auto_at)))
     .slice(0, Math.min(remaining, BATCH));
 
+  // A peek only counts what is waiting. It hands nothing out, so a scheduled check can decide whether to start the robot at all.
+  if (req.nextUrl.searchParams.get("peek") === "1") return NextResponse.json({ ...base, ready: ready.length });
+
   if (ready.length > 0) {
     await svc.from("applications").update({ auto_status: "running", auto_at: new Date().toISOString() }).in("id", ready.map((r) => r.id)).eq("user_id", ownerId);
   }
