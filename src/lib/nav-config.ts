@@ -1,28 +1,29 @@
 // One place that says which pages belong to which section, so the menu, the section strip and the tests agree.
-// The main menu is deliberately short: Copilots, Jobs, Companies, Saved jobs. Everything else sits under "More".
+// The main menu follows the Iris layout: Home, Jobs, Applied, Inbox. Everything else sits under "More".
 
 export type NavLink = { href: string; label: string };
 export type Section = NavLink & { match: string[]; sub: NavLink[]; inMenu: boolean };
 
 export const SECTIONS: Section[] = [
-  { href: "/copilots", label: "Copilots", match: ["/copilots"], sub: [], inMenu: true },
-  { href: "/roles", label: "Jobs", match: ["/roles", "/swipe"], sub: [{ href: "/roles", label: "List" }, { href: "/swipe", label: "Swipe" }, { href: "/swipe?view=grid", label: "Grid" }], inMenu: true },
+  { href: "/home", label: "Home", match: ["/home", "/copilots"], sub: [], inMenu: true },
+  { href: "/swipe", label: "Jobs", match: ["/swipe", "/roles"], sub: [{ href: "/swipe", label: "Swipe" }, { href: "/swipe?view=grid", label: "Grid" }, { href: "/roles", label: "List with filters" }], inMenu: true },
   {
-    href: "/companies", label: "Companies", match: ["/companies", "/sources"], inMenu: true,
+    href: "/applications", label: "Applied", match: ["/applications", "/autopilot", "/pipeline", "/offers", "/pay", "/practice"], inMenu: true,
+    sub: [
+      { href: "/applications", label: "Tracker" }, { href: "/autopilot", label: "Auto-apply" }, { href: "/pipeline", label: "Pipeline" },
+      { href: "/offers", label: "Offers" }, { href: "/practice", label: "Practice" }, { href: "/pay", label: "Pay benchmark" },
+    ],
+  },
+  { href: "/inbox", label: "Inbox", match: ["/inbox"], sub: [], inMenu: true },
+  { href: "/saved", label: "Saved jobs", match: ["/saved"], sub: [], inMenu: false },
+  {
+    href: "/companies", label: "Companies", match: ["/companies", "/sources"], inMenu: false,
     sub: [{ href: "/companies", label: "My companies" }, { href: "/sources", label: "Where roles come from" }],
   },
-  { href: "/saved", label: "Saved jobs", match: ["/saved"], sub: [], inMenu: true },
   { href: "/today", label: "Today", match: ["/today"], sub: [], inMenu: false },
   {
     href: "/outreach", label: "People", match: ["/outreach", "/referrals"], inMenu: false,
     sub: [{ href: "/outreach", label: "Messages" }, { href: "/referrals", label: "Referrals" }],
-  },
-  {
-    href: "/applications", label: "Applications", match: ["/applications", "/inbox", "/autopilot", "/pipeline", "/offers", "/pay", "/practice"], inMenu: false,
-    sub: [
-      { href: "/applications", label: "Tracker" }, { href: "/inbox", label: "Replies" }, { href: "/autopilot", label: "To apply" }, { href: "/pipeline", label: "Pipeline" },
-      { href: "/offers", label: "Offers" }, { href: "/practice", label: "Practice" }, { href: "/pay", label: "Pay benchmark" },
-    ],
   },
 ];
 

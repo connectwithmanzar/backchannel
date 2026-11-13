@@ -2,24 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens: a soft lavender ground, white cards and one purple accent (the JobCopilot look). Contrast checked against the surfaces they sit on. */
+/* Design tokens: a warm cream ground, soft paper cards, serif headlines and one deep indigo accent. Contrast checked against the surfaces they sit on. */
 :root {
-  --bg: #e9eefb; --surface: #ffffff; --sunk: #f1f3fb; --line: #e2e6f3;
-  --fg: #1f2433; --muted: #596077; --accent: #5b3bc5; --accent-ink: #ffffff; --accent-soft: #ece8fb;
-  --signal: #8a4a06; --signal-soft: #fff1de; --good: #0b5246; --good-soft: #e3f1ee; --warn: #9b2c1c; --warn-soft: #fbe6e1;
-  --page-top: #f1f5f9; --page-bottom: #e0e7ff;
+  --bg: #f5f1ea; --surface: #fdfbf7; --sunk: #efeae0; --line: #e4ddd0;
+  --fg: #1d1a16; --muted: #6a6257; --accent: #3b2f8f; --accent-ink: #ffffff; --accent-soft: #e9e5f7;
+  --signal: #8a4a06; --signal-soft: #fbeedb; --good: #0b5246; --good-soft: #e1efe9; --warn: #9b2c1c; --warn-soft: #f9e4de;
+  --page-top: #f5f1ea; --page-bottom: #f5f1ea;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14152a; --surface: #1c1e33; --sunk: #25283f; --line: #34385a;
-    --fg: #eceefa; --muted: #a3a9c4; --accent: #a994ff; --accent-ink: #181433; --accent-soft: #2b2652;
+    --bg: #17140f; --surface: #1f1b15; --sunk: #28231b; --line: #3a3429;
+    --fg: #f1ece2; --muted: #b0a794; --accent: #b4a6ff; --accent-ink: #1a1540; --accent-soft: #2c2650;
     --signal: #f2b65a; --signal-soft: #3a2a10; --good: #5fd39a; --good-soft: #143326; --warn: #ff9a7d; --warn-soft: #3d1f16;
-    --page-top: #14152a; --page-bottom: #191b34;
+    --page-top: #17140f; --page-bottom: #17140f;
     color-scheme: dark;
   }
 }
-body { background: var(--bg); background: linear-gradient(to top, var(--page-bottom), var(--page-top)) fixed; color: var(--fg); min-height: 100vh; }
-h1, h2, h3 { font-family: "Red Hat Display", "Avenir Next", "Segoe UI", sans-serif; text-wrap: balance; letter-spacing: -0.01em; }
+body { background: var(--bg); color: var(--fg); min-height: 100vh; }
+h1, h2, h3 { font-family: "Newsreader", Georgia, "Times New Roman", serif; font-weight: 500 !important; text-wrap: balance; letter-spacing: -0.015em; }
+.font-display { font-family: "Newsreader", Georgia, serif; }
+.eyebrow { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; }
 .num { font-variant-numeric: tabular-nums; }
 
 /* Height of the phone bottom tab bar, so floating buttons sit above it. */

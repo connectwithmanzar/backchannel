@@ -6,6 +6,10 @@ import { createClient } from "@/lib/supabase/client";
 import { TABS, MORE_LINKS, subLinksFor, isOn, tabIsActive, moreIsActive } from "@/lib/nav-config";
 
 const ICON_PATHS: Record<string, ReactNode> = {
+  "/home": <path d="M4 11l8-6.5 8 6.5M6 10v9h12v-9M10 19v-5h4v5" />,
+  "/swipe": <path d="M4 8h16v11H4zM9 8V5.5h6V8M4 13h16" />,
+  "/applications": <path d="M7 4h10a1 1 0 011 1v15l-6-3-6 3V5a1 1 0 011-1zM9.5 9.5l2 2 3-3.5" />,
+  "/inbox": <path d="M3.5 6h17v12h-17zM3.5 7l8.5 6.5L20.5 7" />,
   "/copilots": <path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z" />,
   "/roles": <path d="M4 8h16v11H4zM9 8V5.5h6V8M4 13h16" />,
   "/companies": <path d="M5 20V5h9v15M14 10h5v10M8 9h3M8 13h3M8 17h3M3 20h18" />,
@@ -90,7 +94,7 @@ export default function Nav({ email }: { email: string }) {
     <div ref={rootRef}>
       <header className="sticky top-0 z-20 border-b border-line bg-surface">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4">
-          <Link href="/copilots" className="flex items-center gap-2 py-3 font-display text-xl font-extrabold text-accent">
+          <Link href="/home" className="flex items-center gap-2 py-3 font-display text-xl font-extrabold text-accent">
             <svg width="28" height="28" viewBox="0 0 26 26" aria-hidden="true">
               <rect x="1" y="1" width="24" height="24" rx="8" fill="var(--accent)" />
               <path d="M7 9h9M7 13h12M7 17h6" stroke="var(--accent-ink)" strokeWidth="2.2" strokeLinecap="round" />

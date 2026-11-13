@@ -1,4 +1,4 @@
 import { redirect } from "next/navigation";
-export default function Home() {
-  redirect("/copilots");
+export default function Root() {
+  redirect("/home");
 }

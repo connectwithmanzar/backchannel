@@ -21,8 +21,8 @@ export default {
         warn: { DEFAULT: v("warn"), soft: v("warn-soft") },
       },
       fontFamily: {
-        display: ['"Red Hat Display"', '"Avenir Next"', '"Segoe UI"', "sans-serif"],
-        sans: ['"Red Hat Display"', '"Segoe UI"', "system-ui", "sans-serif"],
+        display: ['"Newsreader"', "Georgia", "serif"],
+        sans: ['"DM Sans"', "system-ui", "sans-serif"],
         mono: ['"JetBrains Mono"', "ui-monospace", "Menlo", "monospace"],
       },
       borderRadius: { card: "20px" },
