@@ -84,10 +84,10 @@ cat > "$AGENTS/com.jobradar.apply.plist" <<EOF
   <key>ProgramArguments</key><array>
     <string>$UV</string><string>run</string><string>--python</string><string>3.12</string>
     <string>--with-requirements</string><string>requirements.txt</string>
-    <string>python</string><string>apply_runner.py</string>
+    <string>python</string><string>apply_runner.py</string><string>--headless</string>
   </array>
   <key>EnvironmentVariables</key><dict><key>PATH</key><string>$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
-  <key>StartInterval</key><integer>1800</integer>
+  <key>StartInterval</key><integer>900</integer>
   <key>StandardOutPath</key><string>$HOME_DIR/data/apply.out</string>
   <key>StandardErrorPath</key><string>$HOME_DIR/data/apply.out</string>
 </dict></plist>
