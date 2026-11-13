@@ -131,3 +131,21 @@ export async function threadReplies(token: string, threadId: string, myEmail: st
   }
   return out;
 }
+
+export interface InboxItem { id: string; threadId: string; from: string; subject: string; date: string; snippet: string }
+
+/** Recent inbox messages matching a Gmail search (read only, headers and a short snippet). */
+export async function listInbox(token: string, query: string, max = 40): Promise<InboxItem[]> {
+  const list = await gmailGet(token, `/messages?${new URLSearchParams({ q: query, maxResults: String(max) })}`);
+  const ids = ((list.messages ?? []) as { id: string }[]).map((m) => m.id);
+  const out: InboxItem[] = [];
+  for (let i = 0; i < ids.length; i += 8) {
+    const batch = await Promise.all(ids.slice(i, i + 8).map((id) => gmailGet(token, `/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`).catch(() => null)));
+    for (const m of batch) {
+      if (!m) continue;
+      const header = (n: string) => (m.payload?.headers as { name: string; value: string }[] | undefined)?.find((h) => h.name.toLowerCase() === n)?.value ?? "";
+      out.push({ id: m.id, threadId: m.threadId, from: header("from"), subject: header("subject"), date: header("date"), snippet: String(m.snippet ?? "") });
+    }
+  }
+  return out;
+}

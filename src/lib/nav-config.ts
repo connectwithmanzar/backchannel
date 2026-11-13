@@ -18,9 +18,9 @@ export const SECTIONS: Section[] = [
     sub: [{ href: "/outreach", label: "Messages" }, { href: "/referrals", label: "Referrals" }],
   },
   {
-    href: "/applications", label: "Applications", match: ["/applications", "/autopilot", "/pipeline", "/offers", "/pay", "/practice"], inMenu: false,
+    href: "/applications", label: "Applications", match: ["/applications", "/inbox", "/autopilot", "/pipeline", "/offers", "/pay", "/practice"], inMenu: false,
     sub: [
-      { href: "/applications", label: "Tracker" }, { href: "/autopilot", label: "To apply" }, { href: "/pipeline", label: "Pipeline" },
+      { href: "/applications", label: "Tracker" }, { href: "/inbox", label: "Replies" }, { href: "/autopilot", label: "To apply" }, { href: "/pipeline", label: "Pipeline" },
       { href: "/offers", label: "Offers" }, { href: "/practice", label: "Practice" }, { href: "/pay", label: "Pay benchmark" },
     ],
   },
