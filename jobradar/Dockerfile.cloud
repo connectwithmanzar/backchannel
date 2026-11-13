@@ -1,0 +1,13 @@
+# JobRadar cloud worker. Build from the jobradar folder:  docker build -f Dockerfile.cloud -t jobradar-worker .
+# The base image already contains the browsers Playwright needs; its version must match requirements-cloud.txt.
+FROM mcr.microsoft.com/playwright/python:v1.48.0-jammy
+
+WORKDIR /app
+COPY requirements-cloud.txt .
+RUN pip install --no-cache-dir -r requirements-cloud.txt
+
+COPY *.py ./
+RUN mkdir -p data
+
+# BACKCHANNEL_URL and JOBRADAR_SECRET are set on the server, never in this file.
+CMD ["python", "cloud_worker.py"]

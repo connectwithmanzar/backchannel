@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -385,6 +386,10 @@ def save_apify(token: str, max_usd: float) -> None:
 
 # ------------------------------------------------------------ backchannel ---
 def load_bc() -> dict:
+    """Where Backchannel is and the JobRadar key. The cloud worker sets these as environment variables; your Mac keeps them in a file."""
+    url, secret = os.environ.get("BACKCHANNEL_URL", "").strip(), os.environ.get("JOBRADAR_SECRET", "").strip()
+    if url and secret:
+        return {"url": url.rstrip("/"), "secret": secret}
     return read_json(BC_FILE)
 
 
