@@ -25,13 +25,13 @@ async function loadRules(db: Awaited<ReturnType<typeof createClient>>, userId: s
 }
 
 /** The reason an automatic send is not allowed by your limits, or null when it is. */
-async function ruleBlock(db: Awaited<ReturnType<typeof createClient>>, userId: string, jobId: string, rules: AutoRules): Promise<string | null> {
+async function ruleBlock(db: Awaited<ReturnType<typeof createClient>>, userId: string, jobId: string, rules: AutoRules, ignoreWeekend = false): Promise<string | null> {
   const [{ data: job }, { data: sc }] = await Promise.all([
     db.from("jobs").select("company_name, currency, ote_max, base_max, companies(name)").eq("id", jobId).maybeSingle(),
     db.from("job_scores").select("score").eq("user_id", userId).eq("job_id", jobId).maybeSingle(),
   ]);
   const j = job as unknown as { company_name: string | null; currency: string | null; ote_max: number | null; base_max: number | null; companies: { name: string } | null } | null;
-  const r = checkRules({ company: j?.companies?.name ?? j?.company_name ?? "", score: sc?.score ?? null, payMax: j?.ote_max ?? j?.base_max ?? null, currency: j?.currency ?? null }, rules);
+  const r = checkRules({ company: j?.companies?.name ?? j?.company_name ?? "", score: sc?.score ?? null, payMax: j?.ote_max ?? j?.base_max ?? null, currency: j?.currency ?? null }, rules, new Date(), { ignoreWeekend });
   return r.ok ? null : r.reason;
 }
 
@@ -183,7 +183,8 @@ export async function POST(req: NextRequest) {
         const prefs = await autoPrefs(db, user.id);
         const { data: app } = await db.from("applications").select("id, status, questions, job_id").eq("id", b.id).eq("user_id", user.id).single();
         if (!app) return NextResponse.json({ error: "Application not found." }, { status: 404 });
-        const blockedBy = await ruleBlock(db, user.id, app.job_id, await loadRules(db, user.id));
+        // Queueing is allowed on a weekend; the robot just holds it until Monday.
+        const blockedBy = await ruleBlock(db, user.id, app.job_id, await loadRules(db, user.id), true);
         if (blockedBy) return NextResponse.json({ error: blockedBy }, { status: 403 });
         const check = checkQueueable({ status: app.status, questions: app.questions as AppQuestion[] | null }, prefs.mode, prefs.useSaved, prefs.saved);
         if (!check.ok) return NextResponse.json({ error: check.reason }, { status: 400 });
@@ -200,7 +201,7 @@ export async function POST(req: NextRequest) {
         let queued = 0, blocked = 0;
         for (const a of apps ?? []) {
           if (a.auto_status === "queued" || a.auto_status === "running") continue;
-          if (await ruleBlock(db, user.id, a.job_id, rules)) { blocked++; continue; }
+          if (await ruleBlock(db, user.id, a.job_id, rules, true)) { blocked++; continue; }
           const check = checkQueueable({ status: a.status, questions: a.questions as AppQuestion[] | null }, prefs.mode, prefs.useSaved, prefs.saved);
           if (!check.ok) { blocked++; continue; }
           const { error } = await db.from("applications").update({ questions: check.questions, auto_status: "queued", auto_log: null, auto_at: now, updated_at: now }).eq("id", a.id).eq("user_id", user.id);

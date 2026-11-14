@@ -56,3 +56,11 @@ test("pay floor only judges a stated yearly INR figure", () => {
   assert.equal(checkRules(job({ currency: "USD", payMax: 50000 }), rules, MON).ok, true);
   assert.equal(checkRules(job({ currency: "INR", payMax: null }), rules, MON).ok, true);
 });
+
+test("on a weekend an application can still be queued; only sending is held back", () => {
+  const rules = cleanRules({ pauseWeekends: true, blockedCompanies: ["Acme"] });
+  assert.equal(checkRules(job({ company: "Globex" }), rules, SAT).ok, false);
+  assert.equal(checkRules(job({ company: "Globex" }), rules, SAT, { ignoreWeekend: true }).ok, true);
+  // the other limits still apply when queueing
+  assert.equal(checkRules(job({ company: "Acme Corp" }), rules, SAT, { ignoreWeekend: true }).ok, false);
+});

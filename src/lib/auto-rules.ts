@@ -36,8 +36,12 @@ export function isWeekendIst(now: Date): boolean {
   return day === "Sat" || day === "Sun";
 }
 
-export function checkRules(job: JobFacts, rules: AutoRules, now = new Date()): RuleCheck {
-  if (rules.pauseWeekends && isWeekendIst(now)) return { ok: false, reason: "Auto-apply is paused on weekends (your setting). It will send on Monday." };
+/**
+ * `ignoreWeekend` is for lining work up: on a weekend an application may be queued, and it is only held back
+ * from being sent. Every other limit still applies when queueing.
+ */
+export function checkRules(job: JobFacts, rules: AutoRules, now = new Date(), opts: { ignoreWeekend?: boolean } = {}): RuleCheck {
+  if (!opts.ignoreWeekend && rules.pauseWeekends && isWeekendIst(now)) return { ok: false, reason: "Auto-apply is paused on weekends (your setting). It will send on Monday." };
   const company = norm(job.company);
   if (company && rules.blockedCompanies.some((b) => { const n = norm(b); return n.length > 0 && (company === n || company.includes(` ${n} `) || company.startsWith(`${n} `) || company.endsWith(` ${n}`)); })) {
     return { ok: false, reason: `${job.company} is on your blocked list.` };

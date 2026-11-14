@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jobradarOwner, missingTable } from "@/lib/jobradar-auth";
 import { buildFormProfile, clampAutoCap, cleanAutoMode, isStale, missingProfileDetails, remainingToday } from "@/lib/auto-apply";
 import type { AppQuestion } from "@/lib/apps/prepare";
+import { cleanRules, isWeekendIst } from "@/lib/auto-rules";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -25,6 +26,9 @@ export async function GET(req: NextRequest) {
   if (prefsError) return NextResponse.json({ error: missingTable(prefsError) ? MIGRATION : "Couldn't read your settings." }, { status: missingTable(prefsError) ? 503 : 500 });
 
   const mode = cleanAutoMode(prefs?.auto_apply_mode);
+  // Your weekend pause: the robot is handed nothing on Saturday or Sunday (India time). Queued work waits for Monday.
+  const rulesRes = await svc.from("preferences").select("auto_apply_rules").eq("user_id", ownerId).maybeSingle();
+  const weekendPause = !rulesRes.error && cleanRules(rulesRes.data?.auto_apply_rules).pauseWeekends && isWeekendIst(new Date());
   const cap = clampAutoCap(prefs?.auto_apply_daily_cap);
   const saved = (prefs?.standard_answers ?? {}) as Record<string, string>;
 
@@ -42,6 +46,7 @@ export async function GET(req: NextRequest) {
   const base = { mode, remaining_today: remaining, profile: formProfile, items: [] as unknown[] };
 
   if (mode === "off") return NextResponse.json({ ...base, note: "Auto-apply is switched off in Backchannel." });
+  if (weekendPause) return NextResponse.json({ ...base, note: "Paused on weekends (your setting). Queued applications go out on Monday." });
   const missing = missingProfileDetails(formProfile);
   if (missing.length > 0) return NextResponse.json({ ...base, note: `Add these in Backchannel first: ${missing.join(", ")}.` });
   if (remaining === 0) return NextResponse.json({ ...base, note: "Today's limit is reached." });
