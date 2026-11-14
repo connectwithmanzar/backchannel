@@ -9,7 +9,9 @@ BACKUP="${1:-}"
 [ -d "$BACKUP" ] || { echo "Usage: bash scripts/db/restore-test.sh backups/<folder>"; exit 1; }
 for t in initdb pg_ctl psql pg_restore; do need_tool "$t"; done
 
-WORK="$(mktemp -d)"
+# Postgres refuses to start on some Macs unless the language setting is valid.
+export LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+WORK="$(mktemp -d /tmp/bcrt.XXXXXX)"   # short path: Postgres sockets break on long ones
 PORT=54329
 export PGHOST=127.0.0.1 PGPORT=$PORT PGUSER=postgres PGDATABASE=restore_test
 unset PGPASSWORD PGSSLMODE
@@ -17,8 +19,8 @@ cleanup() { pg_ctl -D "$WORK/data" stop -m immediate >/dev/null 2>&1 || true; rm
 trap cleanup EXIT
 
 echo "1/5 Starting a throwaway local database..."
-initdb -D "$WORK/data" -U postgres --auth=trust >/dev/null
-pg_ctl -D "$WORK/data" -o "-p $PORT -k $WORK -c listen_addresses=127.0.0.1" -l "$WORK/log" -w start >/dev/null
+initdb -D "$WORK/data" -U postgres --auth=trust -E UTF8 --locale=en_US.UTF-8 >/dev/null
+pg_ctl -D "$WORK/data" -o "-p $PORT -k $WORK -c listen_addresses=127.0.0.1" -l "$WORK/log" -w start >/dev/null || { echo "The local database did not start. Its log:"; tail -20 "$WORK/log"; exit 1; }
 PGDATABASE=postgres psql -qc "create database restore_test"
 
 echo "2/5 Adding the Supabase pieces the backup refers to (roles, sign-in table, extensions)..."
@@ -29,12 +31,15 @@ create table auth.users (id uuid primary key, email text);
 create function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
 create extension if not exists pgcrypto; create extension if not exists "uuid-ossp";
 SQL
-psql -q -c "create extension if not exists vector" || { echo "The 'vector' extension is missing. Install it with: brew install pgvector"; exit 1; }
+psql -q -c "create extension if not exists vector" >/dev/null 2>&1 || { echo "Your tables use the 'vector' type. Install it with: brew install pgvector"; exit 1; }
+# Your tables use the 'vector' type, which lives in the 'public' schema, so 'public' and its extensions stay as they are.
 
 echo "3/5 Restoring the backup..."
 # The sign-in accounts are not in the app dump, so add placeholder rows from the saved list for the links between tables.
 tail -n +2 "$BACKUP/auth-users.csv" | cut -d, -f1,2 | while IFS=, read -r id email; do psql -qc "insert into auth.users(id, email) values ('$id', '$email') on conflict do nothing"; done
-pg_restore --no-owner --no-privileges --exit-on-error -d restore_test "$BACKUP/public.dump"
+# Skip the dump's "create schema public" line, since the test database already has one (with the extensions in it).
+pg_restore -l "$BACKUP/public.dump" | grep -v -E ' SCHEMA - public ' > "$WORK/restore.list"
+pg_restore --no-owner --no-privileges --exit-on-error -L "$WORK/restore.list" -d restore_test "$BACKUP/public.dump"
 
 echo "4/5 Comparing row counts with the originals..."
 bad=0
