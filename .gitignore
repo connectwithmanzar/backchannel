@@ -48,3 +48,6 @@ data/collect-report.json
 /jobradar/data/
 __pycache__/
 *.pyc
+
+# database backups (private data)
+/backups/
