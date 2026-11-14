@@ -5,12 +5,14 @@ import { GROUP_LABEL, GROUP_ORDER, MINUTES_PER_APPLICATION, detailOf, groupOf, s
 import { formatCompanyName } from "@/lib/company-name";
 import { loadFeed } from "@/lib/apply-feed-load";
 import LiveFeed from "./LiveFeed";
+import { buildReceipt } from "@/lib/receipt";
 
 export const dynamic = "force-dynamic";
 
 type Row = {
   id: string; job_id: string; status: string | null; stage: string | null; auto_status: string | null; auto_log: string | null;
   auto_at: string | null; submitted_at: string | null; updated_at: string | null; created_at: string | null; tailored_cv: string | null;
+  cover_note: string | null; receipt: string | null; questions: { q: string; answer: string; sensitive?: boolean }[] | null;
   jobs: { title: string; url: string | null; companies: { name: string } | null; company_name: string | null } | null;
 };
 
@@ -27,10 +29,10 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
   const uid = user?.id ?? "";
   // The auto-apply columns come from migration 0020; read without them if it has not been run.
   const full = await db.from("applications")
-    .select("id, job_id, status, stage, auto_status, auto_log, auto_at, submitted_at, updated_at, created_at, tailored_cv, jobs(title, url, company_name, companies(name))")
+    .select("id, job_id, status, stage, auto_status, auto_log, auto_at, submitted_at, updated_at, created_at, tailored_cv, cover_note, receipt, questions, jobs(title, url, company_name, companies(name))")
     .eq("user_id", uid).order("updated_at", { ascending: false }).limit(500);
   const plain = full.error
-    ? await db.from("applications").select("id, job_id, status, stage, submitted_at, updated_at, created_at, tailored_cv, jobs(title, url, company_name, companies(name))")
+    ? await db.from("applications").select("id, job_id, status, stage, submitted_at, updated_at, created_at, tailored_cv, cover_note, receipt, questions, jobs(title, url, company_name, companies(name))")
         .eq("user_id", uid).order("updated_at", { ascending: false }).limit(500)
     : null;
   const rows = (((full.error ? plain?.data : full.data) ?? []) as unknown as Partial<Row>[]).map((r) => ({ auto_status: null, auto_log: null, auto_at: null, ...r })) as Row[];
@@ -68,6 +70,7 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
           {[...shown].sort((a, b) => GROUP_ORDER.indexOf(groupOf(a)) - GROUP_ORDER.indexOf(groupOf(b))).map((r) => {
             const g = groupOf(r);
             const company = formatCompanyName(r.jobs?.companies?.name ?? r.jobs?.company_name ?? "") || "Unknown company";
+            const receipt = buildReceipt({ url: r.jobs?.url ?? null, status: r.status, auto_status: r.auto_status, submitted_at: r.submitted_at, receipt: r.receipt, tailored_cv: r.tailored_cv, cover_note: r.cover_note, questions: r.questions });
             const log = (r.auto_log ?? "").trim().split("\n").filter(Boolean).slice(-4);
             return (
               <li key={r.id}>
@@ -84,6 +87,21 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
                     {r.tailored_cv ? "Tailored CV used" : "Your standard CV"} · {r.submitted_at ? `Sent ${when(r.submitted_at)}` : `Started ${when(r.created_at)}`}
                     {r.updated_at ? ` · Updated ${when(r.updated_at)}` : ""}
                   </p>
+                  {receipt && (
+                    <details className="rounded-2xl bg-sunk p-3 text-sm">
+                      <summary className="cursor-pointer font-semibold text-accent">Submission receipt · {receipt.filled} of {receipt.total} items filled</summary>
+                      <p className="mt-2 text-muted">Sent through {receipt.provider}{receipt.sentAt ? ` on ${when(receipt.sentAt)}` : ""}{receipt.confirmation ? ` · Confirmation ${receipt.confirmation}` : ""}</p>
+                      <ul className="mt-3 flex flex-col gap-2">
+                        {receipt.items.map((i, n) => (
+                          <li key={n} className="flex gap-2">
+                            <span className={i.filled ? "text-good" : "text-signal"} aria-hidden="true">{i.filled ? "✓" : "!"}</span>
+                            <span className="min-w-0"><b>{i.label}</b>{i.fromSaved ? <span className="text-muted"> (from your saved answer)</span> : null}<br /><span className="text-muted">{i.detail}</span></span>
+                          </li>
+                        ))}
+                      </ul>
+                      {r.tailored_cv && <p className="mt-3"><a className="font-semibold text-accent" href={`/api/applications/${r.id}/pdf`} target="_blank" rel="noopener noreferrer">View the CV that was sent ↗</a></p>}
+                    </details>
+                  )}
                   {log.length > 0 && (
                     <details className="text-sm"><summary className="cursor-pointer font-semibold text-accent">Activity log</summary>
                       <ul className="mt-2 list-disc pl-5 text-muted">{log.map((l, i) => <li key={i}>{l.slice(0, 200)}</li>)}</ul>
