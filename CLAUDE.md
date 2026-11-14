@@ -37,6 +37,9 @@ Every list (Jobs, Saved jobs, Copilot matches) opens the same job page `/roles/[
 ## Auto-apply (13 Nov 2026, migration 0020)
 Queue and settings live in Backchannel; the robot browser lives in JobRadar (`jobradar/apply_runner.py`, Playwright, on the owner's Mac). Backchannel side: `src/lib/auto-apply.ts` (pure rules, tests in `tests/auto-apply.test.ts`), `/api/applications` actions `queue_auto`, `queue_all`, `unqueue_auto` and the `auto_apply_*` settings, and owner-only `/api/jobradar/apply-queue`, `apply-answer`, `apply-result` (JOBRADAR_SECRET). Modes: off (default), dry_run (fills, never sends), submit. Sensitive answers (rule 4) come only from the owner's saved answers and only with his "use saved answers" switch; the robot never solves CAPTCHAs, never touches LinkedIn/Indeed/Naukri/Glassdoor, and reports `needs_you` instead of guessing. Pages read `preferences`/`applications` with `select("*")` so they keep working before 0020 is run.
 
+## Shared Supabase project (15 Nov 2026)
+Backchannel's 28 tables live in the `backchannel` Postgres schema (moved out of `public`), so the same Supabase project can also hold RWS in an `rws` schema. The app reads the schema name from the server setting `DB_SCHEMA` (see `src/lib/supabase/schema.ts`; unset means `public`). It must be `backchannel` in Vercel Production. **New migrations must write `backchannel.<table>`**, never plain table names. Both schemas must stay ticked in Supabase, Data API, Exposed schemas, or every page shows empty data. `anon` has no access to `backchannel`; check with `bash scripts/db/anon-check.sh`. Backups and the move/rollback SQL are in `scripts/db/` and `supabase/consolidation/`. A local `.env.local` needs `DB_SCHEMA=backchannel` too.
+
 ## Commands
 - `npm install`: install dependencies
 - `npm run dev`: run the app at http://localhost:3000
