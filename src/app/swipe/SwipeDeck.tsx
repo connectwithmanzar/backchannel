@@ -2,13 +2,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import FitRing from "@/components/FitRing";
-import { Card, Pill, btn, btnPrimary } from "@/components/ui";import { oneTapApply, outcomeLine, type ApplicationsCall, type ApplyOutcome } from "@/lib/one-tap-apply";
+import { Card, Pill, btn, btnPrimary } from "@/components/ui";
+import { oneTapApply, outcomeLine, type ApplicationsCall, type ApplyOutcome } from "@/lib/one-tap-apply";
 import type { SwipeJob } from "@/lib/jobs/swipe-feed";
 import TargetButton from "@/components/TargetButton";
 import { matchLabel } from "@/lib/match-label";
 import { swipeDecision, swipeProgress, tiltFor } from "@/lib/swipe-gesture";
 
-const UNDO_SECONDS = 4;
+const UNDO_MS = 4000;
 
 const call: ApplicationsCall = async (body) => {
   const res = await fetch("/api/applications", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -33,46 +34,55 @@ type Undoable = { job: SwipeJob; kind: "pass" | "save" };
 
 export default function SwipeDeck({ initial, view }: { initial: SwipeJob[]; view: "swipe" | "grid" }) {
   const [deck, setDeck] = useState(initial);
-  const [pending, setPending] = useState<{ job: SwipeJob; left: number } | null>(null);
+  // Applications waiting out the short undo window. Several can wait at once, so you never have to stop swiping.
+  const [pending, setPending] = useState<{ job: SwipeJob; endsAt: number }[]>([]);
+  const [now, setNow] = useState(() => Date.now());
   const [done, setDone] = useState<Done[]>([]);
   const [last, setLast] = useState<Undoable | null>(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [drag, setDrag] = useState<{ x: number; y: number; active: boolean }>({ x: 0, y: 0, active: false });
   const start = useRef<{ x: number; y: number } | null>(null);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
-  const stopTimer = () => { if (timer.current) { clearInterval(timer.current); timer.current = null; } };
-  useEffect(() => stopTimer, []);
+  useEffect(() => {
+    const map = timers.current;
+    return () => { map.forEach((t) => clearTimeout(t)); map.clear(); };
+  }, []);
+  // Tick only while something is waiting, so the countdown text moves.
+  useEffect(() => {
+    if (pending.length === 0) return;
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, [pending.length]);
 
   const runApply = useCallback(async (job: SwipeJob) => {
     const outcome = await oneTapApply(job.id, call);
     setDone((d) => [{ job, outcome }, ...d].slice(0, 12));
   }, []);
 
-  /** Tapping Apply starts a short countdown; Undo cancels it. When it ends the application is prepared and sent. */
+  /** Tapping Apply queues the application with a short undo window. The next card is ready at once; Undo cancels just that one. */
   const apply = useCallback((job: SwipeJob) => {
-    if (pending) return;
     setError(""); setLast(null);
     setDeck((d) => d.filter((j) => j.id !== job.id));
-    setPending({ job, left: UNDO_SECONDS });
-    stopTimer();
-    let left = UNDO_SECONDS;
-    timer.current = setInterval(() => {
-      left -= 1;
-      if (left > 0) { setPending({ job, left }); return; }
-      stopTimer();
-      setPending(null);
+    setPending((p) => [...p, { job, endsAt: Date.now() + UNDO_MS }]);
+    setNow(Date.now());
+    timers.current.set(job.id, setTimeout(() => {
+      timers.current.delete(job.id);
+      setPending((p) => p.filter((x) => x.job.id !== job.id));
       void runApply(job);
-    }, 1000);
-  }, [pending, runApply]);
+    }, UNDO_MS));
+  }, [runApply]);
 
-  const undoApply = () => {
-    if (!pending) return;
-    stopTimer();
-    setDeck((d) => [pending.job, ...d]);
-    setPending(null);
-  };
+  const undoApply = useCallback((jobId?: string) => {
+    const target = jobId ? pending.find((x) => x.job.id === jobId) : pending[pending.length - 1];
+    if (!target) return;
+    const t = timers.current.get(target.job.id);
+    if (t) clearTimeout(t);
+    timers.current.delete(target.job.id);
+    setPending((p) => p.filter((x) => x.job.id !== target.job.id));
+    setDeck((d) => [target.job, ...d]);
+  }, [pending]);
 
   const pass = useCallback(async (job: SwipeJob) => {
     setError("");
@@ -101,7 +111,6 @@ export default function SwipeDeck({ initial, view }: { initial: SwipeJob[]; view
   const current = visible[0] ?? null;
 
   const onDown = (e: React.PointerEvent) => {
-    if (pending) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     start.current = { x: e.clientX, y: e.clientY };
     setDrag({ x: 0, y: 0, active: true });
@@ -132,7 +141,7 @@ export default function SwipeDeck({ initial, view }: { initial: SwipeJob[]; view
       if (e.key === "ArrowLeft" && current) { e.preventDefault(); void pass(current); }
       else if (e.key === "ArrowRight" && current) { e.preventDefault(); apply(current); }
       else if (e.key === "ArrowUp" && current) { e.preventDefault(); void save(current); }
-      else if (e.key.toLowerCase() === "z") { e.preventDefault(); if (pending) undoApply(); else void undoLast(); }
+      else if (e.key.toLowerCase() === "z") { e.preventDefault(); if (pending.length > 0) undoApply(); else void undoLast(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -140,10 +149,10 @@ export default function SwipeDeck({ initial, view }: { initial: SwipeJob[]; view
 
   const actions = (job: SwipeJob, size: "lg" | "sm") => (
     <div className={`flex flex-wrap items-center gap-2 ${size === "lg" ? "mt-4" : "mt-3"}`}>
-      <button type="button" className={btn} onClick={() => void pass(job)} disabled={!!pending}>Pass{size === "lg" ? " ←" : ""}</button>
-      <button type="button" className={btn} onClick={() => void save(job)} disabled={!!pending}>Save{size === "lg" ? " ↑" : ""}</button>
-      <button type="button" className={btnPrimary} onClick={() => apply(job)} disabled={!!pending}>Apply{size === "lg" ? " →" : ""}</button>
-      {size === "sm" && <TargetButton jobId={job.id} source="swipe" disabled={!!pending} />}
+      <button type="button" className={btn} onClick={() => void pass(job)} >Pass{size === "lg" ? " ←" : ""}</button>
+      <button type="button" className={btn} onClick={() => void save(job)} >Save{size === "lg" ? " ↑" : ""}</button>
+      <button type="button" className={btnPrimary} onClick={() => apply(job)} >Apply{size === "lg" ? " →" : ""}</button>
+      {size === "sm" && <TargetButton jobId={job.id} source="swipe"  />}
     </div>
   );
 
@@ -159,7 +168,7 @@ export default function SwipeDeck({ initial, view }: { initial: SwipeJob[]; view
       )}
       {error && <p role="alert" className="mb-3 rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
 
-      {deck.length === 0 && !pending ? (
+      {deck.length === 0 && pending.length === 0 ? (
         <Card><p className="text-sm text-muted">You&apos;ve been through every relevant role for now. New ones arrive every morning. You can also <Link href="/roles" className="font-semibold text-accent">browse the full list</Link>.</p></Card>
       ) : view === "swipe" && !current ? (
         <Card><p className="text-sm text-muted">No roles match &ldquo;{query}&rdquo;. <button type="button" className="font-semibold text-accent" onClick={() => setQuery("")}>Clear search</button></p></Card>
@@ -205,15 +214,15 @@ export default function SwipeDeck({ initial, view }: { initial: SwipeJob[]; view
             </div>
 
             <div className="mt-5 flex items-center justify-center gap-5">
-              <button type="button" onClick={() => void pass(current)} disabled={!!pending} aria-label="Pass (left arrow)" className="flex h-16 w-16 items-center justify-center rounded-full border border-line bg-surface text-2xl text-warn shadow-sm hover:bg-sunk disabled:opacity-50">✕</button>
-              <TargetButton jobId={current.id} source="swipe" variant="round" disabled={!!pending} />
-              <button type="button" onClick={() => void save(current)} disabled={!!pending} aria-label="Save (up arrow)" className="flex h-14 w-14 items-center justify-center rounded-full border border-line bg-surface text-xl shadow-sm hover:bg-sunk disabled:opacity-50">
+              <button type="button" onClick={() => void pass(current)}  aria-label="Pass (left arrow)" className="flex h-16 w-16 items-center justify-center rounded-full border border-line bg-surface text-2xl text-warn shadow-sm hover:bg-sunk disabled:opacity-50">✕</button>
+              <TargetButton jobId={current.id} source="swipe" variant="round"  />
+              <button type="button" onClick={() => void save(current)}  aria-label="Save (up arrow)" className="flex h-14 w-14 items-center justify-center rounded-full border border-line bg-surface text-xl shadow-sm hover:bg-sunk disabled:opacity-50">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true"><path d="M7 4h10v16l-5-3.5L7 20z" /></svg>
               </button>
-              <button type="button" onClick={() => apply(current)} disabled={!!pending} aria-label="Apply (right arrow)" className="flex h-20 w-20 items-center justify-center rounded-full bg-fg text-3xl text-bg shadow-md hover:opacity-90 disabled:opacity-50">✓</button>
+              <button type="button" onClick={() => apply(current)}  aria-label="Apply (right arrow)" className="flex h-20 w-20 items-center justify-center rounded-full bg-fg text-3xl text-bg shadow-md hover:opacity-90 disabled:opacity-50">✓</button>
             </div>
             <p className="mt-4 text-center text-xs text-muted">{visible.length} left · Drag the card, or use ← pass, ↑ save, → apply, Z undo</p>
-            {last && !pending && <p className="mt-2 text-center"><button type="button" className="text-sm font-semibold text-accent" onClick={() => void undoLast()}>Undo {last.kind === "pass" ? "pass" : "save"}</button></p>}
+            {last && pending.length === 0 && <p className="mt-2 text-center"><button type="button" className="text-sm font-semibold text-accent" onClick={() => void undoLast()}>Undo {last.kind === "pass" ? "pass" : "save"}</button></p>}
           </div>
 
           <Card className="sm:p-6">
@@ -248,12 +257,12 @@ export default function SwipeDeck({ initial, view }: { initial: SwipeJob[]; view
       )}
 
       <div className="fixed inset-x-0 bottom-20 z-30 mx-auto flex max-w-md flex-col gap-2 px-4 md:bottom-6" aria-live="polite">
-        {pending && (
-          <div role="status" className="flex items-center justify-between gap-3 rounded-2xl bg-fg px-4 py-3 text-sm text-bg shadow-lg">
-            <span>Applying to {pending.job.title} at {pending.job.company} in {pending.left}s</span>
-            <button type="button" className="rounded-lg bg-bg px-3 py-1.5 font-semibold text-fg" onClick={undoApply}>Undo</button>
+        {pending.map((p) => (
+          <div key={p.job.id} role="status" className="flex items-center justify-between gap-3 rounded-2xl bg-fg px-4 py-3 text-sm text-bg shadow-lg">
+            <span className="min-w-0 truncate">Applying to {p.job.title} at {p.job.company} in {Math.max(1, Math.ceil((p.endsAt - now) / 1000))}s</span>
+            <button type="button" className="shrink-0 rounded-lg bg-bg px-3 py-1.5 font-semibold text-fg" onClick={() => undoApply(p.job.id)}>Undo</button>
           </div>
-        )}
+        ))}
       </div>
 
       {done.length > 0 && (

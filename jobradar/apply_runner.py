@@ -39,7 +39,7 @@ LOCK_FILE = DATA_DIR / "apply.lock"
 LOG_FILE = DATA_DIR / "apply_log.json"
 
 ITEM_TIMEOUT_S = 240          # one application gets four minutes at most
-PAUSE_RANGE_S = (20, 60)      # polite pause between applications
+PAUSE_RANGE_S = (5, 12)       # short pause between applications
 CALL_TIMEOUT_MS = 15_000
 
 FAKE_PROFILE = {
