@@ -1,23 +1,38 @@
-# Shared helper: turns a Supabase connection string into PG* settings so the password never appears in a command line.
-# Usage: source scripts/db/pg-env.sh   (asks for the string, hidden as you type it)
+# Shared helper: turns a Supabase connection string plus your database password into PG* settings,
+# so the password never appears in a command line or on screen.
+# Usage: source scripts/db/pg-env.sh
 
 read_connection() {
-  local url
-  read -rsp "Paste your database connection string (it stays on this Mac, nothing is shown): " url
-  echo
+  local url pass out
+  echo "Paste the connection string exactly as Supabase shows it (it may still contain [YOUR-PASSWORD]; that is fine)."
+  read -rsp "Connection string (hidden): " url; echo
   [ -n "$url" ] || { echo "Nothing pasted."; return 1; }
-  eval "$(DB_URL="$url" python3 - <<'PY'
-import os, shlex, sys
-from urllib.parse import urlparse, unquote
-u = urlparse(os.environ["DB_URL"])
-if u.scheme not in ("postgresql", "postgres") or not u.hostname:
-    sys.exit("echo 'That does not look like a postgresql:// connection string.'; return 1")
-pairs = {"PGHOST": u.hostname, "PGPORT": str(u.port or 5432), "PGUSER": unquote(u.username or "postgres"),
-         "PGPASSWORD": unquote(u.password or ""), "PGDATABASE": (u.path or "/postgres").lstrip("/") or "postgres", "PGSSLMODE": "require"}
+  read -rsp "Your database password (hidden): " pass; echo
+  [ -n "$pass" ] || { echo "No password entered."; return 1; }
+  out="$(DB_URL="$url" DB_PASS="$pass" python3 - <<'PY'
+import os, re, shlex, sys
+
+url = os.environ["DB_URL"].strip()
+password = os.environ["DB_PASS"]
+m = re.match(r"^postgres(?:ql)?://(.*)$", url)
+if not m:
+    sys.exit("That does not look like a postgresql:// connection string.")
+rest = m.group(1)
+userinfo, sep, hostpart = rest.rpartition("@")
+if not sep:
+    sys.exit("The string has no user and host. Copy it again from Supabase, from the Session pooler option.")
+user = userinfo.partition(":")[0] or "postgres"
+hostport, _, dbpart = hostpart.partition("/")
+host, _, port = hostport.partition(":")
+db = dbpart.split("?")[0] or "postgres"
+if not host or "[" in host or "]" in host:
+    sys.exit("Could not read the host from the string. Copy it again from Supabase.")
+pairs = {"PGHOST": host, "PGPORT": port or "5432", "PGUSER": user, "PGPASSWORD": password, "PGDATABASE": db, "PGSSLMODE": "require"}
 for k, v in pairs.items():
     print(f"export {k}={shlex.quote(v)}")
 PY
-)"
+)" || { echo "$out"; return 1; }
+  eval "$out"
 }
 
 need_tool() {

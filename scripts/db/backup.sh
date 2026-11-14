@@ -7,7 +7,7 @@ cd "$(dirname "$0")/../.."
 source scripts/db/pg-env.sh
 
 need_tool pg_dump && need_tool psql && need_tool pg_restore
-read_connection
+read_connection || exit 1
 
 OUT="backups/$(date +%Y-%m-%d-%H%M)"
 mkdir -p "$OUT"
