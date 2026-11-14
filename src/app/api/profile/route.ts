@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { pickPreferenceFields, pickProfileFields } from "@/lib/profile-fields";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { DB_SCHEMA } from "@/lib/supabase/schema";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -9,6 +10,7 @@ async function getSupabase() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      db: { schema: DB_SCHEMA },
       cookies: {
         getAll: () => cookieStore.getAll(),
         setAll: (list: { name: string; value: string; options?: object }[]) =>

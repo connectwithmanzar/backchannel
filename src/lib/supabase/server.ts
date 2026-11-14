@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { cache } from "react";
+import { DB_SCHEMA } from "@/lib/supabase/schema";
 
 export interface SessionUser { id: string; email: string | null }
 
@@ -23,6 +24,7 @@ export async function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      db: { schema: DB_SCHEMA },
       cookies: {
         getAll() {
           return cookieStore.getAll();
