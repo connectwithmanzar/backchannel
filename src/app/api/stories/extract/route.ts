@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { extractStoriesFromCv } from "@/lib/auto-apply/ats-answerer";
 
@@ -7,7 +7,7 @@ export const maxDuration = 60;
 
 // POST /api/stories/extract
 // Analyzes the candidate's CV and extracts 4-6 quantitative STAR stories into their Story Bank.
-export async function POST(_req: NextRequest) {
+export async function POST() {
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "Please sign in." }, { status: 401 });

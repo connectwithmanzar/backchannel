@@ -15,7 +15,6 @@ export type { AppRow };
 
 export interface Suggestion { job_id: string; score: number; bookmarked: boolean; explanation: string; title: string; url: string; location: string; company: string }
 
-const STAGES = [["applied", "Applied"], ["screening", "Screening"], ["interview", "Interview"], ["final", "Final round"], ["offer", "Offer"], ["rejected", "Rejected"], ["withdrawn", "Withdrawn"]];
 
 export default function AutopilotClient({ apps, suggestions, settings, savedAnswers, hasCv, aiReady }: {
   apps: AppRow[]; suggestions: Suggestion[]; settings: { mode: "ask" | "auto"; minFit: number; cap: number; autoMode: AutoMode; autoCap: number; autoUseSaved: boolean; rules: AutoRules };
