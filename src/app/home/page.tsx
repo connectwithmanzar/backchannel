@@ -4,6 +4,7 @@ import { loadSwipeFeed } from "@/lib/jobs/swipe-feed";
 import { matchLabel } from "@/lib/match-label";
 import { summarise } from "@/lib/application-status";
 import { loadSetup } from "@/lib/onboarding-load";
+import { loadToday } from "@/lib/today-load";
 
 export const dynamic = "force-dynamic";
 
@@ -15,18 +16,22 @@ export default async function HomePage() {
   const uid = user?.id ?? "";
   const [{ data: profile }, { data: apps }, jobs, setup] = await Promise.all([
     db.from("profiles").select("name, target_titles, markets").maybeSingle(),
-    db.from("applications").select("status, stage, auto_status, auto_log").eq("user_id", uid).limit(500),
+    db.from("applications").select("status, stage, auto_status, auto_log, submitted_at, updated_at").eq("user_id", uid).limit(500),
     uid ? loadSwipeFeed(db, uid) : Promise.resolve([]),
     loadSetup(db, uid),
   ]);
   // The auto-apply columns come with migration 0020; without them, count from status and stage only.
-  const rows = (apps ?? []).map((a) => ({ status: a.status ?? null, stage: a.stage ?? null, auto_status: (a as { auto_status?: string | null }).auto_status ?? null, auto_log: null }));
+  const rows = (apps ?? []).map((a) => ({ status: a.status ?? null, stage: a.stage ?? null, auto_status: (a as { auto_status?: string | null }).auto_status ?? null, auto_log: null, submitted_at: (a as { submitted_at?: string | null }).submitted_at ?? null, updated_at: (a as { updated_at?: string | null }).updated_at ?? null }));
   const summary = summarise(rows);
   const first = (profile?.name ?? user?.email ?? "").split(/[ @]/)[0];
   const titles = (profile?.target_titles as string[] | null) ?? [];
   const markets = (profile?.markets as string[] | null) ?? [];
   const goal = titles.length > 1 ? `${titles[0]} +${titles.length - 1}` : titles[0] ?? "All relevant roles";
   const top = jobs.slice(0, 6);
+  const priority = jobs.find((j) => j.tier === "A") ?? jobs.find((j) => j.tier) ?? null;
+  const today = await loadToday(db, uid, rows, priority ? { company: priority.company, title: priority.title } : null);
+  const hour = new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "Asia/Kolkata" });
+  const greeting = Number(hour) < 12 ? "Good morning" : Number(hour) < 18 ? "Good afternoon" : "Good evening";
 
   return (
     <section className="py-5">
@@ -44,14 +49,48 @@ export default async function HomePage() {
         </Link>
       )}
 
-      <div className="rounded-3xl bg-gradient-to-br from-[#5a4a3a] to-[#2b241d] px-6 py-14 text-center text-white md:py-20">
-        <p className="eyebrow text-white/70">Welcome back{first ? `, ${first}` : ""}</p>
-        <h1 className="mx-auto mt-4 max-w-2xl text-4xl leading-tight md:text-5xl">Your next role is already in here.</h1>
-        <p className="mx-auto mt-4 max-w-xl text-white/80">Backchannel is ranking roles that fit your goal. Swipe through them, or let auto-apply work while you sleep.</p>
-        <div className="mt-7 flex flex-wrap justify-center gap-3">
-          <Link href="/swipe" className="rounded-full bg-[#fdfbf7] px-6 py-3 font-semibold text-[#1d1a16]">Start swiping →</Link>
-          <Link href="/autopilot" className="rounded-full border border-white/50 px-6 py-3 font-semibold text-white">Set up auto-apply</Link>
-        </div>
+      <div className="mb-5">
+        <p className="eyebrow text-muted">Today</p>
+        <h1 className="mt-1 text-4xl leading-tight md:text-5xl">{greeting}{first ? `, ${first}` : ""}</h1>
+        <p className="mt-2 text-muted">Three things today. About 15 minutes.</p>
+      </div>
+
+      <ol className="grid gap-4 md:grid-cols-3" aria-label="Three things today">
+        {today.cards.map((c) => (
+          <li key={c.n} className="flex flex-col gap-3 rounded-3xl border border-line bg-surface p-6">
+            <span className="eyebrow self-start rounded-full bg-accent-soft px-3 py-1 text-accent">{c.n} · {c.tag}</span>
+            <h2 className="text-2xl leading-snug">{c.title}</h2>
+            <p className="text-sm text-muted">{c.body}</p>
+            <Link href={c.href} className="mt-auto self-start rounded-full bg-fg px-5 py-2.5 text-sm font-semibold text-bg">{c.cta}</Link>
+          </li>
+        ))}
+      </ol>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <section className="rounded-3xl border border-line bg-surface p-6" aria-label="Waiting on a reply">
+          <h2 className="text-2xl">Waiting on a reply</h2>
+          {today.waiting.length === 0 ? (
+            <p className="mt-3 text-sm text-muted">Nothing sent yet. Messages and applications you send will show up here so you can chase the oldest.</p>
+          ) : (
+            <ul className="mt-3 flex flex-col divide-y divide-line">
+              {today.waiting.map((w, i) => (
+                <li key={i} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
+                  <span className="min-w-0 truncate">{w.label}</span>
+                  <span className="text-muted">{w.note}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link href="/inbox" className="mt-3 inline-block text-sm font-semibold text-accent">Open Replies →</Link>
+        </section>
+        <section className="rounded-3xl border border-line bg-surface p-6" aria-label="This week">
+          <h2 className="text-2xl">This week</h2>
+          <div className="mt-3 flex justify-between text-sm"><span>Applications</span><b>{today.goal.done} of {today.goal.goal}</b></div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-sunk" role="progressbar" aria-valuenow={today.goal.percent} aria-valuemin={0} aria-valuemax={100} aria-label="Weekly application goal"><div className="h-full rounded-full bg-accent" style={{ width: `${today.goal.percent}%` }} /></div>
+          <div className="mt-3 flex justify-between text-sm"><span>Messages sent</span><b>{today.messagesThisWeek}</b></div>
+          <div className="mt-2 flex justify-between text-sm"><span>Replies · Interviews</span><b>{today.week.replies} · {today.week.interviews}</b></div>
+          {today.messagesThisWeek === 0 && <p className="mt-3 rounded-xl bg-signal-soft px-3 py-2 text-sm text-signal">No messages sent this week. One referral ask keeps you on track.</p>}
+        </section>
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
