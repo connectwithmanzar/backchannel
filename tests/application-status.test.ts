@@ -58,3 +58,35 @@ test("time saved reads naturally", () => {
   assert.equal(timeSavedText(120), "2 h");
   assert.equal(timeSavedText(150), "2 h 30 min");
 });
+
+import { boardColumn, weeklySummary, type WeekFacts } from "../src/lib/application-status";
+
+const wk = (o: Partial<WeekFacts>): WeekFacts => ({ status: "submitted", stage: "applied", auto_status: null, auto_log: null, submitted_at: null, updated_at: null, ...o });
+const NOW = Date.parse("2026-11-14T12:00:00Z");
+
+test("board columns follow the stage, with unsent work in its own column", () => {
+  assert.equal(boardColumn(app({})), "before");
+  assert.equal(boardColumn(app({ status: "submitted" })), "applied");
+  assert.equal(boardColumn(app({ status: "submitted", stage: "screening" })), "replied");
+  assert.equal(boardColumn(app({ status: "submitted", stage: "final" })), "interview");
+  assert.equal(boardColumn(app({ status: "submitted", stage: "offer" })), "offer");
+  assert.equal(boardColumn(app({ status: "submitted", stage: "rejected" })), "closed");
+  assert.equal(boardColumn(app({ status: "needs_answer" })), "before");
+});
+
+test("the weekly summary counts only the last seven days", () => {
+  const s = weeklySummary([
+    wk({ submitted_at: "2026-11-13T10:00:00Z" }),
+    wk({ submitted_at: "2026-11-09T10:00:00Z", stage: "screening", updated_at: "2026-11-12T10:00:00Z" }),
+    wk({ submitted_at: "2026-11-01T10:00:00Z", stage: "interview", updated_at: "2026-11-13T10:00:00Z" }),
+    wk({ submitted_at: "2026-10-01T10:00:00Z", stage: "interview", updated_at: "2026-10-05T10:00:00Z" }),
+  ], NOW);
+  assert.equal(s.sent, 2);
+  assert.equal(s.replies, 2);
+  assert.equal(s.interviews, 1);
+  assert.equal(s.hoursSaved, 0.4);
+});
+
+test("an empty week is all zeros", () => {
+  assert.deepEqual(weeklySummary([], NOW), { sent: 0, replies: 0, interviews: 0, hoursSaved: 0 });
+});

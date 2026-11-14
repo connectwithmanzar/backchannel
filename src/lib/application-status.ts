@@ -77,3 +77,37 @@ export function timeSavedText(minutes: number): string {
   const m = minutes % 60;
   return m ? `${h} h ${m} min` : `${h} h`;
 }
+
+// ── Tracker board and weekly summary ───────────────────────────────────────────
+
+export type BoardColumn = "before" | "applied" | "replied" | "interview" | "offer" | "closed";
+
+export const BOARD_ORDER: BoardColumn[] = ["before", "applied", "replied", "interview", "offer"];
+export const BOARD_LABEL: Record<BoardColumn, string> = {
+  before: "Not sent yet", applied: "Applied", replied: "Replied", interview: "Interview", offer: "Offers", closed: "Closed",
+};
+
+/** Which board column an application sits in. "Replied" is the screening stage: the company has answered. */
+export function boardColumn(a: AppFacts): BoardColumn {
+  if (a.stage === "offer") return "offer";
+  if (a.stage === "rejected" || a.stage === "withdrawn" || a.status === "skipped") return "closed";
+  if (a.stage === "interview" || a.stage === "final") return "interview";
+  if (a.stage === "screening") return "replied";
+  const g = groupOf(a);
+  return g === "submitted" ? "applied" : "before";
+}
+
+export interface WeekFacts extends AppFacts { submitted_at: string | null; updated_at: string | null }
+
+export interface WeeklySummary { sent: number; replies: number; interviews: number; hoursSaved: number }
+
+const WEEK_MS = 7 * 864e5;
+
+/** What happened in the last seven days. Replies and interviews count applications moved there this week. */
+export function weeklySummary(apps: WeekFacts[], now = Date.now()): WeeklySummary {
+  const within = (iso: string | null) => !!iso && now - Date.parse(iso) <= WEEK_MS && now - Date.parse(iso) >= 0;
+  const sent = apps.filter((a) => within(a.submitted_at)).length;
+  const replies = apps.filter((a) => ["screening", "interview", "final", "offer"].includes(a.stage ?? "") && within(a.updated_at)).length;
+  const interviews = apps.filter((a) => (a.stage === "interview" || a.stage === "final") && within(a.updated_at)).length;
+  return { sent, replies, interviews, hoursSaved: Math.round(((sent * MINUTES_PER_APPLICATION) / 60) * 10) / 10 };
+}

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { Card, PageHeader, Pill } from "@/components/ui";
-import { GROUP_LABEL, GROUP_ORDER, MINUTES_PER_APPLICATION, detailOf, groupOf, summarise, timeSavedText, type AppGroup } from "@/lib/application-status";
+import { BOARD_LABEL, BOARD_ORDER, GROUP_LABEL, GROUP_ORDER, MINUTES_PER_APPLICATION, boardColumn, detailOf, groupOf, summarise, timeSavedText, weeklySummary, type AppGroup } from "@/lib/application-status";
 import { formatCompanyName } from "@/lib/company-name";
 import { loadFeed } from "@/lib/apply-feed-load";
 import LiveFeed from "./LiveFeed";
@@ -22,7 +22,7 @@ const TONE: Record<AppGroup, "good" | "warn" | "signal" | "accent" | "neutral"> 
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "");
 
-export default async function ApplicationsPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
+export default async function ApplicationsPage({ searchParams }: { searchParams: Promise<{ show?: string; view?: string }> }) {
   const sp = await searchParams;
   const db = await createClient();
   const user = await getSessionUser();
@@ -39,6 +39,8 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
 
   const feed = await loadFeed(db, uid);
   const summary = summarise(rows);
+  const week = weeklySummary(rows);
+  const board = sp.view === "board";
   const filter = GROUP_ORDER.includes(sp.show as AppGroup) ? (sp.show as AppGroup) : null;
   const shown = rows.filter((r) => !filter || groupOf(r) === filter);
 
@@ -50,12 +52,57 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
 
       <LiveFeed initial={feed} />
 
+      <p className="mb-4 rounded-2xl border border-line bg-surface px-5 py-3 text-sm">
+        <b>This week:</b> {week.sent} sent · {week.replies} {week.replies === 1 ? "reply" : "replies"} · {week.interviews} {week.interviews === 1 ? "interview" : "interviews"} · about {week.hoursSaved} hours saved
+      </p>
+      <div className="mb-4 inline-flex rounded-full border border-line bg-surface p-1" role="group" aria-label="View">
+        <Link href="/applications" aria-current={!board ? "page" : undefined} className={`rounded-full px-5 py-2 text-sm font-semibold ${!board ? "bg-bg shadow-sm" : "text-muted"}`}>List</Link>
+        <Link href="/applications?view=board" aria-current={board ? "page" : undefined} className={`rounded-full px-5 py-2 text-sm font-semibold ${board ? "bg-bg shadow-sm" : "text-muted"}`}>Board</Link>
+      </div>
+
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <Card><p className="text-xs font-semibold uppercase tracking-wider text-muted">Sent</p><p className="mt-1 text-3xl font-bold">{summary.sent}</p></Card>
         <Card><p className="text-xs font-semibold uppercase tracking-wider text-muted">Needs you</p><p className="mt-1 text-3xl font-bold">{summary.counts.needs_you}</p></Card>
         <Card><p className="text-xs font-semibold uppercase tracking-wider text-muted">Time saved (estimate)</p><p className="mt-1 text-3xl font-bold">{timeSavedText(summary.minutesSaved)}</p><p className="mt-1 text-xs text-muted">Counted as {MINUTES_PER_APPLICATION} min per sent application.</p></Card>
       </div>
 
+      {board ? (
+        <div>
+          <div className="grid gap-4 md:grid-cols-5">
+            {BOARD_ORDER.map((col) => {
+              const inCol = rows.filter((r) => boardColumn(r) === col);
+              return (
+                <section key={col} aria-label={BOARD_LABEL[col]} className="rounded-3xl bg-sunk p-3">
+                  <h2 className="mb-3 flex items-center justify-between px-1 text-lg">{BOARD_LABEL[col]} <span className="text-sm text-muted">{inCol.length}</span></h2>
+                  <ul className="flex flex-col gap-2">
+                    {inCol.length === 0 && <li className="px-1 text-sm text-muted">Nothing here</li>}
+                    {inCol.map((r) => {
+                      const company = formatCompanyName(r.jobs?.companies?.name ?? r.jobs?.company_name ?? "") || "Unknown company";
+                      return (
+                        <li key={r.id} className="rounded-2xl border border-line bg-surface p-3">
+                          <p className="text-xs text-muted">{company}</p>
+                          <p className="font-semibold leading-snug"><Link href={`/roles/${r.job_id}`} className="hover:underline">{r.jobs?.title ?? "Role removed"}</Link></p>
+                          <p className="mt-1 text-xs text-muted">{detailOf(r)}</p>
+                          <p className="mt-1 text-xs text-muted">{r.submitted_at ? `Sent ${when(r.submitted_at)}` : `Started ${when(r.created_at)}`}</p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
+          {rows.some((r) => boardColumn(r) === "closed") && (
+            <details className="mt-4 rounded-2xl border border-line bg-surface p-4">
+              <summary className="cursor-pointer font-semibold">Closed ({rows.filter((r) => boardColumn(r) === "closed").length})</summary>
+              <ul className="mt-3 flex flex-col gap-1 text-sm text-muted">
+                {rows.filter((r) => boardColumn(r) === "closed").map((r) => <li key={r.id}>{r.jobs?.title ?? "Role removed"} · {formatCompanyName(r.jobs?.companies?.name ?? r.jobs?.company_name ?? "")} · {detailOf(r)}</li>)}
+              </ul>
+            </details>
+          )}
+        </div>
+      ) : (
+      <>
       <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Filter by status">
         <Link href="/applications" aria-current={!filter ? "page" : undefined} className={`rounded-full px-4 py-2 text-sm font-semibold ${!filter ? "bg-fg text-bg" : "border border-line bg-surface hover:border-fg/40"}`}>All {rows.length}</Link>
         {GROUP_ORDER.map((g) => (
@@ -116,6 +163,8 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
             );
           })}
         </ul>
+      )}
+      </>
       )}
     </section>
   );
