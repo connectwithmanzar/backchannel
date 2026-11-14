@@ -64,7 +64,7 @@ export default async function InboxPage() {
   return (
     <section className="py-6">
       <PageHeader eyebrow="Applications" title="Replies from companies">
-        Replies to the emails you sent from Backchannel, calendar invites, and "confirm your email" mails from job sites. Nothing else from your mailbox is shown. Backchannel only reads; it never replies or moves a stage without your tap.
+        Replies to the emails you sent from Backchannel, calendar invites, and &ldquo;confirm your email&rdquo; mails from job sites. Nothing else from your mailbox is shown. Backchannel only reads; it never replies or moves a stage without your tap.
       </PageHeader>
       {data.state === "off" && <Card><p className="text-sm">Connect your Gmail to see replies here. <Link href="/outreach" className="font-semibold text-accent">Connect Gmail</Link></p></Card>}
       {data.state === "error" && <Card><p role="alert" className="text-sm text-warn">{data.error}</p><p className="mt-2 text-sm text-muted">If this keeps happening, reconnect Gmail on the <Link href="/outreach" className="font-semibold text-accent">Messages page</Link>.</p></Card>}
