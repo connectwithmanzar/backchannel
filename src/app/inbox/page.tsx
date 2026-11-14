@@ -3,13 +3,13 @@ import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { serviceClient } from "@/lib/supabase/service";
 import { Card, PageHeader, Pill } from "@/components/ui";
 import { accessToken, gmailConfigured, listInbox, repliesInThreads } from "@/lib/outreach/gmail";
-import { INVITE_QUERY, KIND_LABEL, isCalendarInvite, keepRepliesAndInvites, routeMails, type AppRef, type RoutedMail } from "@/lib/inbox-routing";
+import { INVITE_QUERY, KIND_LABEL, VERIFY_QUERY, isAtsVerification, isCalendarInvite, keepRepliesAndInvites, routeMails, type AppRef, type RoutedMail } from "@/lib/inbox-routing";
 import { formatCompanyName } from "@/lib/company-name";
 import StageButton from "./StageButton";
 
 export const dynamic = "force-dynamic";
 
-const TONE = { invite: "good", interview: "good", offer: "signal", assessment: "accent", rejection: "warn", received: "neutral", other: "neutral" } as const;
+const TONE = { verify: "signal", invite: "good", interview: "good", offer: "signal", assessment: "accent", rejection: "warn", received: "neutral", other: "neutral" } as const;
 
 async function load(uid: string): Promise<{ state: "off" | "error" | "ok"; mails: RoutedMail[]; email?: string; error?: string }> {
   if (!gmailConfigured()) return { state: "off", mails: [] };
@@ -26,8 +26,8 @@ async function load(uid: string): Promise<{ state: "off" | "error" | "ok"; mails
     // Only threads that Backchannel started: the replies in them, plus calendar invites.
     const { data: sent } = await db.from("outreach").select("gmail_thread_id").eq("user_id", uid).not("gmail_thread_id", "is", null).order("sent_at", { ascending: false }).limit(60);
     const threadIds = [...new Set((sent ?? []).map((r) => r.gmail_thread_id as string))];
-    const [replies, invites] = await Promise.all([repliesInThreads(token, threadIds, acct.email), listInbox(token, INVITE_QUERY, 20)]);
-    return { state: "ok", mails: routeMails(keepRepliesAndInvites(replies, invites.filter((m) => isCalendarInvite(m.subject, m.from))), apps), email: acct.email };
+    const [replies, invites, verifications] = await Promise.all([repliesInThreads(token, threadIds, acct.email), listInbox(token, INVITE_QUERY, 20), listInbox(token, VERIFY_QUERY, 20)]);
+    return { state: "ok", mails: routeMails(keepRepliesAndInvites(replies, invites.filter((m) => isCalendarInvite(m.subject, m.from)), verifications.filter((m) => isAtsVerification(m.subject, m.from))), apps), email: acct.email };
   } catch (e) {
     return { state: "error", mails: [], error: e instanceof Error ? e.message : "Couldn't read your Gmail." };
   }
@@ -64,7 +64,7 @@ export default async function InboxPage() {
   return (
     <section className="py-6">
       <PageHeader eyebrow="Applications" title="Replies from companies">
-        Replies to the emails you sent from Backchannel, and calendar invites. Nothing else from your mailbox is shown. Backchannel only reads; it never replies or moves a stage without your tap.
+        Replies to the emails you sent from Backchannel, calendar invites, and "confirm your email" mails from job sites. Nothing else from your mailbox is shown. Backchannel only reads; it never replies or moves a stage without your tap.
       </PageHeader>
       {data.state === "off" && <Card><p className="text-sm">Connect your Gmail to see replies here. <Link href="/outreach" className="font-semibold text-accent">Connect Gmail</Link></p></Card>}
       {data.state === "error" && <Card><p role="alert" className="text-sm text-warn">{data.error}</p><p className="mt-2 text-sm text-muted">If this keeps happening, reconnect Gmail on the <Link href="/outreach" className="font-semibold text-accent">Messages page</Link>.</p></Card>}

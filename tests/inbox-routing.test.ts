@@ -83,3 +83,18 @@ test("words many companies share do not match a mail to the wrong application", 
   assert.equal(matchApplication(m, [grimbell]), null);
   assert.equal(matchApplication(mail({ from: "hr@grimbell.com", subject: "Your application" }), [grimbell])?.id, "g");
 });
+
+import { isAtsVerification } from "../src/lib/inbox-routing";
+
+test("a 'confirm your email' mail from a known job site is recognised, and one from anyone else is not", () => {
+  assert.equal(classifyMail("Please confirm your email address", ""), "verify");
+  assert.equal(isAtsVerification("Confirm your email address", "no-reply@us.greenhouse-mail.io"), true);
+  assert.equal(isAtsVerification("Verify your email", "jobs@mail.lever.co"), true);
+  assert.equal(isAtsVerification("Confirm your email address", "security@paypa1-support.com"), false);
+  assert.equal(isAtsVerification("Your application was received", "no-reply@greenhouse.io"), false);
+});
+
+test("verification mails come first on the Replies page", () => {
+  const out = keepRepliesAndInvites([mail({ id: "r" })], [mail({ id: "i" })], [mail({ id: "v" })]);
+  assert.deepEqual(out.map((m) => m.id), ["v", "r", "i"]);
+});
