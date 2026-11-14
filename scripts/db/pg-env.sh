@@ -33,6 +33,7 @@ for k, v in pairs.items():
 PY
 )" || { echo "$out"; return 1; }
   eval "$out"
+  echo "Connecting as $PGUSER at $PGHOST:$PGPORT (database $PGDATABASE)"
 }
 
 need_tool() {

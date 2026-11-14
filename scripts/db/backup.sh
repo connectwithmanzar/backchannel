@@ -15,7 +15,7 @@ chmod 700 backups "$OUT"
 echo "Saving to $OUT"
 
 echo "1/6 Checking the connection..."
-psql -Atc "select current_database()" >/dev/null || { echo "Could not connect. Check the string and that your network allows it."; exit 1; }
+psql -Atc "select current_database()" >/dev/null || { echo "Could not connect. The most common cause is a wrong or just-changed password (the pooler can take a minute or two to learn a new one). The user shown above should look like postgres.<your project id>."; exit 1; }
 SERVER_MAJOR="$(psql -Atc "show server_version_num" | cut -c1-2)"
 CLIENT_MAJOR="$(pg_dump --version | sed -E 's/[^0-9]*([0-9]+).*/\1/')"
 if [ "$CLIENT_MAJOR" -lt "$SERVER_MAJOR" ]; then
